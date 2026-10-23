@@ -12,6 +12,7 @@ class CorrectiveAction extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'incident_id',
         'assigned_to',
         'organization_id',

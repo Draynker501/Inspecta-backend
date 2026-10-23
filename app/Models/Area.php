@@ -16,6 +16,7 @@ class Area extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'plant_id',
         'organization_id',
         'name',

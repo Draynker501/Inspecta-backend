@@ -12,6 +12,7 @@ class Inspection extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'user_id',
         'supervisor_id',
         'checklist_version_id',

@@ -13,6 +13,7 @@ class Question extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'checklist_section_id',
         'organization_id',
         'question_text',

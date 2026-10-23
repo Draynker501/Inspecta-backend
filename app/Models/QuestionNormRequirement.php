@@ -11,6 +11,7 @@ class QuestionNormRequirement extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'question_id',
         'norm_requirement_id',
         'organization_id',

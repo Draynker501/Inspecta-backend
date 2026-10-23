@@ -11,6 +11,7 @@ class UserArea extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'user_id',
         'area_id',
         'organization_id',

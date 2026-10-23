@@ -11,6 +11,7 @@ class Evidence extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'inspection_id',
         'inspection_answer_id',
         'incident_id',

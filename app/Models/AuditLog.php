@@ -11,6 +11,7 @@ class AuditLog extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'user_id',
         'organization_id',
         'action',

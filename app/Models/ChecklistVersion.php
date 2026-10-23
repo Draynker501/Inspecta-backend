@@ -12,6 +12,7 @@ class ChecklistVersion extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'checklist_id',
         'version',
         'status',

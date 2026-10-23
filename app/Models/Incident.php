@@ -12,6 +12,7 @@ class Incident extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'inspection_id',
         'question_id',
         'reported_by',

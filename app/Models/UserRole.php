@@ -11,6 +11,7 @@ class UserRole extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'user_id',
         'role_id',
         'organization_id',

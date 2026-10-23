@@ -11,6 +11,7 @@ class UserPlant extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'user_id',
         'plant_id',
         'organization_id',

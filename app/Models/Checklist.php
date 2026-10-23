@@ -12,6 +12,7 @@ class Checklist extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'name',
         'description',
         'status',

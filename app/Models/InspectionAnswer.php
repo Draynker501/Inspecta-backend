@@ -12,6 +12,7 @@ class InspectionAnswer extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'inspection_id',
         'question_id',
         'organization_id',

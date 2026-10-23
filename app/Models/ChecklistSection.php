@@ -12,6 +12,7 @@ class ChecklistSection extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'checklist_version_id',
         'organization_id',
         'name',

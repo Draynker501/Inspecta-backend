@@ -15,6 +15,7 @@ class ProductionLine extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'area_id',
         'organization_id',
         'name',

@@ -12,6 +12,7 @@ class NormRequirement extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'id',
         'norm_id',
         'organization_id',
         'code',
