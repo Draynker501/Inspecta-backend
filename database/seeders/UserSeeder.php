@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\UserArea;
 use App\Models\UserPlant;
 use App\Models\UserRole;
+use App\Support\Tenancy\MembershipBackfill;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -112,6 +113,11 @@ class UserSeeder extends Seeder
                 ], $user->organization_id);
             }
         }
+
+        // Doble escritura para usuarios ya existentes: asegurar una
+        // membresía activa por cada (user_id, users.organization_id).
+        // Idempotente: no duplica ni modifica membresías existentes.
+        MembershipBackfill::run();
     }
 
     /**
