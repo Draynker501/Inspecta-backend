@@ -57,7 +57,7 @@ class UserMembershipDoubleWriteTest extends TestCase
         $this->assertSame(2, OrganizationMembership::where('user_id', $user->id)->count());
     }
 
-    public function test_reactiva_membresia_revocada_al_cambiar_organization_id(): void
+    public function test_no_reactiva_membresia_revocada_al_cambiar_organization_id(): void
     {
         $orgA = $this->organization('ORG-A');
         $orgB = $this->organization('ORG-B');
@@ -74,12 +74,14 @@ class UserMembershipDoubleWriteTest extends TestCase
         $user->organization_id = $orgB->id;
         $user->save();
 
+        // El hook nunca modifica el status de una membresía existente.
         $membership = OrganizationMembership::where('user_id', $user->id)
             ->where('organization_id', $orgB->id)
             ->first();
 
-        $this->assertSame(OrganizationMembership::STATUS_ACTIVE, $membership->status);
-        $this->assertNull($membership->revoked_at);
+        $this->assertSame(OrganizationMembership::STATUS_REVOKED, $membership->status);
+        $this->assertNotNull($membership->revoked_at);
+        // Se crea la membresía en la nueva organización, no se reactiva la antigua.
         $this->assertSame(2, OrganizationMembership::where('user_id', $user->id)->count());
     }
 

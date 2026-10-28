@@ -170,12 +170,14 @@ class User extends Authenticatable
     /**
      * Doble escritura de membresía (M1.5, P1.4).
      *
-     * Después de guardar un User cuya organization_id se creó o cambió,
-     * asegura la membresía de (user_id, organization_id):
-     *  - si no existe, la crea activa;
-     *  - si existe revocada, la reactiva en la misma fila;
-     *  - si existe activa, no hace nada;
-     *  - no revoca la membresía de la organización anterior.
+     * Solo actúa cuando el User acaba de crearse o cuando su
+     * organization_id cambió en este guardado. Cualquier otro guardado
+     * no hace nada.
+     *
+     * La reactivación de una membresía revocada es una operación explícita
+     * que se introduce en P3; durante P1 el login sigue leyendo
+     * users.organization_id y el hook nunca modifica el status de una
+     * membresía existente.
      *
      * No choca con bootBelongsToOrganization: este hook solo escribe en
      * organization_memberships, tabla que no usa ese trait.
@@ -183,6 +185,10 @@ class User extends Authenticatable
     protected static function booted(): void
     {
         static::saved(function (User $user): void {
+            if (! $user->wasRecentlyCreated && ! $user->wasChanged('organization_id')) {
+                return;
+            }
+
             self::ensureMembership($user);
         });
     }
@@ -193,21 +199,9 @@ class User extends Authenticatable
             return;
         }
 
-        $membership = OrganizationMembership::where('user_id', $user->id)
-            ->where('organization_id', $user->organization_id)
-            ->first();
-
-        if (!$membership) {
-            OrganizationMembership::create([
-                'user_id' => $user->id,
-                'organization_id' => $user->organization_id,
-                'status' => OrganizationMembership::STATUS_ACTIVE,
-            ]);
-        } elseif ($membership->status === OrganizationMembership::STATUS_REVOKED) {
-            $membership->update([
-                'status' => OrganizationMembership::STATUS_ACTIVE,
-                'revoked_at' => null,
-            ]);
-        }
+        OrganizationMembership::firstOrCreate(
+            ['user_id' => $user->id, 'organization_id' => $user->organization_id],
+            ['status' => OrganizationMembership::STATUS_ACTIVE],
+        );
     }
 }
