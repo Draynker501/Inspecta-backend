@@ -1,0 +1,5112 @@
+openapi: 3.0.3
+
+info:
+  title: Inspecta API
+  description: |
+    Contrato de API para el sistema Inspecta de gestión de inspecciones,
+    incidencias, evidencias y acciones correctivas en plantas industriales.
+
+    **Convenciones transversales:**
+
+    - Todas las colecciones usan paginación con parámetros `page` y `per_page`
+      (estándar Laravel API Resources) y devuelven el envelope `{data, meta}`.
+    - El campo `status` es booleano (BD `TINYINT(1)`): `true` = activo, `false` = inactivo.
+      La baja lógica se realiza enviando `{"status": false}` en endpoints `PATCH …/status`.
+    - Los campos de auditoría (`user_id`, `created_by`, `reported_by`, `assigned_to`,
+      `uploaded_by`) y `organization_id` se toman del token de acceso y no deben
+      enviarse en el body. Un `organization_id` distinto al del token se rechaza
+      con 422.
+    - Aislamiento multi-tenant: la organización se deriva del token. Un recurso de
+      otra organización se comporta como inexistente (404) y no revela su existencia.
+    - Coordenadas con precisión de 7 decimales (BD `DECIMAL(10,7)`):
+      latitud −90..90, longitud −180..180.
+  version: 1.3.0
+
+servers:
+  - url: https://api.inspecta.com/v1
+    description: Servidor de Producción
+  - url: http://localhost:8000/api
+    description: Servidor de Desarrollo Local
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Authentication
+    description: Inicio y cierre de sesión, e identidad del usuario autenticado.
+  - name: Organization
+  - name: Users
+  - name: Checklists
+  - name: Norms
+  - name: Inspections
+  - name: Incidents
+  - name: Evidences
+  - name: Corrective Actions
+  - name: Audit Logs
+  - name: Sync
+
+paths:
+
+  # ===================================================================
+  # AUTHENTICATION
+  # ===================================================================
+
+  /auth/login:
+    post:
+      summary: Iniciar sesión
+      description: |
+        Autentica las credenciales y emite un token personal de Sanctum.
+        El token es opaco (`{id}|{40 caracteres}`), no un JWT.
+
+        La ruta está limitada a 5 intentos por minuto y por combinación de
+        email e IP. Los intentos fallidos consumen la cuota.
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginInput'
+            example:
+              email: inspector@inspecta-demo.com
+              password: Inspector123!
+      responses:
+        '200':
+          description: Autenticación exitosa.
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/RateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimitRemaining'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/InvalidCredentialsError'
+        '403':
+          $ref: '#/components/responses/InactiveUserError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /auth/logout:
+    post:
+      summary: Cerrar sesión
+      description: Revoca únicamente el token Bearer utilizado en la petición.
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: Sesión cerrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/InactiveUserError'
+
+  /auth/me:
+    get:
+      summary: Obtener el usuario autenticado
+      description: |
+        Devuelve la identidad del usuario dueño del token Bearer.
+        Requiere que el usuario y su organización existan y estén activos.
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: Usuario autenticado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/AccessDeniedError'
+
+  # ===================================================================
+  # ORGANIZATION
+  # ===================================================================
+
+  /plants:
+    get:
+      summary: Listar Plantas
+      description: Obtiene una lista paginada de todas las plantas registradas. Ideal para la sincronización offline.
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+        - in: query
+          name: include_hierarchy
+          schema:
+            type: boolean
+          description: Si es true, retorna las áreas y líneas de producción anidadas.
+      responses:
+        '200':
+          description: Lista de plantas obtenida exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Plant'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      summary: Crear Planta
+      tags:
+        - Organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlantInput'
+      responses:
+        '201':
+          description: Planta creada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Plant'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /plants/{plantId}:
+    get:
+      summary: Obtener Planta
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/plantIdParam'
+      responses:
+        '200':
+          description: Detalle de la planta.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Plant'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      summary: Actualizar Planta
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/plantIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlantInput'
+      responses:
+        '200':
+          description: Planta actualizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Plant'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      summary: Activar/Desactivar Planta
+      description: Cambia el estado lógico de la planta (activa o inactiva).
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/plantIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: Estado actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Plant'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /plants/{plantId}/areas:
+    get:
+      summary: Listar Áreas de una Planta
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/plantIdParam'
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+      responses:
+        '200':
+          description: Áreas listadas.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Area'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    post:
+      summary: Crear Área
+      description: Crea una nueva área asignada directamente a la planta especificada en la URL.
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/plantIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AreaInput'
+      responses:
+        '201':
+          description: Área creada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Area'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /areas/{areaId}:
+    get:
+      summary: Obtener Área
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/areaIdParam'
+      responses:
+        '200':
+          description: Detalle del área.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Area'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      summary: Actualizar Área
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/areaIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AreaInput'
+      responses:
+        '200':
+          description: Área actualizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Area'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      summary: Activar/Desactivar Área
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/areaIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: boolean
+      responses:
+        '200':
+          description: Estado actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Area'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /areas/{areaId}/lines:
+    get:
+      summary: Listar Líneas de Producción de un Área
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/areaIdParam'
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+      responses:
+        '200':
+          description: Líneas listadas.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProductionLine'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    post:
+      summary: Crear Línea de Producción
+      description: Crea una nueva línea de producción para el área especificada.
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/areaIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductionLineInput'
+      responses:
+        '201':
+          description: Línea de producción creada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductionLine'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /production-lines/{productionLineId}:
+    get:
+      summary: Obtener Línea de Producción
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/productionLineIdParam'
+      responses:
+        '200':
+          description: Detalle de la línea.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductionLine'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      summary: Actualizar Línea de Producción
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/productionLineIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductionLineInput'
+      responses:
+        '200':
+          description: Línea actualizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductionLine'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      summary: Activar/Desactivar Línea de Producción
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/productionLineIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: boolean
+      responses:
+        '200':
+          description: Estado actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductionLine'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # ===================================================================
+  # USERS
+  # ===================================================================
+
+  /users:
+    get:
+      summary: Listar Usuarios
+      description: Obtiene una lista paginada de todos los usuarios registrados.
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+        - in: query
+          name: status
+          schema:
+            type: boolean
+          description: Filtrar por usuarios activos o inactivos.
+      responses:
+        '200':
+          description: Lista de usuarios obtenida.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      summary: Crear Usuario
+      description: Crea un nuevo usuario. Permite enviar arreglos opcionales con IDs de roles, plantas y áreas para configurar sus permisos inmediatamente.
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreateInput'
+      responses:
+        '201':
+          description: Usuario creado exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /users/{userId}:
+    get:
+      summary: Obtener detalle de Usuario
+      description: Retorna la información de un usuario, incluyendo los roles, plantas y áreas a las que tiene acceso.
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/parameters/userIdParam'
+      responses:
+        '200':
+          description: Detalle del usuario obtenido.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserDetail'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      summary: Actualizar Usuario
+      description: Actualiza información básica del usuario (Nombre, Email, Estado). No se usa para actualizar contraseñas.
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/parameters/userIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateInput'
+      responses:
+        '200':
+          description: Usuario actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      summary: Activar/Desactivar Usuario
+      description: Cambia el estado lógico del usuario (activa o inactiva).
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/parameters/userIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: boolean
+      responses:
+        '200':
+          description: Estado actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /users/{userId}/password:
+    put:
+      summary: Cambiar Contraseña
+      description: Actualiza la contraseña del usuario.
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/parameters/userIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - current_password
+                - new_password
+              properties:
+                current_password:
+                  type: string
+                  format: password
+                  example: "PasswordActual123!"
+                new_password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  maxLength: 255
+                  example: "NuevoPassword456!"
+                new_password_confirmation:
+                  type: string
+                  format: password
+                  example: "NuevoPassword456!"
+      responses:
+        '200':
+          description: Contraseña actualizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /roles:
+    get:
+      summary: Listar Roles
+      description: Obtiene la lista paginada de roles disponibles para asignar a los usuarios.
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+      responses:
+        '200':
+          description: Lista de roles obtenida.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Role'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  # ===================================================================
+  # CHECKLISTS
+  # ===================================================================
+
+  /checklists:
+    get:
+      summary: Listar Checklists
+      description: Obtiene la lista paginada de checklists disponibles.
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+      responses:
+        '200':
+          description: Lista de checklists obtenida exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChecklistBase'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      summary: Crear Checklist Base
+      tags:
+        - Checklists
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChecklistInput'
+      responses:
+        '201':
+          description: Checklist creado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChecklistBase'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /checklists/{checklistId}:
+    get:
+      summary: Obtener Checklist
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/checklistIdParam'
+      responses:
+        '200':
+          description: Checklist obtenido.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChecklistBase'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      summary: Actualizar Checklist
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/checklistIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChecklistInput'
+      responses:
+        '200':
+          description: Checklist actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChecklistBase'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      summary: Activar/Desactivar Checklist
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/checklistIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: boolean
+      responses:
+        '200':
+          description: Estado actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChecklistBase'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /checklists/{checklistId}/versions:
+    get:
+      summary: Listar Versiones de un Checklist
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/checklistIdParam'
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+      responses:
+        '200':
+          description: Versiones listadas.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChecklistVersion'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    post:
+      summary: Crear Versión de Checklist
+      description: Crea una nueva versión del checklist en estado draft.
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/checklistIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+              properties:
+                version:
+                  type: string
+                  maxLength: 20
+                  example: "v1.1"
+      responses:
+        '201':
+          description: Versión creada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChecklistVersion'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /checklists/{checklistId}/versions/{versionId}:
+    get:
+      summary: Obtener Versión de Checklist
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/checklistIdParam'
+        - $ref: '#/components/parameters/checklistVersionIdParam'
+      responses:
+        '200':
+          description: Versión obtenida.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChecklistVersion'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      summary: Actualizar Versión de Checklist
+      description: Actualiza los metadatos de la versión (número, estado draft).
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/checklistIdParam'
+        - $ref: '#/components/parameters/checklistVersionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version:
+                  type: string
+                  maxLength: 20
+                  example: "v1.2"
+                status:
+                  type: string
+                  enum: [draft, archived]
+      responses:
+        '200':
+          description: Versión actualizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChecklistVersion'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      summary: Publicar Versión de Checklist
+      description: Cambia el estado de la versión. `publicada` la marca como versión activa y registra `published_at`.
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/checklistIdParam'
+        - $ref: '#/components/parameters/checklistVersionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [published, archived]
+      responses:
+        '200':
+          description: Estado actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChecklistVersion'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /checklists/{checklistId}/active-version:
+    get:
+      summary: Descargar Estructura Completa del Checklist
+      description: Retorna la versión activa/publicada de un checklist con todo su árbol de dependencias (secciones y preguntas). Este es el endpoint que consumirá la PWA para sincronización offline.
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/checklistIdParam'
+      responses:
+        '200':
+          description: Árbol del checklist obtenido exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChecklistFullTree'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /versions/{versionId}/sections:
+    get:
+      summary: Listar Secciones de una Versión
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/checklistVersionIdParam'
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+      responses:
+        '200':
+          description: Secciones listadas.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChecklistSection'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    post:
+      summary: Crear Sección
+      description: Crea una nueva sección dentro de una versión de checklist.
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/checklistVersionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  maxLength: 150
+                  example: "1. Equipos de Emergencia"
+                description:
+                  type: string
+                  maxLength: 65535
+                  example: "Validación de extintores y mangueras."
+                display_order:
+                  type: integer
+                  minimum: 0
+                  example: 1
+      responses:
+        '201':
+          description: Sección creada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChecklistSection'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /sections/{sectionId}:
+    get:
+      summary: Obtener Sección
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/sectionIdParam'
+      responses:
+        '200':
+          description: Sección obtenida.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChecklistSection'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      summary: Actualizar Sección
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/sectionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 150
+                description:
+                  type: string
+                  maxLength: 65535
+                display_order:
+                  type: integer
+                  minimum: 0
+      responses:
+        '200':
+          description: Sección actualizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChecklistSection'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      summary: Activar/Desactivar Sección
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/sectionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: boolean
+      responses:
+        '200':
+          description: Estado actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChecklistSection'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /sections/{sectionId}/questions:
+    get:
+      summary: Listar Preguntas de una Sección
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/sectionIdParam'
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+      responses:
+        '200':
+          description: Preguntas listadas.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Question'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    post:
+      summary: Crear Pregunta
+      description: Crea una nueva pregunta dentro de una sección del checklist.
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/sectionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionInput'
+      responses:
+        '201':
+          description: Pregunta creada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Question'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /questions/{questionId}:
+    get:
+      summary: Obtener Pregunta
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/questionIdParam'
+      responses:
+        '200':
+          description: Pregunta obtenida.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Question'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      summary: Actualizar Pregunta
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/questionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionInput'
+      responses:
+        '200':
+          description: Pregunta actualizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Question'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      summary: Activar/Desactivar Pregunta
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/questionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: boolean
+      responses:
+        '200':
+          description: Estado actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Question'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # ===================================================================
+  # NORMS
+  # ===================================================================
+
+  /norms:
+    get:
+      summary: Listar Normas
+      description: Obtiene el catálogo paginado de normas registradas en el sistema.
+      tags:
+        - Norms
+      parameters:
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+      responses:
+        '200':
+          description: Lista de normas obtenida exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Norm'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      summary: Crear Norma
+      description: Registra una nueva normativa, estándar o marco legal.
+      tags:
+        - Norms
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NormInput'
+      responses:
+        '201':
+          description: Norma creada exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Norm'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /norms/{normId}:
+    get:
+      summary: Obtener Norma
+      tags:
+        - Norms
+      parameters:
+        - $ref: '#/components/parameters/normIdParam'
+      responses:
+        '200':
+          description: Norma obtenida.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Norm'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      summary: Actualizar Norma
+      tags:
+        - Norms
+      parameters:
+        - $ref: '#/components/parameters/normIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NormInput'
+      responses:
+        '200':
+          description: Norma actualizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Norm'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      summary: Activar/Desactivar Norma
+      tags:
+        - Norms
+      parameters:
+        - $ref: '#/components/parameters/normIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: boolean
+      responses:
+        '200':
+          description: Estado actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Norm'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /norms/{normId}/requirements:
+    get:
+      summary: Listar Requerimientos de una Norma
+      description: Retorna todos los artículos o cláusulas específicas pertenecientes a una norma.
+      tags:
+        - Norms
+      parameters:
+        - $ref: '#/components/parameters/normIdParam'
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+      responses:
+        '200':
+          description: Requerimientos listados.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NormRequirement'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    post:
+      summary: Crear Requerimiento de Norma
+      description: Agrega una cláusula específica a la norma indicada.
+      tags:
+        - Norms
+      parameters:
+        - $ref: '#/components/parameters/normIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NormRequirementInput'
+      responses:
+        '201':
+          description: Requerimiento creado exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/NormRequirement'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /requirements/{requirementId}:
+    get:
+      summary: Obtener Requerimiento de Norma
+      tags:
+        - Norms
+      parameters:
+        - $ref: '#/components/parameters/normRequirementIdParam'
+      responses:
+        '200':
+          description: Requerimiento obtenido.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/NormRequirement'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      summary: Actualizar Requerimiento de Norma
+      tags:
+        - Norms
+      parameters:
+        - $ref: '#/components/parameters/normRequirementIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NormRequirementInput'
+      responses:
+        '200':
+          description: Requerimiento actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/NormRequirement'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /questions/{questionId}/norm-requirements:
+    get:
+      summary: Listar Requerimientos Normativos vinculados a una Pregunta
+      tags:
+        - Norms
+      parameters:
+        - $ref: '#/components/parameters/questionIdParam'
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+      responses:
+        '200':
+          description: Requerimientos normativos listados.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NormRequirement'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    post:
+      summary: Vincular Norma a Pregunta
+      description: Asocia un requerimiento normativo específico a una pregunta del checklist.
+      tags:
+        - Norms
+      parameters:
+        - $ref: '#/components/parameters/questionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - norm_requirement_id
+              properties:
+                norm_requirement_id:
+                  type: string
+                  format: uuid
+                  example: "018f5f6a-1111-7a8b-8000-123456789abc"
+      responses:
+        '201':
+          description: Vinculación creada correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/QuestionNormRequirement'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /questions/{questionId}/norm-requirements/{linkId}:
+    delete:
+      summary: Desvincular Requerimiento de Pregunta
+      description: Elimina la vinculación entre una pregunta y un requerimiento normativo.
+      tags:
+        - Norms
+      parameters:
+        - $ref: '#/components/parameters/questionIdParam'
+        - in: path
+          name: linkId
+          required: true
+          description: ID de la vinculación (question_norm_requirement)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Vinculación eliminada.
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # ===================================================================
+  # INSPECTIONS
+  # ===================================================================
+
+  /inspections:
+    get:
+      summary: Listar Inspecciones
+      description: Obtiene una lista paginada de inspecciones. Útil para el dashboard web de supervisores.
+      tags:
+        - Inspections
+      parameters:
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [draft, completed, confirmed, rejected]
+          description: Filtrar inspecciones por estado.
+        - in: query
+          name: plant_id
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar inspecciones por planta.
+        - in: query
+          name: area_id
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar inspecciones por área.
+        - in: query
+          name: user_id
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar inspecciones por inspector.
+        - in: query
+          name: supervisor_id
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar inspecciones por supervisor.
+        - in: query
+          name: date_from
+          schema:
+            type: string
+            format: date
+          description: Fecha de inicio del rango (inclusive).
+        - in: query
+          name: date_to
+          schema:
+            type: string
+            format: date
+          description: Fecha de fin del rango (inclusive).
+      responses:
+        '200':
+          description: Lista de inspecciones obtenida exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InspectionBase'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      summary: Sincronizar/Crear Inspección
+      description: Crea una inspección completa incluyendo sus respuestas en una sola transacción. Es el endpoint principal que consume la PWA al recuperar la conexión a internet.
+      tags:
+        - Inspections
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InspectionSyncInput'
+      responses:
+        '201':
+          description: Inspección sincronizada correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/InspectionDetail'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /inspections/{inspectionId}:
+    get:
+      summary: Detalle de Inspección
+      description: Obtiene todos los datos de la inspección, incluyendo las respuestas a cada pregunta para su revisión.
+      tags:
+        - Inspections
+      parameters:
+        - $ref: '#/components/parameters/inspectionIdParam'
+      responses:
+        '200':
+          description: Detalle de inspección.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/InspectionDetail'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /inspections/{inspectionId}/status:
+    put:
+      summary: Evaluar Inspección (Supervisor)
+      description: Permite al supervisor confirmar o rechazar una inspección completada en campo, añadiendo observaciones. El `supervisor_id` se toma del token JWT.
+      tags:
+        - Inspections
+      parameters:
+        - $ref: '#/components/parameters/inspectionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InspectionStatusInput'
+      responses:
+        '200':
+          description: Estado de inspección actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/InspectionDetail'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ===================================================================
+  # INCIDENTS
+  # ===================================================================
+
+  /incidents:
+    get:
+      summary: Listar Incidencias
+      description: Obtiene una lista paginada de incidencias, ideal para tableros de control y seguimiento.
+      tags:
+        - Incidents
+      parameters:
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [open, in_progress, resolved, closed]
+          description: Filtrar por estado.
+        - in: query
+          name: risk_level
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+          description: Filtrar por nivel de riesgo.
+        - in: query
+          name: plant_id
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar por planta.
+        - in: query
+          name: area_id
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar por área.
+        - in: query
+          name: reported_by
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar por usuario que reportó.
+        - in: query
+          name: date_from
+          schema:
+            type: string
+            format: date
+          description: Fecha de inicio del rango (inclusive).
+        - in: query
+          name: date_to
+          schema:
+            type: string
+            format: date
+          description: Fecha de fin del rango (inclusive).
+      responses:
+        '200':
+          description: Lista de incidencias obtenida.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Incident'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      summary: Reportar Incidencia
+      description: Crea una nueva incidencia. Puede estar vinculada a una inspección previa o ser un reporte aislado. El `reported_by` se toma del token JWT.
+      tags:
+        - Incidents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentInput'
+      responses:
+        '201':
+          description: Incidencia registrada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Incident'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /incidents/{incidentId}:
+    get:
+      summary: Detalle de Incidencia
+      tags:
+        - Incidents
+      parameters:
+        - $ref: '#/components/parameters/incidentIdParam'
+      responses:
+        '200':
+          description: Incidencia obtenida.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Incident'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /incidents/{incidentId}/status:
+    patch:
+      summary: Actualizar Estado de Incidencia
+      description: Permite cambiar el estado de una incidencia (ej. de 'open' a 'resolved').
+      tags:
+        - Incidents
+      parameters:
+        - $ref: '#/components/parameters/incidentIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentStatusInput'
+      responses:
+        '200':
+          description: Estado actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Incident'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ===================================================================
+  # EVIDENCES
+  # ===================================================================
+
+  /evidences:
+    get:
+      summary: Listar Evidencias
+      description: Obtiene una lista paginada de evidencias con filtros opcionales.
+      tags:
+        - Evidences
+      parameters:
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+        - in: query
+          name: inspection_id
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar por inspección.
+        - in: query
+          name: inspection_answer_id
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar por respuesta de inspección.
+        - in: query
+          name: incident_id
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar por incidencia.
+      responses:
+        '200':
+          description: Lista de evidencias obtenida.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Evidence'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      summary: Subir Evidencia Multimedia
+      description: Endpoint especializado para la recepción de archivos (fotos, documentos). Utiliza form-data en lugar de JSON. El `uploaded_by` se toma del token JWT.
+      tags:
+        - Evidences
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EvidenceUploadInput'
+      responses:
+        '201':
+          description: Archivo subido y registrado exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Evidence'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /evidences/{evidenceId}:
+    get:
+      summary: Obtener Evidencia
+      description: Devuelve los metadatos de la evidencia, incluyendo `storage_path` (URL firmada para descarga).
+      tags:
+        - Evidences
+      parameters:
+        - in: path
+          name: evidenceId
+          required: true
+          description: UUID de la evidencia
+          schema:
+            type: string
+            format: uuid
+            example: "018f8c9d-5555-7a8b-8000-112233445566"
+      responses:
+        '200':
+          description: Evidencia obtenida.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Evidence'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # ===================================================================
+  # CORRECTIVE ACTIONS
+  # ===================================================================
+
+  /corrective-actions:
+    get:
+      summary: Listar Acciones Correctivas
+      description: Obtiene una lista paginada de acciones. Permite filtrar por asignado (Mis Tareas), por incidencia o por estado.
+      tags:
+        - Corrective Actions
+      parameters:
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+        - in: query
+          name: assigned_to
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar por el UUID del usuario responsable.
+        - in: query
+          name: incident_id
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar por una incidencia específica.
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, in_progress, completed, verified]
+      responses:
+        '200':
+          description: Listado obtenido exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CorrectiveAction'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      summary: Crear Acción Correctiva
+      description: Asigna una nueva tarea correctiva derivada de una incidencia.
+      tags:
+        - Corrective Actions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorrectiveActionInput'
+      responses:
+        '201':
+          description: Acción correctiva asignada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CorrectiveAction'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /corrective-actions/{actionId}:
+    get:
+      summary: Detalle de Acción Correctiva
+      description: Muestra los datos de la tarea y todo el historial de actualizaciones y comentarios.
+      tags:
+        - Corrective Actions
+      parameters:
+        - $ref: '#/components/parameters/actionIdParam'
+      responses:
+        '200':
+          description: Detalle obtenido.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CorrectiveActionDetail'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    patch:
+      summary: Actualizar Acción Correctiva
+      description: Permite editar la descripción, prioridad, fecha límite o reasignar la tarea.
+      tags:
+        - Corrective Actions
+      parameters:
+        - $ref: '#/components/parameters/actionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorrectiveActionInput'
+      responses:
+        '200':
+          description: Acción actualizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CorrectiveAction'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /corrective-actions/{actionId}/updates:
+    get:
+      summary: Listar Actualizaciones de una Acción
+      tags:
+        - Corrective Actions
+      parameters:
+        - $ref: '#/components/parameters/actionIdParam'
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+      responses:
+        '200':
+          description: Actualizaciones listadas.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CorrectiveActionUpdate'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    post:
+      summary: Registrar Actualización / Avance
+      description: Permite al responsable agregar un comentario sobre la tarea y avanzar su estado (ej. de pendiente a completada). El `user_id` se toma del token JWT.
+      tags:
+        - Corrective Actions
+      parameters:
+        - $ref: '#/components/parameters/actionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorrectiveActionUpdateInput'
+      responses:
+        '201':
+          description: Avance registrado correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CorrectiveActionUpdate'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ===================================================================
+  # AUDIT LOGS
+  # ===================================================================
+
+  /audit-logs:
+    get:
+      summary: Listar Registros de Auditoría
+      description: Obtiene el historial de cambios en el sistema. Los resultados pueden filtrarse por usuario, modelo afectado o tipo de acción.
+      tags:
+        - Audit Logs
+      parameters:
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+        - in: query
+          name: user_id
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar acciones realizadas por un usuario específico.
+        - in: query
+          name: auditable_type
+          schema:
+            type: string
+          description: Filtrar por modelo (ej. 'Inspection', 'Incident', 'User').
+          example: "Inspection"
+        - in: query
+          name: auditable_id
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar por el ID del recurso afectado.
+        - in: query
+          name: action
+          schema:
+            type: string
+            enum: [created, updated, deleted]
+          description: Tipo de operación realizada.
+        - in: query
+          name: date_from
+          schema:
+            type: string
+            format: date
+          description: Fecha de inicio del rango (inclusive).
+        - in: query
+          name: date_to
+          schema:
+            type: string
+            format: date
+          description: Fecha de fin del rango (inclusive).
+      responses:
+        '200':
+          description: Listado de auditoría obtenido exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLog'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /audit-logs/{logId}:
+    get:
+      summary: Detalle de Registro de Auditoría
+      description: Obtiene los detalles exactos de un cambio, incluyendo el estado anterior y nuevo de los campos modificados.
+      tags:
+        - Audit Logs
+      parameters:
+        - $ref: '#/components/parameters/logIdParam'
+      responses:
+        '200':
+          description: Detalle del log obtenido.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AuditLog'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # ===================================================================
+  # ORGANIZATIONS
+  # ===================================================================
+
+  /organizations:
+    get:
+      summary: Listar Organizaciones
+      description: Obtiene una lista paginada de organizaciones. Cada organización es el raíz de separación de responsabilidades (multi-tenancy).
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+        - in: query
+          name: status
+          schema:
+            type: boolean
+          description: Filtrar por organizaciones activas o inactivas.
+      responses:
+        '200':
+          description: Lista de organizaciones obtenida.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Organization'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      summary: Crear Organización
+      description: Crea una nueva empresa u organización.
+      tags:
+        - Organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationInput'
+      responses:
+        '201':
+          description: Organización creada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /organizations/{organizationId}:
+    get:
+      summary: Obtener Organización
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+      responses:
+        '200':
+          description: Detalle de la organización.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Organization'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      summary: Actualizar Organización
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationInput'
+      responses:
+        '200':
+          description: Organización actualizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Organization'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      summary: Activar/Desactivar Organización
+      description: Cambia el estado lógico de la organización (activa o inactiva).
+      tags:
+        - Organization
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: Estado actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Organization'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # ===================================================================
+  # SYNC (Offline / PWA)
+  # ===================================================================
+
+  /sync/bootstrap:
+    get:
+      summary: Descargar Snapshot Inicial
+      description: >
+        Retorna el snapshot inicial para la PWA: organizaciones, plantas, áreas,
+        líneas de producción, checklists y normas, junto con un cursor inicial
+        para sincronización incremental. Es el primer endpoint que consume la
+        PWA al recuperar la conexión.
+      tags:
+        - Sync
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Snapshot inicial obtenido.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      organizations:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Organization'
+                      plants:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Plant'
+                      areas:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Area'
+                      production_lines:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ProductionLine'
+                      checklists:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ChecklistBase'
+                      norms:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Norm'
+                      cursor:
+                        $ref: '#/components/schemas/SyncCursor'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /sync/changes:
+    get:
+      summary: Descargar Cambios Incrementales
+      description: >
+        Retorna el flujo de cambios del servidor posteriores al cursor indicado.
+        El cursor es opaco y lo emite el servidor. Permite a la PWA mantenerse
+        sincronizada con los cambios realizados por otros dispositivos o por el
+        panel web.
+      tags:
+        - Sync
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: cursor
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+            description: Secuencia `seq` del último cambio procesado por el cliente.
+          example: 0
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          description: Número máximo de cambios a devolver.
+          example: 100
+        - in: query
+          name: resources
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [plants, areas, production_lines, checklists, checklist_versions, checklist_sections, questions, norms, norm_requirements, inspections, inspection_answers, incidents, evidences, corrective_actions, corrective_action_updates, audit_logs]
+          description: Filtro opcional por tipo de recurso. Si se omite, se devuelve todo.
+      responses:
+        '200':
+          description: Cambios obtenidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncChangeList'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /sync/operations:
+    post:
+      summary: Enviar Operaciones Pendientes
+      description: >
+        Recibe un lote de operaciones pendientes creadas offline por la PWA y
+        devuelve un resultado individual por operación. Es idempotente: reenviar
+        el mismo `operation_id` devuelve el mismo resultado sin duplicar efectos.
+        Las operaciones se resuelven respetando `depends_on`.
+      tags:
+        - Sync
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncBatchRequest'
+      responses:
+        '200':
+          description: Lote procesado. El estado HTTP es 200 aunque alguna operación falle.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncBatchResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /devices:
+    get:
+      summary: Listar Dispositivos
+      description: Obtiene los dispositivos registrados para sincronización.
+      tags:
+        - Sync
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/perPageParam'
+      responses:
+        '200':
+          description: Lista de dispositivos obtenida.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+    post:
+      summary: Registrar Dispositivo
+      description: Registra un dispositivo móvil para habilitar la sincronización offline.
+      tags:
+        - Sync
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceInput'
+      responses:
+        '201':
+          description: Dispositivo registrado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /devices/{deviceId}:
+    get:
+      summary: Obtener Dispositivo
+      tags:
+        - Sync
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/deviceIdParam'
+      responses:
+        '200':
+          description: Detalle del dispositivo.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Device'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Token personal de Sanctum con formato `{id}|{40 caracteres}`.
+        No es un JWT: debe enviarse tal cual lo devuelve `POST /auth/login`
+        en `data.token`. Se revoca con `POST /auth/logout`.
+
+  headers:
+    RateLimitLimit:
+      description: Peticiones permitidas en la ventana actual.
+      schema:
+        type: integer
+        example: 5
+    RateLimitRemaining:
+      description: Peticiones restantes en la ventana actual.
+      schema:
+        type: integer
+        example: 4
+
+  parameters:
+    plantIdParam:
+      in: path
+      name: plantId
+      required: true
+      description: UUID de la planta
+      schema:
+        type: string
+        format: uuid
+        example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+    areaIdParam:
+      in: path
+      name: areaId
+      required: true
+      description: UUID del área
+      schema:
+        type: string
+        format: uuid
+        example: "018f1a2c-1111-7e5f-8000-abcdef123456"
+    productionLineIdParam:
+      in: path
+      name: productionLineId
+      required: true
+      description: UUID de la línea de producción
+      schema:
+        type: string
+        format: uuid
+        example: "018f1a2d-2222-7e5f-8000-fedcba654321"
+    userIdParam:
+      in: path
+      name: userId
+      required: true
+      description: UUID del usuario
+      schema:
+        type: string
+        format: uuid
+        example: "018f2b3c-4d5e-7f8a-8000-112233445566"
+    checklistIdParam:
+      in: path
+      name: checklistId
+      required: true
+      description: UUID del checklist
+      schema:
+        type: string
+        format: uuid
+        example: "018f3d4e-1234-7a8b-8000-abcdef123456"
+    checklistVersionIdParam:
+      in: path
+      name: versionId
+      required: true
+      description: UUID de la versión del checklist
+      schema:
+        type: string
+        format: uuid
+        example: "018f3d5e-4321-7a8b-8000-aabbccddeeff"
+    sectionIdParam:
+      in: path
+      name: sectionId
+      required: true
+      description: UUID de la sección
+      schema:
+        type: string
+        format: uuid
+        example: "018f3e5f-9999-7a8b-8000-112233445566"
+    questionIdParam:
+      in: path
+      name: questionId
+      required: true
+      description: UUID de la pregunta del checklist
+      schema:
+        type: string
+        format: uuid
+        example: "018f4e5f-5678-7a8b-8000-fedcba654321"
+    normIdParam:
+      in: path
+      name: normId
+      required: true
+      description: UUID de la Norma principal
+      schema:
+        type: string
+        format: uuid
+        example: "018f5e6a-9999-7a8b-8000-abcdef123456"
+    normRequirementIdParam:
+      in: path
+      name: requirementId
+      required: true
+      description: UUID del requerimiento normativo
+      schema:
+        type: string
+        format: uuid
+        example: "018f5f6a-1111-7a8b-8000-123456789abc"
+    inspectionIdParam:
+      in: path
+      name: inspectionId
+      required: true
+      description: UUID de la inspección
+      schema:
+        type: string
+        format: uuid
+        example: "018f6a7b-2222-7a8b-8000-abcdef123456"
+    incidentIdParam:
+      in: path
+      name: incidentId
+      required: true
+      description: UUID de la incidencia
+      schema:
+        type: string
+        format: uuid
+        example: "018f7b8c-4444-7a8b-8000-abcdef123456"
+    actionIdParam:
+      in: path
+      name: actionId
+      required: true
+      description: UUID de la acción correctiva
+      schema:
+        type: string
+        format: uuid
+        example: "018f9a1b-6666-7a8b-8000-abcdef123456"
+    logIdParam:
+      in: path
+      name: logId
+      required: true
+      description: UUID del registro de auditoría
+      schema:
+        type: string
+        format: uuid
+        example: "018fa1b2-3333-7a8b-8000-abcdef123456"
+    organizationIdParam:
+      in: path
+      name: organizationId
+      required: true
+      description: UUID de la organización
+      schema:
+        type: string
+        format: uuid
+        example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+    deviceIdParam:
+      in: path
+      name: deviceId
+      required: true
+      description: UUID del dispositivo
+      schema:
+        type: string
+        format: uuid
+        example: "018f9c1d-1111-7a8b-8000-aabbccddeeff"
+    pageParam:
+      in: query
+      name: page
+      required: false
+      description: Número de página (1-indexado)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    perPageParam:
+      in: query
+      name: per_page
+      required: false
+      description: Elementos por página
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 15
+
+  responses:
+    UnauthorizedError:
+      description: No autenticado. Token de acceso ausente, inválido o revocado.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            tokenAusente:
+              summary: Sin cabecera Authorization
+              value:
+                message: "No autenticado. Token de acceso ausente."
+            tokenInvalido:
+              summary: Token inexistente o revocado
+              value:
+                message: "No autenticado. Token de acceso inválido."
+    InvalidCredentialsError:
+      description: El email no existe o la contraseña es incorrecta.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "Las credenciales proporcionadas son incorrectas."
+    InactiveUserError:
+      description: Credenciales válidas, pero el usuario tiene `status = false`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "El usuario está inactivo. Contacte al administrador."
+    AccessDeniedError:
+      description: |
+        Acceso denegado por el estado del usuario o de su organización.
+        El usuario debe existir, estar activo y pertenecer a una organización
+        existente y activa.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            usuarioInactivo:
+              value:
+                message: "El usuario está inactivo. Contacte al administrador."
+            organizacionInactiva:
+              value:
+                message: "La organización está inactiva. Contacte al administrador."
+            organizacionInexistente:
+              value:
+                message: "La organización del usuario no existe."
+            sinOrganizacion:
+              value:
+                message: "El usuario no tiene una organización asignada."
+    ForbiddenError:
+      description: Prohibido. No tienes permiso para realizar esta acción.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "This action is unauthorized."
+    NotFoundError:
+      description: Recurso no encontrado.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "Recurso no encontrado."
+    ValidationError:
+      description: Error de validación en los datos enviados.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Los datos proporcionados no son válidos."
+              errors:
+                type: object
+                additionalProperties:
+                  type: array
+                  items:
+                    type: string
+                example:
+                  code: ["El código PLN-01 ya ha sido registrado."]
+    TooManyRequests:
+      description: |
+        Límite de peticiones excedido. La respuesta actual del backend no
+        incluye `Retry-After` ni `X-RateLimit-*`: el cliente debe aplicar su
+        propio backoff. En `POST /auth/login` el límite es de 5 intentos por
+        minuto.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "Too Many Attempts."
+    ServiceUnavailable:
+      description: Servicio temporalmente no disponible. El cliente debe reintentar más tarde.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "Servicio temporalmente no disponible."
+
+  schemas:
+
+    # -------------------------------------------------------------------
+    # Authentication
+    # -------------------------------------------------------------------
+
+    LoginInput:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 150
+          example: inspector@inspecta-demo.com
+        password:
+          type: string
+          example: Inspector123!
+
+    AuthUser:
+      type: object
+      description: Identidad mínima del usuario autenticado.
+      required:
+        - id
+        - name
+        - email
+        - organization_id
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f2b3c-4d5e-7f8a-8000-112233445591"
+        name:
+          type: string
+          maxLength: 150
+          example: "Inspector Demo"
+        email:
+          type: string
+          format: email
+          maxLength: 150
+          example: inspector@inspecta-demo.com
+        organization_id:
+          type: string
+          format: uuid
+          description: Organización a la que pertenece el usuario. Es la raíz del aislamiento multi-tenancy.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+
+    LoginResponse:
+      type: object
+      required:
+        - message
+        - data
+      properties:
+        message:
+          type: string
+          example: "Autenticación exitosa."
+        data:
+          type: object
+          required:
+            - user
+            - token
+          properties:
+            user:
+              $ref: '#/components/schemas/AuthUser'
+            token:
+              type: string
+              description: Token personal de Sanctum con formato `{id}|{40 caracteres}`.
+              example: "1|xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+    MeResponse:
+      type: object
+      required:
+        - message
+        - data
+      properties:
+        message:
+          type: string
+          example: "Usuario autenticado."
+        data:
+          $ref: '#/components/schemas/AuthUser'
+
+    LogoutResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: "Sesión cerrada correctamente."
+
+    # -------------------------------------------------------------------
+    # Common
+    # -------------------------------------------------------------------
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Mensaje de error."
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+
+    PaginationMeta:
+      type: object
+      description: Metadatos de paginación (estándar Laravel API Resources).
+      properties:
+        current_page:
+          type: integer
+          example: 1
+        last_page:
+          type: integer
+          example: 4
+        per_page:
+          type: integer
+          example: 15
+        total:
+          type: integer
+          example: 52
+
+    # -------------------------------------------------------------------
+    # Organization
+    # -------------------------------------------------------------------
+
+    Organization:
+      type: object
+      description: Empresa u organización. Es la raíz de la separación de responsabilidades por organización (multi-tenancy).
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        name:
+          type: string
+          maxLength: 150
+          example: "Constructora del Norte S.A. de C.V."
+        code:
+          type: string
+          maxLength: 50
+          example: "CN-01"
+        tax_id:
+          type: string
+          maxLength: 50
+          nullable: true
+          example: "ABC123456789"
+        address:
+          type: string
+          nullable: true
+          example: "Av. Industria 100, Jalisco"
+        description:
+          type: string
+          nullable: true
+          example: "Empresa constructora principal"
+        phone:
+          type: string
+          maxLength: 50
+          nullable: true
+          example: "+52 33 1234 5678"
+        email:
+          type: string
+          maxLength: 150
+          nullable: true
+          example: "contacto@constructoranorte.com"
+        status:
+          type: boolean
+          example: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fecha de baja lógica (soft delete). Nulo si la organización está activa.
+          example: null
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-10-01T09:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-10-01T09:00:00Z"
+
+    OrganizationInput:
+      type: object
+      required:
+        - name
+        - code
+      properties:
+        name:
+          type: string
+          maxLength: 150
+          example: "Constructora del Norte S.A. de C.V."
+        code:
+          type: string
+          maxLength: 50
+          example: "CN-01"
+        tax_id:
+          type: string
+          maxLength: 50
+          nullable: true
+          example: "ABC123456789"
+        address:
+          type: string
+          nullable: true
+          example: "Av. Industria 100, Jalisco"
+        description:
+          type: string
+          nullable: true
+          example: "Empresa constructora principal"
+        phone:
+          type: string
+          maxLength: 50
+          nullable: true
+          example: "+52 33 1234 5678"
+        email:
+          type: string
+          maxLength: 150
+          nullable: true
+          example: "contacto@constructoranorte.com"
+        status:
+          type: boolean
+          default: true
+          example: true
+
+    # -------------------------------------------------------------------
+    # Plant
+    # -------------------------------------------------------------------
+
+    Plant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece la planta.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        name:
+          type: string
+          maxLength: 150
+          example: "Planta Norte"
+        code:
+          type: string
+          maxLength: 50
+          example: "PLN-01"
+        address:
+          type: string
+          nullable: true
+          example: "Av. Industria 100, Jalisco"
+        description:
+          type: string
+          nullable: true
+          example: "Planta principal de manufactura"
+        status:
+          type: boolean
+          example: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fecha de baja lógica (soft delete). Nulo si la planta está activa.
+          example: null
+        areas:
+          type: array
+          nullable: true
+          description: "Opcional. Se devuelve si se solicita la jerarquía."
+          items:
+            $ref: '#/components/schemas/Area'
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-10-01T09:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-10-01T09:00:00Z"
+
+    PlantInput:
+      type: object
+      required:
+        - name
+        - code
+      properties:
+        name:
+          type: string
+          maxLength: 150
+          example: "Planta Norte"
+        code:
+          type: string
+          maxLength: 50
+          example: "PLN-01"
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        address:
+          type: string
+          nullable: true
+          example: "Av. Industria 100, Jalisco"
+        description:
+          type: string
+          nullable: true
+          example: "Planta principal de manufactura"
+
+    Area:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f1a2c-1111-7e5f-8000-abcdef123456"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece el área.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        plant_id:
+          type: string
+          format: uuid
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        name:
+          type: string
+          maxLength: 150
+          example: "Área de Soldadura"
+        code:
+          type: string
+          maxLength: 50
+          example: "AR-SOLD-01"
+        type:
+          type: string
+          enum: [production, warehouse, administrative, maintenance, outdoor]
+          example: "production"
+        description:
+          type: string
+          nullable: true
+          example: "Zona de soldadura robótica"
+        status:
+          type: boolean
+          example: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fecha de baja lógica (soft delete). Nulo si el área está activa.
+          example: null
+        production_lines:
+          type: array
+          nullable: true
+          description: "Opcional. Jerarquía inferior."
+          items:
+            $ref: '#/components/schemas/ProductionLine'
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    AreaInput:
+      type: object
+      required:
+        - name
+        - code
+      properties:
+        name:
+          type: string
+          maxLength: 150
+          example: "Área de Soldadura"
+        code:
+          type: string
+          maxLength: 50
+          example: "AR-SOLD-01"
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        type:
+          type: string
+          enum: [production, warehouse, administrative, maintenance, outdoor]
+          example: "production"
+        description:
+          type: string
+          nullable: true
+          example: "Zona de soldadura robótica"
+
+    ProductionLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f1a2d-2222-7e5f-8000-fedcba654321"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece la línea de producción.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        area_id:
+          type: string
+          format: uuid
+          example: "018f1a2c-1111-7e5f-8000-abcdef123456"
+        name:
+          type: string
+          maxLength: 150
+          example: "Línea Automotriz A"
+        code:
+          type: string
+          maxLength: 50
+          example: "LN-AUT-A"
+        description:
+          type: string
+          nullable: true
+          example: "Ensamblaje de chasis"
+        status:
+          type: boolean
+          example: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fecha de baja lógica (soft delete). Nulo si la línea está activa.
+          example: null
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ProductionLineInput:
+      type: object
+      required:
+        - name
+        - code
+      properties:
+        name:
+          type: string
+          maxLength: 150
+          example: "Línea Automotriz A"
+        code:
+          type: string
+          maxLength: 50
+          example: "LN-AUT-A"
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        description:
+          type: string
+          nullable: true
+          example: "Ensamblaje de chasis"
+
+    # -------------------------------------------------------------------
+    # Users
+    # -------------------------------------------------------------------
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f2b3c-4d5e-7f8a-8000-112233445566"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece el usuario.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        name:
+          type: string
+          maxLength: 150
+          example: "Ulises Arturo Rocha"
+        email:
+          type: string
+          format: email
+          maxLength: 150
+          example: "ulises.rocha@inspecta.com"
+        status:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    UserDetail:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            roles:
+              type: array
+              items:
+                $ref: '#/components/schemas/Role'
+            assigned_plants:
+              type: array
+              items:
+                $ref: '#/components/schemas/Plant'
+            assigned_areas:
+              type: array
+              items:
+                $ref: '#/components/schemas/Area'
+
+    UserCreateInput:
+      type: object
+      required:
+        - name
+        - email
+        - password
+      properties:
+        name:
+          type: string
+          maxLength: 150
+          example: "Yajaira Estrada"
+        email:
+          type: string
+          format: email
+          maxLength: 150
+          example: "yajaira.estrada@inspecta.com"
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 255
+          example: "PasswordSeguro123!"
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        roles:
+          type: array
+          description: Arreglo de IDs de roles a asignar (opcional).
+          items:
+            type: string
+            format: uuid
+        assigned_plants:
+          type: array
+          description: Arreglo de IDs de plantas a asignar (opcional).
+          items:
+            type: string
+            format: uuid
+        assigned_areas:
+          type: array
+          description: Arreglo de IDs de áreas a asignar (opcional).
+          items:
+            type: string
+            format: uuid
+
+    UserUpdateInput:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 150
+          example: "Ulises Arturo Rocha Garcia"
+        email:
+          type: string
+          format: email
+          maxLength: 150
+          example: "ulises.rocha@inspecta.com"
+        status:
+          type: boolean
+          example: true
+
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f2b3c-9999-7f8a-8000-112233445566"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece el rol.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        name:
+          type: string
+          maxLength: 50
+          example: "Inspector"
+        description:
+          type: string
+          nullable: true
+          example: "Puede realizar inspecciones y reportar incidencias"
+        status:
+          type: boolean
+          example: true
+
+    # -------------------------------------------------------------------
+    # Checklists
+    # -------------------------------------------------------------------
+
+    ChecklistBase:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f3d4e-1234-7a8b-8000-abcdef123456"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece el checklist.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        name:
+          type: string
+          maxLength: 150
+          example: "Inspección de EHS Semanal"
+        description:
+          type: string
+          nullable: true
+          example: "Revisión rutinaria de equipo de protección personal y extintores."
+        status:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ChecklistInput:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 150
+          example: "Inspección de EHS Semanal"
+        description:
+          type: string
+          nullable: true
+          example: "Revisión rutinaria de equipo de protección personal y extintores."
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+
+    ChecklistVersion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f3d5e-4321-7a8b-8000-aabbccddeeff"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece la versión del checklist.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        checklist_id:
+          type: string
+          format: uuid
+          example: "018f3d4e-1234-7a8b-8000-abcdef123456"
+        version:
+          type: string
+          maxLength: 20
+          example: "v1.2"
+        status:
+          type: string
+          enum: [draft, published, archived]
+          example: "published"
+        created_by:
+          type: string
+          format: uuid
+          description: ID del usuario que creó la versión (BD checklist_versions.created_by).
+          example: "018f2b3c-4d5e-7f8a-8000-112233445566"
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-10-10T14:30:00Z"
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ChecklistSection:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f3e5f-9999-7a8b-8000-112233445566"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece la sección.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        checklist_version_id:
+          type: string
+          format: uuid
+          example: "018f3d5e-4321-7a8b-8000-aabbccddeeff"
+        name:
+          type: string
+          maxLength: 150
+          example: "1. Equipos de Emergencia"
+        description:
+          type: string
+          nullable: true
+          example: "Validación de extintores y mangueras."
+        display_order:
+          type: integer
+          minimum: 0
+          example: 1
+        status:
+          type: boolean
+          example: true
+        questions:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/Question'
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    Question:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f4e5f-5678-7a8b-8000-fedcba654321"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece la pregunta.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        checklist_section_id:
+          type: string
+          format: uuid
+          example: "018f3e5f-9999-7a8b-8000-112233445566"
+        question_text:
+          type: string
+          maxLength: 65535
+          example: "¿Todos los extintores tienen carga vigente y marchamo de seguridad?"
+        description:
+          type: string
+          nullable: true
+          example: "Verifique visualmente la etiqueta de inspección mensual."
+        answer_type:
+          type: string
+          enum: [boolean, text, number, multiple_choice, signature, date]
+          description: |
+            Tipo de respuesta esperado:
+            - `boolean`: Sí/No (se serializa como "true"/"false").
+            - `text`: Respuesta abierta.
+            - `number`: Mediciones numéricas (se serializa como string numérico).
+            - `multiple_choice`: Selector de opciones.
+            - `signature`: Firma digital.
+            - `date`: Fecha.
+          example: "boolean"
+        display_order:
+          type: integer
+          minimum: 0
+          example: 1
+        required:
+          type: boolean
+          example: true
+        allows_evidence:
+          type: boolean
+          example: true
+        status:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    QuestionInput:
+      type: object
+      required:
+        - question_text
+        - answer_type
+      properties:
+        question_text:
+          type: string
+          maxLength: 65535
+          example: "¿Todos los extintores tienen carga vigente y marchamo de seguridad?"
+        description:
+          type: string
+          nullable: true
+          example: "Verifique visualmente la etiqueta de inspección mensual."
+        answer_type:
+          type: string
+          enum: [boolean, text, number, multiple_choice, signature, date]
+          example: "boolean"
+        display_order:
+          type: integer
+          minimum: 0
+          example: 1
+        required:
+          type: boolean
+          default: true
+        allows_evidence:
+          type: boolean
+          default: false
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+
+    ChecklistFullTree:
+      allOf:
+        - $ref: '#/components/schemas/ChecklistBase'
+        - type: object
+          properties:
+            active_version:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                  example: "018f3d5e-4321-7a8b-8000-aabbccddeeff"
+                version:
+                  type: string
+                  maxLength: 20
+                  example: "v1.2"
+                status:
+                  type: string
+                  enum: [draft, published, archived]
+                  example: "published"
+                published_at:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  example: "2026-10-10T14:30:00Z"
+                sections:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ChecklistSection'
+
+    # -------------------------------------------------------------------
+    # Norms
+    # -------------------------------------------------------------------
+
+    Norm:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f5e6a-9999-7a8b-8000-abcdef123456"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece la norma.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        code:
+          type: string
+          maxLength: 100
+          example: "NOM-017-STPS"
+        name:
+          type: string
+          maxLength: 150
+          example: "Equipo de Protección Personal"
+        description:
+          type: string
+          nullable: true
+          example: "Selección, uso y manejo en los centros de trabajo."
+        issuing_body:
+          type: string
+          maxLength: 150
+          nullable: true
+          example: "Secretaría del Trabajo y Previsión Social (STPS)"
+        version:
+          type: string
+          maxLength: 50
+          example: "2008"
+        effective_date:
+          type: string
+          format: date
+          nullable: true
+          example: "2008-12-09"
+        status:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    NormInput:
+      type: object
+      required:
+        - code
+        - name
+      properties:
+        code:
+          type: string
+          maxLength: 100
+          example: "NOM-017-STPS"
+        name:
+          type: string
+          maxLength: 150
+          example: "Equipo de Protección Personal"
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        description:
+          type: string
+          nullable: true
+          example: "Selección, uso y manejo en los centros de trabajo."
+        issuing_body:
+          type: string
+          maxLength: 150
+          nullable: true
+          example: "Secretaría del Trabajo y Previsión Social (STPS)"
+        version:
+          type: string
+          maxLength: 50
+          example: "2008"
+        effective_date:
+          type: string
+          format: date
+          nullable: true
+          example: "2008-12-09"
+
+    NormRequirement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f5f6a-1111-7a8b-8000-123456789abc"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece el requerimiento.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        norm_id:
+          type: string
+          format: uuid
+          example: "018f5e6a-9999-7a8b-8000-abcdef123456"
+        code:
+          type: string
+          maxLength: 100
+          example: "ART-5.1"
+        section:
+          type: string
+          maxLength: 100
+          nullable: true
+          example: "Obligaciones del Patrón"
+        description:
+          type: string
+          maxLength: 65535
+          example: "Mostrar a la autoridad del trabajo los documentos que la presente Norma le obligue a elaborar."
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    NormRequirementInput:
+      type: object
+      required:
+        - code
+        - description
+      properties:
+        code:
+          type: string
+          maxLength: 100
+          example: "ART-5.1"
+        section:
+          type: string
+          maxLength: 100
+          nullable: true
+          example: "Obligaciones del Patrón"
+        description:
+          type: string
+          maxLength: 65535
+          example: "Mostrar a la autoridad del trabajo los documentos que la presente Norma le obligue a elaborar."
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+
+    QuestionNormRequirement:
+      type: object
+      description: Vinculación entre una pregunta del checklist y un requerimiento normativo (tabla question_norm_requirement).
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f6a7b-1111-7a8b-8000-abcdef123456"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece la vinculación.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        question_id:
+          type: string
+          format: uuid
+          example: "018f4e5f-5678-7a8b-8000-fedcba654321"
+        norm_requirement_id:
+          type: string
+          format: uuid
+          example: "018f5f6a-1111-7a8b-8000-123456789abc"
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    # -------------------------------------------------------------------
+    # Inspections
+    # -------------------------------------------------------------------
+
+    InspectionBase:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f6a7b-2222-7a8b-8000-abcdef123456"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece la inspección.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        user_id:
+          type: string
+          format: uuid
+          description: ID del inspector (BD inspections.user_id).
+          example: "018f2b3c-4d5e-7f8a-8000-112233445566"
+        supervisor_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID del supervisor asignado (BD inspections.supervisor_id).
+          example: "018f2b3c-4d5e-7f8a-8000-112233445566"
+        checklist_version_id:
+          type: string
+          format: uuid
+          description: Versión del checklist utilizada (BD inspections.checklist_version_id).
+          example: "018f3d5e-4321-7a8b-8000-aabbccddeeff"
+        plant_id:
+          type: string
+          format: uuid
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        area_id:
+          type: string
+          format: uuid
+          example: "018f1a2c-1111-7e5f-8000-abcdef123456"
+        production_line_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: "018f1a2d-2222-7e5f-8000-fedcba654321"
+        status:
+          type: string
+          enum: [draft, completed, confirmed, rejected]
+          description: |
+            Estado de la inspección:
+            - `draft`: Borrador.
+            - `completed`: Completada en campo.
+            - `confirmed`: Confirmada por supervisor.
+            - `rejected`: Rechazada por supervisor.
+          example: "completed"
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-10-12T10:00:00Z"
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-10-12T10:45:00Z"
+        supervisor_confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+        rejected_at:
+          type: string
+          format: date-time
+          nullable: true
+        location_description:
+          type: string
+          maxLength: 255
+          nullable: true
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+          description: Latitud (BD DECIMAL(10,7), 7 decimales).
+          example: 20.659698
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+          description: Longitud (BD DECIMAL(10,7), 7 decimales).
+          example: -103.349609
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    InspectionSyncInput:
+      type: object
+      required:
+        - checklist_version_id
+        - plant_id
+        - area_id
+        - answers
+      properties:
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        checklist_version_id:
+          type: string
+          format: uuid
+          description: Versión del checklist utilizada.
+          example: "018f3d5e-4321-7a8b-8000-aabbccddeeff"
+        plant_id:
+          type: string
+          format: uuid
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        area_id:
+          type: string
+          format: uuid
+          example: "018f1a2c-1111-7e5f-8000-abcdef123456"
+        production_line_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: null
+        status:
+          type: string
+          enum: [draft, completed]
+          description: Estado de la inspección (BD inspections.status).
+          example: "completed"
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fecha/hora de inicio (BD inspections.started_at).
+          example: "2026-10-12T10:00:00Z"
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fecha/hora de finalización (BD inspections.completed_at).
+          example: "2026-10-12T10:45:00Z"
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+          example: 20.659698
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+          example: -103.349609
+        location_description:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Pasillo principal, junto a la extintor E-12."
+        observations:
+          type: string
+          maxLength: 65535
+          nullable: true
+          example: "Se detectó personal nuevo sin EPP."
+        answers:
+          type: array
+          description: "Arreglo de respuestas recopiladas en campo. Cada `question_id` debe pertenecer al checklist_version_id indicado."
+          items:
+            $ref: '#/components/schemas/AnswerInput'
+
+    AnswerInput:
+      type: object
+      required:
+        - question_id
+      properties:
+        question_id:
+          type: string
+          format: uuid
+          description: ID de la pregunta del checklist.
+          example: "018f4e5f-5678-7a8b-8000-fedcba654321"
+        answer:
+          type: string
+          nullable: true
+          description: |
+            Valor de la respuesta como string. La interpretación depende del `answer_type`:
+            - `boolean`: "true" / "false".
+            - `text`: texto libre.
+            - `number`: número como string (ej. "12.5").
+            - `multiple_choice`: valor de la opción seleccionada.
+            - `signature`: datos de la firma (ej. URL o base64).
+            - `date`: fecha ISO 8601.
+          example: "false"
+        observation:
+          type: string
+          maxLength: 65535
+          nullable: true
+          example: "El extintor de la zona norte está caducado."
+
+    InspectionDetail:
+      allOf:
+        - $ref: '#/components/schemas/InspectionBase'
+        - type: object
+          properties:
+            supervisor_observations:
+              type: string
+              maxLength: 65535
+              nullable: true
+              example: "Buen reporte, procedo a levantar incidencias derivadas."
+            answers:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    example: "018f6b8c-3333-7a8b-8000-ccddeeff1122"
+                  question_id:
+                    type: string
+                    format: uuid
+                    example: "018f4e5f-5678-7a8b-8000-fedcba654321"
+                  answer:
+                    type: string
+                    nullable: true
+                    example: "false"
+                  observation:
+                    type: string
+                    nullable: true
+                    example: "El extintor de la zona norte está caducado."
+
+    InspectionStatusInput:
+      type: object
+      required:
+        - action
+      properties:
+        action:
+          type: string
+          enum: [confirm, reject]
+          description: |
+            `confirm`: marca la inspección como `confirmed` y registra `supervisor_confirmed_at`.
+            `reject`: marca la inspección como `rejected` y registra `rejected_at`.
+            Solo inspecciones en estado `completed` pueden ser evaluadas.
+          example: "confirm"
+        supervisor_observations:
+          type: string
+          maxLength: 65535
+          nullable: true
+          example: "Revisado. Las medidas de seguridad son aceptables."
+
+    # -------------------------------------------------------------------
+    # Incidents
+    # -------------------------------------------------------------------
+
+    Incident:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f7b8c-4444-7a8b-8000-abcdef123456"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece la incidencia.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        inspection_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: "018f6a7b-2222-7a8b-8000-abcdef123456"
+        question_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: "018f4e5f-5678-7a8b-8000-fedcba654321"
+        reported_by:
+          type: string
+          format: uuid
+          description: ID del usuario que reportó la incidencia (BD incidents.reported_by).
+          example: "018f2b3c-4d5e-7f8a-8000-112233445566"
+        plant_id:
+          type: string
+          format: uuid
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        area_id:
+          type: string
+          format: uuid
+          example: "018f1a2c-1111-7e5f-8000-abcdef123456"
+        production_line_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: "018f1a2d-2222-7e5f-8000-fedcba654321"
+        type:
+          type: string
+          enum: [unsafe_condition, unsafe_act, near_miss, environmental_spill, equipment_damage]
+          example: "unsafe_condition"
+        title:
+          type: string
+          maxLength: 200
+          example: "Derrame químico en pasillo principal"
+        description:
+          type: string
+          maxLength: 65535
+          example: "Se detectó un derrame de solvente de aproximadamente 2 metros cuadrados."
+        risk_level:
+          type: string
+          enum: [low, medium, high, critical]
+          example: "high"
+        status:
+          type: string
+          enum: [open, in_progress, resolved, closed]
+          example: "open"
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+          example: 20.659698
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+          example: -103.349609
+        location_description:
+          type: string
+          maxLength: 255
+          nullable: true
+        reported_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-10-12T11:05:00Z"
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    IncidentInput:
+      type: object
+      required:
+        - plant_id
+        - area_id
+        - title
+        - description
+        - risk_level
+      properties:
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        inspection_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: "Opcional. Enviar si deriva de una inspección."
+        question_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: "Opcional. Enviar si deriva de una pregunta específica."
+        plant_id:
+          type: string
+          format: uuid
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        area_id:
+          type: string
+          format: uuid
+          example: "018f1a2c-1111-7e5f-8000-abcdef123456"
+        production_line_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: "Opcional. Línea de producción donde se detectó la incidencia."
+          example: "018f1a2d-2222-7e5f-8000-fedcba654321"
+        type:
+          type: string
+          enum: [unsafe_condition, unsafe_act, near_miss, environmental_spill, equipment_damage]
+          example: "unsafe_condition"
+        title:
+          type: string
+          maxLength: 200
+          example: "Derrame químico en pasillo principal"
+        description:
+          type: string
+          maxLength: 65535
+          example: "Se detectó un derrame de solvente de aproximadamente 2 metros cuadrados."
+        risk_level:
+          type: string
+          enum: [low, medium, high, critical]
+          example: "high"
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+          example: 20.659698
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+          example: -103.349609
+        location_description:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Pasillo principal, cerca de la salida de emergencia."
+
+    IncidentStatusInput:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [open, in_progress, resolved, closed]
+          description: Nuevo estado de la incidencia (BD incidents.status).
+          example: "resolved"
+
+    # -------------------------------------------------------------------
+    # Evidences
+    # -------------------------------------------------------------------
+
+    EvidenceUploadInput:
+      type: object
+      required:
+        - file
+        - inspection_id
+      properties:
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        file:
+          type: string
+          format: binary
+          description: "El archivo físico (foto, firma, documento)."
+        inspection_id:
+          type: string
+          format: uuid
+          description: "ID de la inspección (NOT NULL en BD evidences.inspection_id)."
+          example: "018f6a7b-2222-7a8b-8000-abcdef123456"
+        incident_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: "Opcional. ID de la incidencia asociada."
+        inspection_answer_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: "Opcional. ID de la respuesta asociada."
+        description:
+          type: string
+          maxLength: 65535
+          nullable: true
+          example: "Foto del extintor caducado."
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+          example: 20.659698
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+          example: -103.349609
+        captured_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-10-12T10:15:00Z"
+
+    Evidence:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f8c9d-5555-7a8b-8000-112233445566"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece la evidencia.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        inspection_id:
+          type: string
+          format: uuid
+          example: "018f6a7b-2222-7a8b-8000-abcdef123456"
+        inspection_answer_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: "018f6b8c-3333-7a8b-8000-ccddeeff1122"
+        incident_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: "018f7b8c-4444-7a8b-8000-abcdef123456"
+        uploaded_by:
+          type: string
+          format: uuid
+          description: ID del usuario que subió el archivo (BD evidences.uploaded_by).
+          example: "018f2b3c-4d5e-7f8a-8000-112233445566"
+        file_name:
+          type: string
+          maxLength: 255
+          example: "IMG_20261012_101500.jpg"
+        storage_path:
+          type: string
+          maxLength: 500
+          description: "Ruta relativa o URL firmada para descargar el archivo."
+          example: "https://inspecta.s3.amazonaws.com/evidences/IMG_20261012_101500.jpg"
+        mime_type:
+          type: string
+          maxLength: 100
+          example: "image/jpeg"
+        file_size:
+          type: integer
+          format: int64
+          description: "Tamaño en bytes (BD BIGINT)."
+          example: 2048576
+        description:
+          type: string
+          maxLength: 65535
+          nullable: true
+          example: "Foto del extintor caducado."
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+          nullable: true
+          example: 20.659698
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+          nullable: true
+          example: -103.349609
+        captured_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-10-12T10:15:00Z"
+        uploaded_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-10-12T10:20:00Z"
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    # -------------------------------------------------------------------
+    # Corrective Actions
+    # -------------------------------------------------------------------
+
+    CorrectiveAction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f9a1b-6666-7a8b-8000-abcdef123456"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece la acción correctiva.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        incident_id:
+          type: string
+          format: uuid
+          example: "018f7b8c-4444-7a8b-8000-abcdef123456"
+        assigned_to:
+          type: string
+          format: uuid
+          description: "ID del usuario responsable."
+          example: "018f2b3c-4d5e-7f8a-8000-112233445566"
+        description:
+          type: string
+          maxLength: 65535
+          example: "Limpiar derrame de solvente y colocar material absorbente."
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+          example: "high"
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-10-15"
+        status:
+          type: string
+          enum: [pending, in_progress, completed, verified]
+          example: "in_progress"
+        observations:
+          type: string
+          maxLength: 65535
+          nullable: true
+          example: "Asegurarse de usar mascarilla contra vapores."
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    CorrectiveActionInput:
+      type: object
+      required:
+        - incident_id
+        - assigned_to
+        - description
+      properties:
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        incident_id:
+          type: string
+          format: uuid
+          example: "018f7b8c-4444-7a8b-8000-abcdef123456"
+        assigned_to:
+          type: string
+          format: uuid
+          example: "018f2b3c-4d5e-7f8a-8000-112233445566"
+        description:
+          type: string
+          maxLength: 65535
+          example: "Limpiar derrame de solvente y colocar material absorbente."
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+          default: medium
+          example: "high"
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-10-15"
+        observations:
+          type: string
+          maxLength: 65535
+          nullable: true
+          description: "Instrucciones adicionales opcionales."
+          example: "Asegurarse de usar mascarilla contra vapores."
+
+    CorrectiveActionUpdate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f9b2c-7777-7a8b-8000-112233445566"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece la actualización.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        corrective_action_id:
+          type: string
+          format: uuid
+          example: "018f9a1b-6666-7a8b-8000-abcdef123456"
+        user_id:
+          type: string
+          format: uuid
+          description: "ID del usuario que registró el avance (BD corrective_action_updates.user_id)."
+          example: "018f2b3c-4d5e-7f8a-8000-112233445566"
+        status:
+          type: string
+          enum: [in_progress, completed, verified]
+          example: "completed"
+        comment:
+          type: string
+          maxLength: 65535
+          nullable: true
+          example: "Se limpió el área y se confinó el material absorbente en los contenedores rojos."
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-10-13T09:30:00Z"
+
+    CorrectiveActionUpdateInput:
+      type: object
+      required:
+        - status
+      properties:
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        status:
+          type: string
+          enum: [in_progress, completed, verified]
+          description: Nuevo estado de la acción. No puede retroceder a `pending`.
+          example: "completed"
+        comment:
+          type: string
+          maxLength: 65535
+          nullable: true
+          example: "Se limpió el área y se confinó el material absorbente en los contenedores rojos."
+
+    CorrectiveActionDetail:
+      allOf:
+        - $ref: '#/components/schemas/CorrectiveAction'
+        - type: object
+          properties:
+            updates:
+              type: array
+              description: "Historial cronológico de la tarea."
+              items:
+                $ref: '#/components/schemas/CorrectiveActionUpdate'
+
+    # -------------------------------------------------------------------
+    # Audit Logs
+    # -------------------------------------------------------------------
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018fa1b2-3333-7a8b-8000-abcdef123456"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece el registro de auditoría.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: "ID del usuario que ejecutó la acción. Puede ser nulo si fue un proceso del sistema (FK ON DELETE SET NULL)."
+          example: "018f2b3c-4d5e-7f8a-8000-112233445566"
+        action:
+          type: string
+          enum: [created, updated, deleted]
+          description: "Tipo de operación realizada (BD audit_logs.action)."
+          example: "updated"
+        auditable_type:
+          type: string
+          maxLength: 100
+          description: "Nombre del modelo o entidad afectada (BD audit_logs.auditable_type)."
+          example: "Incident"
+        auditable_id:
+          type: string
+          format: uuid
+          description: "ID del recurso afectado (BD audit_logs.auditable_id)."
+          example: "018f7b8c-4444-7a8b-8000-abcdef123456"
+        old_values:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: "Estado de las columnas antes de la modificación (BD JSON, nulo si es creación)."
+          example:
+            status: "open"
+            risk_level: "high"
+        new_values:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: "Estado de las columnas después de la modificación (BD JSON, nulo si es eliminación)."
+          example:
+            status: "resolved"
+            risk_level: "low"
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-10-14T16:45:00Z"
+
+    # -------------------------------------------------------------------
+    # Sync (Offline / PWA)
+    # -------------------------------------------------------------------
+
+    Device:
+      type: object
+      description: Dispositivo móvil registrado para sincronización offline.
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018fa1b2-1111-7a8b-8000-abcdef123456"
+        device_id:
+          type: string
+          format: uuid
+          description: Identificador persistente del dispositivo (generado por la PWA).
+          example: "018f9c1d-1111-7a8b-8000-aabbccddeeff"
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID del usuario autenticado en el dispositivo (BD devices.user_id).
+          example: "018f2b3c-4d5e-7f8a-8000-112233445566"
+        last_sync_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Última sincronización exitosa.
+          example: "2026-10-22T09:15:00Z"
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Si no es nulo, el dispositivo está revocado y no puede sincronizar.
+          example: null
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    DeviceInput:
+      type: object
+      required:
+        - device_id
+      properties:
+        device_id:
+          type: string
+          format: uuid
+          description: Identificador persistente del dispositivo (generado por la PWA).
+          example: "018f9c1d-1111-7a8b-8000-aabbccddeeff"
+
+    SyncChange:
+      type: object
+      description: Un cambio de un recurso en el change log del servidor. `seq` es el cursor de sincronización.
+      required:
+        - seq
+        - resource
+        - resource_id
+        - operation
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018fa2b3-2222-7a8b-8000-abcdef123456"
+        seq:
+          type: integer
+          format: int64
+          description: Secuencia mono-tónica. Define el orden global del stream de cambios.
+          example: 10427
+        resource:
+          type: string
+          example: "incident"
+        resource_id:
+          type: string
+          format: uuid
+          example: "018f7b8c-4444-7a8b-8000-abcdef123456"
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece el cambio.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        operation:
+          type: string
+          enum: [upsert, delete]
+          description: "`delete` actúa como tombstone: el cliente elimina su copia local."
+          example: "upsert"
+        payload:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Estado completo del recurso. `null` cuando operation = delete.
+          example:
+            id: "018f7b8c-4444-7a8b-8000-abcdef123456"
+            title: "Derrame químico en pasillo principal"
+            risk_level: "high"
+            status: "open"
+        changed_at:
+          type: string
+          format: date-time
+          example: "2026-10-22T09:12:00Z"
+
+    SyncCursor:
+      type: object
+      description: Cursor opaco de sincronización emitido por el servidor.
+      required:
+        - seq
+      properties:
+        seq:
+          type: integer
+          format: int64
+          example: 10427
+        issued_at:
+          type: string
+          format: date-time
+          example: "2026-10-22T09:15:00Z"
+
+    SyncChangeList:
+      type: object
+      description: Lista de cambios del servidor con paginación incremental.
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncChange'
+        meta:
+          type: object
+          properties:
+            cursor:
+              $ref: '#/components/schemas/SyncCursor'
+            has_more:
+              type: boolean
+              example: true
+            server_time:
+              type: string
+              format: date-time
+              example: "2026-10-22T09:15:00Z"
+
+    SyncOperation:
+      type: object
+      description: Resultado individual de una operación de sincronización enviada por la PWA.
+      required:
+        - operation_id
+        - status
+      properties:
+        operation_id:
+          type: string
+          format: uuid
+          example: "018f9c2e-2222-7a8b-8000-aabbccddeeff"
+        status:
+          type: string
+          enum: [applied, duplicate, conflict, rejected, forbidden, skipped]
+          description: |
+            - `applied`: aplicada correctamente.
+            - `duplicate`: ya se había aplicado (idempotencia). Es un éxito.
+            - `conflict`: el servidor tiene un estado incompatible. Incluye `server_state`.
+            - `rejected`: error de validación permanente. Incluye `errors`. No reintentar.
+            - `forbidden`: el usuario ya no tiene permiso. No reintentar.
+            - `skipped`: una dependencia falló. Reintentar tras resolver la dependencia.
+          example: "applied"
+        resource_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: "018f7b8c-4444-7a8b-8000-abcdef123456"
+        version:
+          type: integer
+          nullable: true
+          description: Nueva versión (lock_version) del recurso tras aplicar la operación.
+          example: 1
+        server_state:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Estado actual del recurso en el servidor (para `conflict`).
+        errors:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          description: Detalle de validación (para `rejected`).
+        retryable:
+          type: boolean
+          example: false
+
+    SyncBatchRequest:
+      type: object
+      description: Lote de operaciones de sincronización enviadas por la PWA.
+      required:
+        - device_id
+        - operations
+      properties:
+        device_id:
+          type: string
+          format: uuid
+          description: Identificador persistente del dispositivo.
+          example: "018f9c1d-1111-7a8b-8000-aabbccddeeff"
+        operations:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/SyncOperationInput'
+
+    SyncOperationInput:
+      type: object
+      description: Una operación individual dentro de un lote de sincronización.
+      required:
+        - operation_id
+        - resource
+        - operation
+        - payload
+      properties:
+        operation_id:
+          type: string
+          format: uuid
+          description: Identificador único y estable de esta operación (clave de idempotencia). No confundir con el `id` del recurso de negocio.
+          example: "018f9c2e-2222-7a8b-8000-aabbccddeeff"
+        resource:
+          type: string
+          enum: [inspection, inspection_answer, incident, evidence, corrective_action_update]
+          example: "incident"
+        operation:
+          type: string
+          enum: [create, update, delete]
+          example: "create"
+        payload:
+          type: object
+          additionalProperties: true
+          description: Cuerpo de la operación. Para `create` puede incluir `id` (UUID del cliente).
+          example:
+            id: "018f7b8c-4444-7a8b-8000-abcdef123456"
+            title: "Derrame químico en pasillo principal"
+            description: "Derrame de solvente de ~2 m²."
+            risk_level: "high"
+            reported_at: "2026-10-21T08:40:00Z"
+        base_version:
+          type: integer
+          minimum: 0
+          description: Versión conocida por el cliente del recurso (bloqueo optimista). Solo para `update`.
+          example: 3
+        depends_on:
+          type: array
+          description: Identificadores de operaciones que deben aplicarse antes que esta.
+          items:
+            type: string
+            format: uuid
+          example: ["018f9c2d-3333-7a8b-8000-aabbccddeeff"]
+
+    SyncBatchResponse:
+      type: object
+      description: Respuesta del lote de operaciones con resultados individuales.
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncOperation'
+        cursor:
+          $ref: '#/components/schemas/SyncCursor'
