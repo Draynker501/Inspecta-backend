@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Evidence extends Model
 {
+    use BelongsToOrganization;
+
     public $incrementing = false;
     protected $keyType = 'string';
 
@@ -36,6 +39,19 @@ class Evidence extends Model
         'uploaded_at' => 'datetime',
         'organization_id' => 'string',
     ];
+
+    /**
+     * @return array<string, class-string<Model>>
+     */
+    protected function tenantParentRelations(): array
+    {
+        return [
+            'inspection_id' => Inspection::class,
+            'inspection_answer_id' => InspectionAnswer::class,
+            'incident_id' => Incident::class,
+            'uploaded_by' => User::class,
+        ];
+    }
 
     public function organization(): BelongsTo
     {

@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SyncChange extends Model
 {
+    use BelongsToOrganization;
+
     public $incrementing = false;
     protected $keyType = 'string';
 

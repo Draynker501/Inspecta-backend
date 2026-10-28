@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\Concerns\BelongsToOrganization;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -19,7 +20,7 @@ use Laravel\Sanctum\HasApiTokens;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, HasApiTokens;
+    use BelongsToOrganization, HasApiTokens, HasFactory, Notifiable;
 
     public $incrementing = false;
     protected $keyType = 'string';
@@ -41,6 +42,62 @@ class User extends Authenticatable
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class, 'organization_id');
+    }
+
+    /**
+     * Indica si el usuario tiene el rol indicado dentro de su organización.
+     */
+    public function hasRole(string $role): bool
+    {
+        return $this->roles()
+            ->where('roles.name', $role)
+            ->exists();
+    }
+
+    /**
+     * Administrador de la organización (no existe super-admin global).
+     */
+    public function isAdmin(): bool
+    {
+        return $this->hasRole((string) config('tenancy.roles.admin'));
+    }
+
+    public function hasPlantAccess(string $plantId): bool
+    {
+        return $this->plants()->whereKey($plantId)->exists();
+    }
+
+    public function hasAreaAccess(string $areaId): bool
+    {
+        return $this->areas()->whereKey($areaId)->exists();
+    }
+
+    /**
+     * Asignaciones con organization_id explícito: las tablas pivote lo
+     * exigen como NOT NULL y attach() no lo rellenaría.
+     */
+    public function assignRole(Role $role): UserRole
+    {
+        return UserRole::firstOrCreate(
+            ['user_id' => $this->id, 'role_id' => $role->id],
+            ['organization_id' => $this->organization_id],
+        );
+    }
+
+    public function assignPlant(Plant $plant): UserPlant
+    {
+        return UserPlant::firstOrCreate(
+            ['user_id' => $this->id, 'plant_id' => $plant->id],
+            ['organization_id' => $this->organization_id],
+        );
+    }
+
+    public function assignArea(Area $area): UserArea
+    {
+        return UserArea::firstOrCreate(
+            ['user_id' => $this->id, 'area_id' => $area->id],
+            ['organization_id' => $this->organization_id],
+        );
     }
 
     public function roles(): BelongsToMany

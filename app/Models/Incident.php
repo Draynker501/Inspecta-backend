@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Incident extends Model
 {
+    use BelongsToOrganization;
+
     public $incrementing = false;
     protected $keyType = 'string';
 
@@ -39,6 +42,21 @@ class Incident extends Model
         'reported_at' => 'datetime',
         'organization_id' => 'string',
     ];
+
+    /**
+     * @return array<string, class-string<Model>>
+     */
+    protected function tenantParentRelations(): array
+    {
+        return [
+            'inspection_id' => Inspection::class,
+            'question_id' => Question::class,
+            'reported_by' => User::class,
+            'plant_id' => Plant::class,
+            'area_id' => Area::class,
+            'production_line_id' => ProductionLine::class,
+        ];
+    }
 
     public function organization(): BelongsTo
     {

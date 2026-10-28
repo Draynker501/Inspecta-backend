@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Inspection extends Model
 {
+    use BelongsToOrganization;
+
     public $incrementing = false;
     protected $keyType = 'string';
 
@@ -42,6 +45,21 @@ class Inspection extends Model
         'longitude' => 'decimal:10,7',
         'organization_id' => 'string',
     ];
+
+    /**
+     * @return array<string, class-string<Model>>
+     */
+    protected function tenantParentRelations(): array
+    {
+        return [
+            'user_id' => User::class,
+            'supervisor_id' => User::class,
+            'checklist_version_id' => ChecklistVersion::class,
+            'plant_id' => Plant::class,
+            'area_id' => Area::class,
+            'production_line_id' => ProductionLine::class,
+        ];
+    }
 
     public function organization(): BelongsTo
     {

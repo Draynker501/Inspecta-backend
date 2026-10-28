@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CorrectiveActionUpdate extends Model
 {
+    use BelongsToOrganization;
+
     public $incrementing = false;
     protected $keyType = 'string';
 
@@ -23,6 +26,17 @@ class CorrectiveActionUpdate extends Model
         'status' => 'string',
         'organization_id' => 'string',
     ];
+
+    /**
+     * @return array<string, class-string<Model>>
+     */
+    protected function tenantParentRelations(): array
+    {
+        return [
+            'corrective_action_id' => CorrectiveAction::class,
+            'user_id' => User::class,
+        ];
+    }
 
     public function organization(): BelongsTo
     {
