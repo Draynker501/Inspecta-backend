@@ -6,6 +6,7 @@ use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Exceptions\Handler as BaseHandler;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class Handler extends BaseHandler
 {
@@ -37,6 +38,17 @@ class Handler extends BaseHandler
                 return response()->json([
                     'message' => 'No autenticado. Token de acceso ausente o inválido.',
                 ], 401);
+            }
+        });
+
+        // Un recurso de otra organización y un recurso inexistente deben ser
+        // indistinguibles: mismo 404 y mismo mensaje, sin clase de modelo ni
+        // identificadores en el cuerpo.
+        $this->renderable(function (NotFoundHttpException $e, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Recurso no encontrado.',
+                ], 404);
             }
         });
 

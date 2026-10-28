@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+    // Logout solo exige autenticación: un usuario debe poder revocar su token
+    // aunque su organización haya quedado inactiva.
     Route::post('logout', [AuthController::class, 'logout'])->middleware('api.auth');
-    Route::get('me', [AuthController::class, 'me'])->middleware('api.auth');
+    Route::get('me', [AuthController::class, 'me'])->middleware('api.tenant');
 });
