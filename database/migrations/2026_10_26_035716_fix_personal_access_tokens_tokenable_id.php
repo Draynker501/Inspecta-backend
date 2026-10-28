@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -16,6 +15,8 @@ return new class extends Migration
      * asociados a usuarios con ID UUID.
      *
      * Idempotente: si la columna ya es char(36), no realiza ningún cambio.
+     * Portable: usa la introspección de esquema de Laravel, válida tanto en
+     * MariaDB/MySQL como en SQLite (usado por la suite de pruebas).
      */
     public function up(): void
     {
@@ -23,13 +24,25 @@ return new class extends Migration
             return;
         }
 
-        $columns = collect(DB::select("SELECT DATA_TYPE, CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'personal_access_tokens' AND COLUMN_NAME = 'tokenable_id'"));
+        $column = collect(Schema::getColumns('personal_access_tokens'))
+            ->firstWhere('name', 'tokenable_id');
 
-        if ($columns->isNotEmpty() && !($columns->first()->DATA_TYPE === 'char' && $columns->first()->CHARACTER_MAXIMUM_LENGTH === 36)) {
-            Schema::table('personal_access_tokens', function (Blueprint $table) {
-                $table->char('tokenable_id', 36)->change();
-            });
+        if ($column === null) {
+            return;
         }
+
+        $type = strtolower((string) ($column['type'] ?? $column['type_name'] ?? ''));
+        $driver = Schema::getConnection()->getDriverName();
+
+        // Un CHAR es compatible con UUID; en SQLite Laravel materializa CHAR como
+        // VARCHAR (sin longitud fija), que también almacena el UUID correctamente.
+        if (str_starts_with($type, 'char') || ($driver === 'sqlite' && str_starts_with($type, 'varchar'))) {
+            return;
+        }
+
+        Schema::table('personal_access_tokens', function (Blueprint $table) {
+            $table->char('tokenable_id', 36)->change();
+        });
     }
 
     public function down(): void
