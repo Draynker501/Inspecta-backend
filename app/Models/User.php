@@ -45,6 +45,17 @@ class User extends Authenticatable
     }
 
     /**
+     * Membresías de este usuario en organizaciones (M1.5, P1).
+     *
+     * Fuente de pertenencia paralela a users.organization_id. No usa
+     * BelongsToOrganization: se consulta directamente por user_id.
+     */
+    public function memberships(): HasMany
+    {
+        return $this->hasMany(OrganizationMembership::class, 'user_id');
+    }
+
+    /**
      * Indica si el usuario tiene el rol indicado dentro de su organización.
      */
     public function hasRole(string $role): bool
