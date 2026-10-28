@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\BelongsToOrganization;
+use App\Models\OrganizationMembership;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -164,5 +165,49 @@ class User extends Authenticatable
     public function checklistVersions(): HasMany
     {
         return $this->hasMany(ChecklistVersion::class, 'created_by');
+    }
+
+    /**
+     * Doble escritura de membresía (M1.5, P1.4).
+     *
+     * Después de guardar un User cuya organization_id se creó o cambió,
+     * asegura la membresía de (user_id, organization_id):
+     *  - si no existe, la crea activa;
+     *  - si existe revocada, la reactiva en la misma fila;
+     *  - si existe activa, no hace nada;
+     *  - no revoca la membresía de la organización anterior.
+     *
+     * No choca con bootBelongsToOrganization: este hook solo escribe en
+     * organization_memberships, tabla que no usa ese trait.
+     */
+    protected static function booted(): void
+    {
+        static::saved(function (User $user): void {
+            self::ensureMembership($user);
+        });
+    }
+
+    protected static function ensureMembership(User $user): void
+    {
+        if (blank($user->organization_id)) {
+            return;
+        }
+
+        $membership = OrganizationMembership::where('user_id', $user->id)
+            ->where('organization_id', $user->organization_id)
+            ->first();
+
+        if (!$membership) {
+            OrganizationMembership::create([
+                'user_id' => $user->id,
+                'organization_id' => $user->organization_id,
+                'status' => OrganizationMembership::STATUS_ACTIVE,
+            ]);
+        } elseif ($membership->status === OrganizationMembership::STATUS_REVOKED) {
+            $membership->update([
+                'status' => OrganizationMembership::STATUS_ACTIVE,
+                'revoked_at' => null,
+            ]);
+        }
     }
 }

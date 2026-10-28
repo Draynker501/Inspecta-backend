@@ -6,6 +6,7 @@ use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\Support\TenantFixtures;
 use Tests\TestCase;
 
@@ -14,19 +15,17 @@ class OrganizationMembershipTest extends TestCase
     use RefreshDatabase;
     use TenantFixtures;
 
-    public function test_crear_membresia_activa_por_defecto(): void
+    public function test_usuario_creado_por_factory_tiene_membresia_activa(): void
     {
         $organization = $this->organization('ORG-A');
         $user = $this->user($organization);
 
-        $membership = OrganizationMembership::create([
-            'user_id' => $user->id,
-            'organization_id' => $organization->id,
-        ])->fresh();
-
-        $this->assertSame(OrganizationMembership::STATUS_ACTIVE, $membership->status);
-        $this->assertNull($membership->revoked_at);
-        $this->assertTrue($membership->isActive());
+        $this->assertTrue(
+            OrganizationMembership::where('user_id', $user->id)
+                ->where('organization_id', $organization->id)
+                ->where('status', OrganizationMembership::STATUS_ACTIVE)
+                ->exists()
+        );
     }
 
     public function test_unico_impide_duplicar_user_id_organization_id(): void
@@ -34,10 +33,12 @@ class OrganizationMembershipTest extends TestCase
         $organization = $this->organization('ORG-A');
         $user = $this->user($organization);
 
-        OrganizationMembership::create([
-            'user_id' => $user->id,
-            'organization_id' => $organization->id,
-        ]);
+        // La membresía ya existe por doble escritura (P1.4).
+        $this->assertTrue(
+            OrganizationMembership::where('user_id', $user->id)
+                ->where('organization_id', $organization->id)
+                ->exists()
+        );
 
         $this->expectException(\Illuminate\Database\QueryException::class);
 
@@ -76,12 +77,12 @@ class OrganizationMembershipTest extends TestCase
         $organization = $this->organization('ORG-A');
         $user = $this->user($organization);
 
-        $membership = OrganizationMembership::create([
-            'user_id' => $user->id,
-            'organization_id' => $organization->id,
-        ]);
-
-        $this->assertTrue($user->memberships()->whereKey($membership->id)->exists());
-        $this->assertSame($organization->id, $user->memberships()->first()->organization_id);
+        $this->assertTrue(
+            $user->memberships()->where('organization_id', $organization->id)->exists()
+        );
+        $this->assertSame(
+            $organization->id,
+            $user->memberships()->first()->organization_id
+        );
     }
 }
