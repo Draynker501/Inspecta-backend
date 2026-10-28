@@ -10,6 +10,7 @@ use App\Models\UserPlant;
 use App\Models\UserRole;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class UserSeeder extends Seeder
@@ -36,7 +37,7 @@ class UserSeeder extends Seeder
                 'id' => '018f2b3c-4d5e-7f8a-8000-112233445590',
                 'name' => 'Administrador Sistema',
                 'email' => 'admin@inspecta-demo.com',
-                'password' => 'Admin123!',
+                'password' => Hash::make('Admin123!'),
                 'organization_id' => $organization->id,
                 'email_verified_at' => now(),
                 'status' => true,
@@ -48,7 +49,7 @@ class UserSeeder extends Seeder
                 'id' => '018f2b3c-4d5e-7f8a-8000-112233445591',
                 'name' => 'Inspector Demo',
                 'email' => 'inspector@inspecta-demo.com',
-                'password' => 'Inspector123!',
+                'password' => Hash::make('Inspector123!'),
                 'organization_id' => $organization->id,
                 'email_verified_at' => now(),
                 'status' => true,
@@ -60,7 +61,7 @@ class UserSeeder extends Seeder
                 'id' => '018f2b3c-4d5e-7f8a-8000-112233445592',
                 'name' => 'Supervisor Demo',
                 'email' => 'supervisor@inspecta-demo.com',
-                'password' => 'Supervisor123!',
+                'password' => Hash::make('Supervisor123!'),
                 'organization_id' => $organization->id,
                 'email_verified_at' => now(),
                 'status' => true,
