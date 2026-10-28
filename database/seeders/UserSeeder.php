@@ -10,7 +10,6 @@ use App\Models\UserPlant;
 use App\Models\UserRole;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class UserSeeder extends Seeder
@@ -19,7 +18,7 @@ class UserSeeder extends Seeder
 
     public function run(): void
     {
-        $organization = Organization::first();
+        $organization = Organization::where('code', 'INSP-01')->first();
 
         if (!$organization) {
             return;
@@ -37,7 +36,7 @@ class UserSeeder extends Seeder
                 'id' => '018f2b3c-4d5e-7f8a-8000-112233445590',
                 'name' => 'Administrador Sistema',
                 'email' => 'admin@inspecta-demo.com',
-                'password' => Hash::make('Admin123!'),
+                'password' => 'Admin123!',
                 'organization_id' => $organization->id,
                 'email_verified_at' => now(),
                 'status' => true,
@@ -49,7 +48,7 @@ class UserSeeder extends Seeder
                 'id' => '018f2b3c-4d5e-7f8a-8000-112233445591',
                 'name' => 'Inspector Demo',
                 'email' => 'inspector@inspecta-demo.com',
-                'password' => Hash::make('Inspector123!'),
+                'password' => 'Inspector123!',
                 'organization_id' => $organization->id,
                 'email_verified_at' => now(),
                 'status' => true,
@@ -61,7 +60,7 @@ class UserSeeder extends Seeder
                 'id' => '018f2b3c-4d5e-7f8a-8000-112233445592',
                 'name' => 'Supervisor Demo',
                 'email' => 'supervisor@inspecta-demo.com',
-                'password' => Hash::make('Supervisor123!'),
+                'password' => 'Supervisor123!',
                 'organization_id' => $organization->id,
                 'email_verified_at' => now(),
                 'status' => true,
@@ -72,50 +71,63 @@ class UserSeeder extends Seeder
         ];
 
         foreach ($users as $userData) {
-            $user = User::updateOrCreate(
-                ['id' => $userData['id']],
-                [
-                    'name' => $userData['name'],
-                    'email' => $userData['email'],
-                    'password' => $userData['password'],
-                    'organization_id' => $userData['organization_id'],
-                    'email_verified_at' => $userData['email_verified_at'],
-                    'status' => $userData['status'],
-                ]
-            );
+            $user = User::firstOrNew(['id' => $userData['id']]);
 
-            // Asignar rol mediante tabla pivote (con id explícito)
+            $user->fill([
+                'name' => $userData['name'],
+                'email' => $userData['email'],
+                'organization_id' => $userData['organization_id'],
+                'email_verified_at' => $userData['email_verified_at'],
+                'status' => $userData['status'],
+            ]);
+
+            // Solo se define la contraseña al crear: re-sembrar no debe
+            // regenerar el hash ni sobrescribir una contraseña ya cambiada.
+            if (!$user->exists) {
+                $user->password = $userData['password'];
+            }
+
+            $user->save();
+
+            // Asignar rol y accesos con IDs de pivote estables entre siembras.
             if ($userData['role_id']) {
-                UserRole::updateOrCreate(
-                    ['user_id' => $user->id, 'role_id' => $userData['role_id']],
-                    [
-                        'id' => (string) Str::uuid7(),
-                        'organization_id' => $user->organization_id,
-                    ]
-                );
+                $this->assignPivot(UserRole::class, [
+                    'user_id' => $user->id,
+                    'role_id' => $userData['role_id'],
+                ], $user->organization_id);
             }
 
-            // Asignar plantas mediante tabla pivote
             foreach ($userData['plant_ids'] as $plantId) {
-                UserPlant::updateOrCreate(
-                    ['user_id' => $user->id, 'plant_id' => $plantId],
-                    [
-                        'id' => (string) Str::uuid7(),
-                        'organization_id' => $user->organization_id,
-                    ]
-                );
+                $this->assignPivot(UserPlant::class, [
+                    'user_id' => $user->id,
+                    'plant_id' => $plantId,
+                ], $user->organization_id);
             }
 
-            // Asignar áreas mediante tabla pivote
             foreach ($userData['area_ids'] as $areaId) {
-                UserArea::updateOrCreate(
-                    ['user_id' => $user->id, 'area_id' => $areaId],
-                    [
-                        'id' => (string) Str::uuid7(),
-                        'organization_id' => $user->organization_id,
-                    ]
-                );
+                $this->assignPivot(UserArea::class, [
+                    'user_id' => $user->id,
+                    'area_id' => $areaId,
+                ], $user->organization_id);
             }
+        }
+    }
+
+    /**
+     * Crea la asignación solo si no existe y conserva su id entre siembras.
+     *
+     * @param  class-string<\Illuminate\Database\Eloquent\Model>  $modelClass
+     * @param  array<string, string>  $keys
+     */
+    private function assignPivot(string $modelClass, array $keys, string $organizationId): void
+    {
+        $pivot = $modelClass::firstOrCreate($keys, [
+            'id' => (string) Str::uuid7(),
+            'organization_id' => $organizationId,
+        ]);
+
+        if ($pivot->organization_id !== $organizationId) {
+            $pivot->update(['organization_id' => $organizationId]);
         }
     }
 }
