@@ -70,8 +70,8 @@ paths:
             schema:
               $ref: '#/components/schemas/LoginInput'
             example:
-              email: inspector@inspecta-demo.com
-              password: Inspector123!
+              email: <email>
+              password: <password>
       responses:
         '200':
           description: Autenticación exitosa.
