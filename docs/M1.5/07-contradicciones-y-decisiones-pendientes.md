@@ -266,9 +266,9 @@ No se implementan endpoints de auditoría, ni modelos de dominio nuevos, ni disp
 
 | ID | Decisión | Recomendación |
 |---|---|---|
-| **D-09** | ¿Índices de roles y plantas antes de seeders multiempresa? | **Sí** |
+| **D-09** | ¿Índices de roles y plantas antes de seeders multiempresa? | **IMPLEMENTADA en P2** (commit `8856b64`). |
 | **D-13** | ¿Ventana de mantenimiento, versión de MariaDB y DDL online confirmados? | APROBADA para desarrollo: MariaDB 11.8 LTS (11.8.9 verificada). Ventana de mantenimiento: pendiente para producción |
-| **D-15** | ¿Se exige membresía a `user_roles`/`user_plants`/`user_areas`? | **Sí**, opción A: FK compuestas `(user_id, organization_id)` hacia `organization_memberships(user_id, organization_id)` y `(role_id|plant_id|area_id, organization_id)` hacia `roles`, `plants` y `areas`, en `user_roles`, `user_plants` y `user_areas`. La unicidad usa índices únicos `(id, organization_id)` en `roles`, `plants` y `areas`. |
+| **D-15** | ¿Se exige membresía a `user_roles`/`user_plants`/`user_areas`? | **IMPLEMENTADA en P2** (commit `02085ef`). Opción A: 6 FK compuestas con `restrictOnDelete()->cascadeOnUpdate()` en `user_roles`, `user_plants`, `user_areas`. Nombres reales generados por Laravel: `user_roles_user_id_organization_id_foreign`, `user_roles_role_org_id_foreign`, `user_plants_user_id_organization_id_foreign`, `user_plants_plant_id_organization_id_foreign`, `user_areas_user_id_organization_id_foreign`, `user_areas_area_id_organization_id_foreign`. |
 
 ### Bloqueantes para P3
 
@@ -277,6 +277,7 @@ No se implementan endpoints de auditoría, ni modelos de dominio nuevos, ni disp
 | **D-07** | ¿FK a usuario por membresía y solo *dirty* en update? | PROPUESTA, pendiente de aprobación (P3) |
 | **D-08** | ¿Fail-closed en fronteras (P3) y scope estricto en P5? | PROPUESTA, pendiente de aprobación (P3/P5) |
 | **D-11** | ¿Auditoría append-only con `AuditLogger` como excepción? | PROPUESTA, pendiente de aprobación (P3) |
+| **D-20** | Roles, plantas y áreas se evalúan contra la organización activa y exigen membresía activa, en un único punto. | **[Nota 2026-10-29] BLOQUEANTE de P3** — se implementa en P3. |
 | **D-06** | ¿Sin revocación masiva de tokens en M1.5? | **Sí**. [Nota 2026-10-28] el token de Sanctum no lleva organización (verificado en P1). |
 
 ### Bloqueantes para P4
@@ -299,7 +300,9 @@ No se implementan endpoints de auditoría, ni modelos de dominio nuevos, ni disp
 | — | `organization_id` en `devices` y `sync_operations` | Fase de sync |
 | — | UI de selección de empresa | Frontend |
 | **D-19** | Métricas entre clientes por vía separada (agregados o datos desidentificados), con consentimiento por organización; nunca relajando OrganizationScope. | APROBADA; implementación diferida a un hito posterior |
-| **D-20** | Roles, plantas y áreas se evalúan contra la organización activa y exigen membresía activa, en un único punto de la aplicación. | APROBADA; se implementa en P3 |
+| **D-24** | ¿`UserSeeder` solo usa contraseñas fijas en entorno local? | **PROPUESTA** — en otros entornos las toma de variables de entorno o falla. No aprobada. |
+| **D-25** | ¿Job de CI con MariaDB 11.8 como servicio que ejecute `migrate:fresh --seed`? | **PROPUESTA** — simulación en PHP 8.3 falló (16 paquetes symfony requieren PHP >=8.4.1); en PHP 8.4 OK (108/318). No aprobada. |
+| **D-20** | Roles, plantas y áreas se evalúan contra la organización activa y exigen membresía activa, en un único punto de la aplicación. | **[Nota 2026-10-29] BLOQUEANTE de P3** — se implementa en P3. |
 | **D-21** | User sale del scope de organización; listados de usuarios de una organización parten de las membresías. | PROPUESTA, pendiente de aprobación (P3) |
 | **D-22** | organization_memberships.status es string(20) con 'active' y 'revoked'. | APROBADA (2026-10-28) |
 | **D-23** | No se añade joined_at; created_at es la fecha de alta. | APROBADA (2026-10-28) |

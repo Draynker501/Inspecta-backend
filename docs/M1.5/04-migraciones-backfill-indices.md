@@ -1,10 +1,10 @@
 # 04 — Migraciones, backfill e índices
 
-Última actualización: 2026-10-28 (D-22, D-23; alineado con el código de P1)
+Última actualización: 2026-10-29 (P2 implementada: D-09 y D-15A; D-22, D-23; alineado con el código de P1 y P2)
 
 **Objetivo:** separar con precisión tres operaciones distintas, definir comprobaciones read-only
 previas, condiciones de parada, rollback y el orden de despliegue.
-**Estado:** propuesta. Nada ejecutado.
+**Estado:** P2 implementada y verificada en MariaDB 11.8.9.
 
 ---
 
@@ -129,15 +129,17 @@ Esta es la prueba de aceptación T24.
 
 ```text
 DROP INDEX roles_name_unique
-CREATE UNIQUE INDEX roles_organization_name_unique (organization_id, name)
+CREATE UNIQUE INDEX roles_org_name_unique (organization_id, name)
 ```
 
 ### C2. Plantas
 
 ```text
 DROP INDEX plants_code_unique
-CREATE UNIQUE INDEX plants_organization_code_unique (organization_id, code)
+CREATE UNIQUE INDEX plants_org_code_unique (organization_id, code)
 ```
+
+[Nota 2026-10-29] Los nombres reales generados en MariaDB son `roles_org_name_unique` y `plants_org_name_unique` (no `roles_organization_name_unique` ni `plants_organization_code_unique`). Laravel usa el patrón `{tabla}_{columnas}_unique` sin el nombre de la tabla en el medio cuando el nombre se genera automáticamente.
 
 ### C3. Por qué ahora es seguro
 
@@ -169,7 +171,28 @@ CREATE UNIQUE INDEX plants_organization_code_unique (organization_id, code)
 
 ---
 
-## 5. Prechecks read-only
+## 5. Bucket D — FK compuestas en pivotes (P2.3)
+
+| FK | Columnas | Referencia | Nombre real generado |
+|----|----------|------------|---------------------|
+| user_roles | (user_id, organization_id) | organization_memberships (user_id, organization_id) | `user_roles_user_id_organization_id_foreign` |
+| user_roles | (role_id, organization_id) | roles (id, organization_id) | `user_roles_role_id_organization_id_foreign` |
+| user_plants | (user_id, organization_id) | organization_memberships (user_id, organization_id) | `user_plants_user_id_organization_id_foreign` |
+| user_plants | (plant_id, organization_id) | plants (id, organization_id) | `user_plants_plant_id_organization_id_foreign` |
+| user_areas | (user_id, organization_id) | organization_memberships (user_id, organization_id) | `user_areas_user_id_organization_id_foreign` |
+| user_areas | (area_id, organization_id) | areas (id, organization_id) | `user_areas_area_id_organization_id_foreign` |
+
+[Nota 2026-10-29] Los nombres de FK compuestas son generados automáticamente por Laravel (patrón `{tabla}_{col1}_{col2}_foreign`). El query builder de Laravel 13 no respeta `->name()` en foreign keys compuestas; se usaron nombres explícitos vía `DB::statement()` en versiones intermedias, pero la migración final usa `Schema::table()->foreign()` con nombres generados para compatibilidad con SQLite.
+
+### D1. Comportamiento verificado en MariaDB 11.8.9
+
+- `restrictOnDelete()`: no se puede borrar una membresía si existen pivotes que la referencian (1451).
+- `cascadeOnUpdate()`: actualizar columnas de la membresía propaga a los pivotes.
+- Las FK rechazan filas sin membresía previa y filas cuyo recurso pertenezca a otra organización (1452).
+
+---
+
+## 6. Prechecks read-only
 
 Ejecutar **antes** de cualquier escritura, en el entorno destino, y guardar el reporte. Todas son
 consultas de lectura.

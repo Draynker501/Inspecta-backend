@@ -1,10 +1,10 @@
 # 06 — Fases, gates y matriz de pruebas
 
-Última actualización: 2026-10-28 (D-22, D-23; alineado con el código de P1)
+Última actualización: 2026-10-29 (P2 implementada y verificada; D-09 y D-15A pasan a IMPLEMENTADAS)
 
 **Objetivo:** que cada fase sea ejecutable y verificable por sí misma, sin depender de fases
 futuras, y que la suite permanezca verde durante toda la transición.
-**Estado:** propuesta. Nada implementado ni ejecutado.
+**Estado:** P0 completada; P1 cerrada; P2 cerrada; P3 a P5 sin iniciar.
 
 ---
 
@@ -32,14 +32,14 @@ futuras, y que la suite permanezca verde durante toda la transición.
 **Por qué P1 no rompe nada:** el código de autorización no consulta las membresías todavía. Las
 membresías se escriben “en paralelo” y se validan por pruebas. Es la fase más segura para empezar.
 
-### P2 — Índices de unicidad
+### P2 — Únicos por organización y FK compuestas en pivotes
 
 | Aspecto | Detalle |
 |---|---|
-| **Alcance** | C1: `roles (organization_id, name)`. C2: `plants (organization_id, code)`. |
-| **Límites** | Solo índices. Sin datos. Sin cambios de código de aplicación. |
-| **Gate** | Precheck S6/S7 = 0. `up` y `down` en SQLite. T36, T37, T52, T53, T54. Suite completa verde. |
-| **Rollback** | Recrear índice global, **solo** si no hay datos multiempresa. |
+| **Alcance** | C1: `roles (organization_id, name)` → `roles_org_name_unique`. C2: `plants (organization_id, code)` → `plants_org_code_unique`. Retira únicos globales `roles_name_unique` y `plants_code_unique`. Únicos auxiliares `(id, organization_id)` en roles, plants y areas. 6 FK compuestas en `user_roles`, `user_plants`, `user_areas` hacia `organization_memberships` y hacia roles/plants/areas. `UserSeeder` reordenado (usuarios → `MembershipBackfill::run()` → pivotes). |
+| **Límites** | No crea únicos por organización para `areas` (fuera de alcance). No toca políticas, middleware, scopes, AuthController ni `users.organization_id`. No crea controladores, rutas, políticas ni audit log (P3). |
+| **Gate** | Suite SQLite: 97 pruebas y 284 aserciones (después de 2.2); 107 pruebas y 306 aserciones (después de 2.3). MariaDB: 43 migraciones y seeders sin error (dos veces). 9 casos de FK probados con datos reales; DELETE de membresía bloqueado por RESTRICT; UPDATE a `revoked` permitido. Rollback de 3 pasos verificado: únicos globales restaurados, 6 FK eliminadas. |
+| **Rollback** | `migrate:rollback --step=3` elimina las 6 FK y los 5 únicos nuevos; recrea los únicos globales. **Puerta sin retorno:** tras usar D-09 con datos reales (mismo nombre de rol en dos organizaciones), el `down()` de 2.2 falla si hay duplicados entre organizaciones. |
 
 **Por qué P2 va antes de P4:** no se puede sembrar “Administrador” en dos organizaciones mientras
 `roles.name` sea único global. Ver `07` C1.
