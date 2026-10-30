@@ -8,8 +8,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | Nombres de los roles sembrados por RoleSeeder. Se usan para resolver
-    | capacidades dentro de una organización. Los nombres son únicos a nivel
-    | global en el esquema actual (ver limitación conocida en roles.name).
+    | capacidades dentro de una organización. Los nombres son únicos por
+    | organización (roles_org_name_unique), no a nivel global, desde P2.
     |
     */
 
