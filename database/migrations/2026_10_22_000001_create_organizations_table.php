@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -62,15 +61,13 @@ return new class extends Migration
             }
         }
 
-        // Asegurar índice único sobre code (idempotente, consulta directa por MariaDB)
-        $hasUniqueIdx = DB::select("SHOW INDEX FROM `organizations` WHERE Key_name = 'organizations_code_unique'");
-        if (empty($hasUniqueIdx)) {
+        // Asegurar índices (idempotente y portable entre MariaDB y SQLite)
+        if (!Schema::hasIndex('organizations', 'organizations_code_unique')) {
             Schema::table('organizations', function (Blueprint $table) {
                 $table->unique(['code'], 'organizations_code_unique');
             });
         }
-        $hasStatusIdx = DB::select("SHOW INDEX FROM `organizations` WHERE Key_name = 'organizations_status_idx'");
-        if (empty($hasStatusIdx)) {
+        if (!Schema::hasIndex('organizations', 'organizations_status_idx')) {
             Schema::table('organizations', function (Blueprint $table) {
                 $table->index(['status'], 'organizations_status_idx');
             });

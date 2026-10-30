@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ProductionLine extends Model
 {
-    use SoftDeletes;
+    use BelongsToOrganization, SoftDeletes;
 
     public $incrementing = false;
     protected $keyType = 'string';
@@ -30,6 +31,16 @@ class ProductionLine extends Model
     ];
 
     protected $dates = ['deleted_at'];
+
+    /**
+     * @return array<string, class-string<Model>>
+     */
+    protected function tenantParentRelations(): array
+    {
+        return [
+            'area_id' => Area::class,
+        ];
+    }
 
     public function organization(): BelongsTo
     {

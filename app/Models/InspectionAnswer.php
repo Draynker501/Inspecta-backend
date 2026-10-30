@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InspectionAnswer extends Model
 {
+    use BelongsToOrganization;
+
     public $incrementing = false;
     protected $keyType = 'string';
 
@@ -23,6 +26,17 @@ class InspectionAnswer extends Model
     protected $casts = [
         'organization_id' => 'string',
     ];
+
+    /**
+     * @return array<string, class-string<Model>>
+     */
+    protected function tenantParentRelations(): array
+    {
+        return [
+            'inspection_id' => Inspection::class,
+            'question_id' => Question::class,
+        ];
+    }
 
     public function organization(): BelongsTo
     {

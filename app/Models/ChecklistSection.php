@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ChecklistSection extends Model
 {
+    use BelongsToOrganization;
+
     public $incrementing = false;
     protected $keyType = 'string';
 
@@ -24,6 +27,16 @@ class ChecklistSection extends Model
         'display_order' => 'integer',
         'organization_id' => 'string',
     ];
+
+    /**
+     * @return array<string, class-string<Model>>
+     */
+    protected function tenantParentRelations(): array
+    {
+        return [
+            'checklist_version_id' => ChecklistVersion::class,
+        ];
+    }
 
     public function organization(): BelongsTo
     {

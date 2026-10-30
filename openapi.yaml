@@ -2998,10 +2998,10 @@ components:
           type: string
           format: email
           maxLength: 150
-          example: inspector@inspecta-demo.com
+          example: <email>
         password:
           type: string
-          example: Inspector123!
+          example: <password>
 
     AuthUser:
       type: object
@@ -3024,7 +3024,7 @@ components:
           type: string
           format: email
           maxLength: 150
-          example: inspector@inspecta-demo.com
+          example: <email>
         organization_id:
           type: string
           format: uuid

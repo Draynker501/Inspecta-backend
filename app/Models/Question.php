@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -9,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Question extends Model
 {
+    use BelongsToOrganization;
+
     public $incrementing = false;
     protected $keyType = 'string';
 
@@ -32,6 +35,16 @@ class Question extends Model
         'status' => 'boolean',
         'organization_id' => 'string',
     ];
+
+    /**
+     * @return array<string, class-string<Model>>
+     */
+    protected function tenantParentRelations(): array
+    {
+        return [
+            'checklist_section_id' => ChecklistSection::class,
+        ];
+    }
 
     public function organization(): BelongsTo
     {
