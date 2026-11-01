@@ -29,6 +29,7 @@ class OrganizationFactory extends Factory
             'id' => (string) Str::uuid7(),
             'name' => fake()->unique()->company(),
             'code' => 'ORG-'.fake()->unique()->numerify('#####'),
+            'type' => Organization::TYPE_CLIENT,
             'status' => true,
         ];
     }

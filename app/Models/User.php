@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\BelongsToOrganization;
+use App\Models\OrganizationMembership;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -42,6 +43,17 @@ class User extends Authenticatable
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class, 'organization_id');
+    }
+
+    /**
+     * Membresías de este usuario en organizaciones (M1.5, P1).
+     *
+     * Fuente de pertenencia paralela a users.organization_id. No usa
+     * BelongsToOrganization: se consulta directamente por user_id.
+     */
+    public function memberships(): HasMany
+    {
+        return $this->hasMany(OrganizationMembership::class, 'user_id');
     }
 
     /**
@@ -153,5 +165,43 @@ class User extends Authenticatable
     public function checklistVersions(): HasMany
     {
         return $this->hasMany(ChecklistVersion::class, 'created_by');
+    }
+
+    /**
+     * Doble escritura de membresía (M1.5, P1.4).
+     *
+     * Solo actúa cuando el User acaba de crearse o cuando su
+     * organization_id cambió en este guardado. Cualquier otro guardado
+     * no hace nada.
+     *
+     * La reactivación de una membresía revocada es una operación explícita
+     * que se introduce en P3; durante P1 el login sigue leyendo
+     * users.organization_id y el hook nunca modifica el status de una
+     * membresía existente.
+     *
+     * No choca con bootBelongsToOrganization: este hook solo escribe en
+     * organization_memberships, tabla que no usa ese trait.
+     */
+    protected static function booted(): void
+    {
+        static::saved(function (User $user): void {
+            if (! $user->wasRecentlyCreated && ! $user->wasChanged('organization_id')) {
+                return;
+            }
+
+            self::ensureMembership($user);
+        });
+    }
+
+    protected static function ensureMembership(User $user): void
+    {
+        if (blank($user->organization_id)) {
+            return;
+        }
+
+        OrganizationMembership::firstOrCreate(
+            ['user_id' => $user->id, 'organization_id' => $user->organization_id],
+            ['status' => OrganizationMembership::STATUS_ACTIVE],
+        );
     }
 }

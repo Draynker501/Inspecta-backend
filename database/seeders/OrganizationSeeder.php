@@ -18,6 +18,7 @@ class OrganizationSeeder extends Seeder
             [
                 'id' => '018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f',
                 'name' => 'Inspecta Demo Organization',
+                'type' => Organization::TYPE_CLIENT,
                 'tax_id' => 'ABC123456789',
                 'address' => 'Av. Industria 100, Jalisco, México',
                 'description' => 'Organización de demostración para entorno de desarrollo',

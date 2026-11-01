@@ -13,6 +13,9 @@ class Organization extends Model
     /** @use HasFactory<OrganizationFactory> */
     use HasFactory, SoftDeletes;
 
+    public const TYPE_CLIENT = 'client';
+    public const TYPE_OPERATOR = 'operator';
+
     public $incrementing = false;
     protected $keyType = 'string';
 
@@ -20,6 +23,7 @@ class Organization extends Model
         'id',
         'name',
         'code',
+        'type',
         'tax_id',
         'address',
         'description',
@@ -30,6 +34,7 @@ class Organization extends Model
 
     protected $casts = [
         'status' => 'boolean',
+        'type' => 'string',
     ];
 
     protected $dates = ['deleted_at'];

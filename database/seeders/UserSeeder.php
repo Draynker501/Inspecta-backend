@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\UserArea;
 use App\Models\UserPlant;
 use App\Models\UserRole;
+use App\Support\Tenancy\MembershipBackfill;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -71,6 +72,9 @@ class UserSeeder extends Seeder
             ],
         ];
 
+        // 1. Crear/actualizar todos los usuarios primero. El hook booted
+        //    de User crea la membresía vía firstOrCreate al guardar cada uno.
+        $userRecords = [];
         foreach ($users as $userData) {
             $user = User::firstOrNew(['id' => $userData['id']]);
 
@@ -89,6 +93,20 @@ class UserSeeder extends Seeder
             }
 
             $user->save();
+
+            $userRecords[] = ['user' => $user, 'data' => $userData];
+        }
+
+        // 2. Backfill idempotente: asegurar membresía para todos los usuarios.
+        //    Debe ejecutarse ANTES de asignar pivotes, porque las FK compuestas
+        //    de los pivotes requieren que la membresía (user_id, organization_id)
+        //    ya exista en organization_memberships.
+        MembershipBackfill::run();
+
+        // 3. Asignar pivotes DESPUÉS de que existen las membresías.
+        foreach ($userRecords as $record) {
+            $user = $record['user'];
+            $userData = $record['data'];
 
             // Asignar rol y accesos con IDs de pivote estables entre siembras.
             if ($userData['role_id']) {
