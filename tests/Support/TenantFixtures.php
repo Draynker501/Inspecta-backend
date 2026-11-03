@@ -4,10 +4,12 @@ namespace Tests\Support;
 
 use App\Models\Area;
 use App\Models\Organization;
+use App\Models\OrganizationMembership;
 use App\Models\Plant;
 use App\Models\ProductionLine;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Str;
 
 /**
@@ -29,9 +31,24 @@ trait TenantFixtures
 
     protected function user(Organization $organization, array $attributes = []): User
     {
-        return User::factory()->create($attributes + [
-            'organization_id' => $organization->id,
-        ]);
+        $user = User::factory()->create();
+
+        // Sobrescribir organization_id directamente (bypassa Fillable) con la
+        // organización solicitada. Desde P3.2, la pertenencia se basa en
+        // organization_memberships, no en users.organization_id.
+        $user->organization_id = $organization->id;
+        $user->save();
+
+        // Crear membresía explícita.
+        OrganizationMembership::firstOrCreate(
+            ['user_id' => $user->id, 'organization_id' => $organization->id],
+            [
+                'id' => (string) Str::uuid7(),
+                'status' => OrganizationMembership::STATUS_ACTIVE,
+            ],
+        );
+
+        return $user;
     }
 
     protected function role(Organization $organization, string $name): Role
@@ -48,6 +65,9 @@ trait TenantFixtures
     protected function admin(Organization $organization): User
     {
         $user = $this->user($organization);
+
+        // assignRole requiere TenantContext activo desde P3.2.
+        app(TenantContext::class)->set($organization->id);
 
         $user->assignRole($this->role($organization, (string) config('tenancy.roles.admin')));
 
@@ -95,5 +115,19 @@ trait TenantFixtures
         $token = $user->createToken('tests')->plainTextToken;
 
         return $this->withHeader('Authorization', 'Bearer '.$token);
+    }
+
+    /**
+     * Autentica como usuario y establece la cabecera X-Organization-Id.
+     *
+     * Requerido desde P3.1: el contexto de tenant se resuelve exclusivamente
+     * mediante la cabecera y una membresía activa.
+     */
+    protected function actingAsApiInOrganization(User $user, Organization $organization): static
+    {
+        $token = $user->createToken('tests')->plainTextToken;
+
+        return $this->withHeader('Authorization', 'Bearer '.$token)
+            ->withHeader('X-Organization-Id', $organization->id);
     }
 }

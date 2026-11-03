@@ -3,8 +3,9 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use App\Models\Concerns\BelongsToOrganization;
-use App\Models\OrganizationMembership;
+use App\Exceptions\CrossTenantOperationException;
+use App\Exceptions\MissingTenantContextException;
+use App\Support\Tenancy\TenantContext;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -16,14 +17,15 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['id', 'name', 'email', 'password', 'organization_id'])]
+#[Fillable(['id', 'name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use BelongsToOrganization, HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     public $incrementing = false;
+
     protected $keyType = 'string';
 
     /**
@@ -57,17 +59,27 @@ class User extends Authenticatable
     }
 
     /**
-     * Indica si el usuario tiene el rol indicado dentro de su organización.
+     * Indica si el usuario tiene el rol indicado dentro de la organización activa.
+     *
+     * La organización se resuelve exclusivamente del TenantContext activo.
+     * Sin contexto, devuelve false. Nunca usa users.organization_id como fallback.
      */
     public function hasRole(string $role): bool
     {
+        $organizationId = app(TenantContext::class)->id();
+
+        if ($organizationId === null) {
+            return false;
+        }
+
         return $this->roles()
             ->where('roles.name', $role)
+            ->where('roles.organization_id', $organizationId)
             ->exists();
     }
 
     /**
-     * Administrador de la organización (no existe super-admin global).
+     * Administrador de la organización activa (no existe super-admin global).
      */
     public function isAdmin(): bool
     {
@@ -76,40 +88,147 @@ class User extends Authenticatable
 
     public function hasPlantAccess(string $plantId): bool
     {
-        return $this->plants()->whereKey($plantId)->exists();
+        $organizationId = app(TenantContext::class)->id();
+
+        if ($organizationId === null) {
+            return false;
+        }
+
+        return $this->plants()
+            ->whereKey($plantId)
+            ->wherePivot('organization_id', $organizationId)
+            ->exists();
     }
 
     public function hasAreaAccess(string $areaId): bool
     {
-        return $this->areas()->whereKey($areaId)->exists();
+        $organizationId = app(TenantContext::class)->id();
+
+        if ($organizationId === null) {
+            return false;
+        }
+
+        return $this->areas()
+            ->whereKey($areaId)
+            ->wherePivot('organization_id', $organizationId)
+            ->exists();
     }
 
     /**
-     * Asignaciones con organization_id explícito: las tablas pivote lo
-     * exigen como NOT NULL y attach() no lo rellenaría.
+     * Asigna un rol al usuario en la organización activa.
+     *
+     * Valida membresía activa del usuario y que el rol pertenezca a
+     * TenantContext. Rechaza asignaciones existentes incoherentes.
      */
     public function assignRole(Role $role): UserRole
     {
-        return UserRole::firstOrCreate(
+        $organizationId = app(TenantContext::class)->id();
+
+        if ($organizationId === null) {
+            throw MissingTenantContextException::for(UserRole::class);
+        }
+
+        if ($role->organization_id !== $organizationId) {
+            throw CrossTenantOperationException::write();
+        }
+
+        $membership = OrganizationMembership::where('user_id', $this->id)
+            ->where('organization_id', $organizationId)
+            ->where('status', OrganizationMembership::STATUS_ACTIVE)
+            ->first();
+
+        if (! $membership) {
+            throw CrossTenantOperationException::write();
+        }
+
+        $userRole = UserRole::firstOrCreate(
             ['user_id' => $this->id, 'role_id' => $role->id],
-            ['organization_id' => $this->organization_id],
+            ['organization_id' => $organizationId],
         );
+
+        if ($userRole->organization_id !== $organizationId) {
+            throw CrossTenantOperationException::write();
+        }
+
+        return $userRole;
     }
 
+    /**
+     * Asigna una planta al usuario en la organización activa.
+     *
+     * Valida membresía activa del usuario y que la planta pertenezca a
+     * TenantContext. Rechaza asignaciones existentes incoherentes.
+     */
     public function assignPlant(Plant $plant): UserPlant
     {
-        return UserPlant::firstOrCreate(
+        $organizationId = app(TenantContext::class)->id();
+
+        if ($organizationId === null) {
+            throw MissingTenantContextException::for(UserPlant::class);
+        }
+
+        if ($plant->organization_id !== $organizationId) {
+            throw CrossTenantOperationException::write();
+        }
+
+        $membership = OrganizationMembership::where('user_id', $this->id)
+            ->where('organization_id', $organizationId)
+            ->where('status', OrganizationMembership::STATUS_ACTIVE)
+            ->first();
+
+        if (! $membership) {
+            throw CrossTenantOperationException::write();
+        }
+
+        $userPlant = UserPlant::firstOrCreate(
             ['user_id' => $this->id, 'plant_id' => $plant->id],
-            ['organization_id' => $this->organization_id],
+            ['organization_id' => $organizationId],
         );
+
+        if ($userPlant->organization_id !== $organizationId) {
+            throw CrossTenantOperationException::write();
+        }
+
+        return $userPlant;
     }
 
+    /**
+     * Asigna un área al usuario en la organización activa.
+     *
+     * Valida membresía activa del usuario y que el área pertenezca a
+     * TenantContext. Rechaza asignaciones existentes incoherentes.
+     */
     public function assignArea(Area $area): UserArea
     {
-        return UserArea::firstOrCreate(
+        $organizationId = app(TenantContext::class)->id();
+
+        if ($organizationId === null) {
+            throw MissingTenantContextException::for(UserArea::class);
+        }
+
+        if ($area->organization_id !== $organizationId) {
+            throw CrossTenantOperationException::write();
+        }
+
+        $membership = OrganizationMembership::where('user_id', $this->id)
+            ->where('organization_id', $organizationId)
+            ->where('status', OrganizationMembership::STATUS_ACTIVE)
+            ->first();
+
+        if (! $membership) {
+            throw CrossTenantOperationException::write();
+        }
+
+        $userArea = UserArea::firstOrCreate(
             ['user_id' => $this->id, 'area_id' => $area->id],
-            ['organization_id' => $this->organization_id],
+            ['organization_id' => $organizationId],
         );
+
+        if ($userArea->organization_id !== $organizationId) {
+            throw CrossTenantOperationException::write();
+        }
+
+        return $userArea;
     }
 
     public function roles(): BelongsToMany
@@ -165,43 +284,5 @@ class User extends Authenticatable
     public function checklistVersions(): HasMany
     {
         return $this->hasMany(ChecklistVersion::class, 'created_by');
-    }
-
-    /**
-     * Doble escritura de membresía (M1.5, P1.4).
-     *
-     * Solo actúa cuando el User acaba de crearse o cuando su
-     * organization_id cambió en este guardado. Cualquier otro guardado
-     * no hace nada.
-     *
-     * La reactivación de una membresía revocada es una operación explícita
-     * que se introduce en P3; durante P1 el login sigue leyendo
-     * users.organization_id y el hook nunca modifica el status de una
-     * membresía existente.
-     *
-     * No choca con bootBelongsToOrganization: este hook solo escribe en
-     * organization_memberships, tabla que no usa ese trait.
-     */
-    protected static function booted(): void
-    {
-        static::saved(function (User $user): void {
-            if (! $user->wasRecentlyCreated && ! $user->wasChanged('organization_id')) {
-                return;
-            }
-
-            self::ensureMembership($user);
-        });
-    }
-
-    protected static function ensureMembership(User $user): void
-    {
-        if (blank($user->organization_id)) {
-            return;
-        }
-
-        OrganizationMembership::firstOrCreate(
-            ['user_id' => $user->id, 'organization_id' => $user->organization_id],
-            ['status' => OrganizationMembership::STATUS_ACTIVE],
-        );
     }
 }

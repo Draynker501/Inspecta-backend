@@ -2,14 +2,17 @@
 
 namespace Database\Seeders;
 
+use App\Models\Area;
 use App\Models\Organization;
+use App\Models\OrganizationMembership;
+use App\Models\Plant;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserArea;
 use App\Models\UserPlant;
 use App\Models\UserRole;
-use App\Support\Tenancy\MembershipBackfill;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -22,7 +25,7 @@ class UserSeeder extends Seeder
     {
         $organization = Organization::where('code', 'INSP-01')->first();
 
-        if (!$organization) {
+        if (! $organization) {
             return;
         }
 
@@ -30,8 +33,8 @@ class UserSeeder extends Seeder
         $inspectorRole = Role::where('name', 'Inspector')->first();
         $supervisorRole = Role::where('name', 'Supervisor')->first();
 
-        $plantNorte = \App\Models\Plant::where('code', 'PLN-01')->first();
-        $areaSoldadura = \App\Models\Area::where('code', 'AR-SOLD-01')->first();
+        $plantNorte = Plant::where('code', 'PLN-01')->first();
+        $areaSoldadura = Area::where('code', 'AR-SOLD-01')->first();
 
         $users = [
             [
@@ -72,8 +75,7 @@ class UserSeeder extends Seeder
             ],
         ];
 
-        // 1. Crear/actualizar todos los usuarios primero. El hook booted
-        //    de User crea la membresía vía firstOrCreate al guardar cada uno.
+        // 1. Crear/actualizar todos los usuarios primero.
         $userRecords = [];
         foreach ($users as $userData) {
             $user = User::firstOrNew(['id' => $userData['id']]);
@@ -88,7 +90,7 @@ class UserSeeder extends Seeder
 
             // Solo se define la contraseña al crear: re-sembrar no debe
             // regenerar el hash ni sobrescribir una contraseña ya cambiada.
-            if (!$user->exists) {
+            if (! $user->exists) {
                 $user->password = $userData['password'];
             }
 
@@ -97,37 +99,60 @@ class UserSeeder extends Seeder
             $userRecords[] = ['user' => $user, 'data' => $userData];
         }
 
-        // 2. Backfill idempotente: asegurar membresía para todos los usuarios.
+        // 2. Crear membresías explícitamente para cada usuario en su organización.
         //    Debe ejecutarse ANTES de asignar pivotes, porque las FK compuestas
         //    de los pivotes requieren que la membresía (user_id, organization_id)
         //    ya exista en organization_memberships.
-        MembershipBackfill::run();
+        foreach ($userRecords as $record) {
+            $user = $record['user'];
+            $userData = $record['data'];
+
+            OrganizationMembership::firstOrCreate(
+                ['user_id' => $user->id, 'organization_id' => $userData['organization_id']],
+                [
+                    'id' => (string) Str::uuid7(),
+                    'status' => OrganizationMembership::STATUS_ACTIVE,
+                ],
+            );
+        }
 
         // 3. Asignar pivotes DESPUÉS de que existen las membresías.
         foreach ($userRecords as $record) {
             $user = $record['user'];
             $userData = $record['data'];
 
+            // Validar membresía activa antes de asignar pivotes.
+            $membership = OrganizationMembership::where('user_id', $user->id)
+                ->where('organization_id', $userData['organization_id'])
+                ->where('status', OrganizationMembership::STATUS_ACTIVE)
+                ->first();
+
+            if (! $membership) {
+                throw new \RuntimeException(
+                    "Usuario {$user->id} no tiene membresía activa en {$userData['organization_id']}."
+                );
+            }
+
             // Asignar rol y accesos con IDs de pivote estables entre siembras.
             if ($userData['role_id']) {
                 $this->assignPivot(UserRole::class, [
                     'user_id' => $user->id,
                     'role_id' => $userData['role_id'],
-                ], $user->organization_id);
+                ], $userData['organization_id']);
             }
 
             foreach ($userData['plant_ids'] as $plantId) {
                 $this->assignPivot(UserPlant::class, [
                     'user_id' => $user->id,
                     'plant_id' => $plantId,
-                ], $user->organization_id);
+                ], $userData['organization_id']);
             }
 
             foreach ($userData['area_ids'] as $areaId) {
                 $this->assignPivot(UserArea::class, [
                     'user_id' => $user->id,
                     'area_id' => $areaId,
-                ], $user->organization_id);
+                ], $userData['organization_id']);
             }
         }
     }
@@ -135,7 +160,7 @@ class UserSeeder extends Seeder
     /**
      * Crea la asignación solo si no existe y conserva su id entre siembras.
      *
-     * @param  class-string<\Illuminate\Database\Eloquent\Model>  $modelClass
+     * @param  class-string<Model>  $modelClass
      * @param  array<string, string>  $keys
      */
     private function assignPivot(string $modelClass, array $keys, string $organizationId): void
