@@ -29,6 +29,22 @@ trait TenantFixtures
         ]);
     }
 
+    protected function operatorOrganization(array $attributes = []): Organization
+    {
+        return Organization::create(array_merge([
+            'id' => (string) Str::uuid7(),
+            'name' => 'Consultora INSPECTA',
+            'code' => 'INSPECTA-OP',
+            'type' => Organization::TYPE_OPERATOR,
+            'status' => true,
+        ], $attributes));
+    }
+
+    protected function clientOrganization(string $code = 'ORG-CLIENT', array $attributes = []): Organization
+    {
+        return $this->organization($code, $attributes);
+    }
+
     protected function user(Organization $organization, array $attributes = []): User
     {
         $user = User::factory()->create();

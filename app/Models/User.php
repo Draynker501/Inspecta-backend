@@ -59,6 +59,96 @@ class User extends Authenticatable
     }
 
     /**
+     * Indica si el usuario es operador de plataforma.
+     *
+     * La organización operadora se resuelve de forma determinista por su
+     * tipo (operator), estado activo y ausencia de borrado lógico. Debe
+     * existir exactamente una; en caso contrario se deniega (fail-closed).
+     * La pertenencia se verifica contra organization_memberships, nunca
+     * contra users.organization_id ni TenantContext.
+     */
+    public function isPlatformOperator(): bool
+    {
+        $operatorOrganizationId = $this->platformOperatorOrganizationId();
+
+        $status = $this->getAttribute('status');
+
+        if ($status === null && $this->exists) {
+            $status = $this->fresh()?->getAttribute('status');
+        }
+
+        if (! (bool) $status) {
+            return false;
+        }
+
+        if ($operatorOrganizationId === null) {
+            return false;
+        }
+
+        return OrganizationMembership::where('user_id', $this->id)
+            ->where('organization_id', $operatorOrganizationId)
+            ->where('status', OrganizationMembership::STATUS_ACTIVE)
+            ->exists();
+    }
+
+    /**
+     * Indica si el usuario tiene el rol de plataforma en la organización
+     * operadora, con coherencia de organización (D-07).
+     *
+     * Se ejecuta fuera del TenantContext vigente, porque el contexto será
+     * el de una organización cliente. El contexto previo se restaura
+     * incluso si la consulta lanza una excepción.
+     *
+     * No autoriza por sí solo: debe combinarse con isPlatformOperator().
+     */
+    public function hasPlatformRole(): bool
+    {
+        $operatorOrganizationId = $this->platformOperatorOrganizationId();
+
+        if ($operatorOrganizationId === null) {
+            return false;
+        }
+
+        $platformRoleName = config('tenancy.roles.platform_admin');
+
+        if (! is_string($platformRoleName) || $platformRoleName === '') {
+            return false;
+        }
+
+        $context = app(TenantContext::class);
+
+        return (bool) $context->withoutTenant('platform-role-check', function () use ($operatorOrganizationId, $platformRoleName) {
+            return UserRole::query()
+                ->where('user_id', $this->id)
+                ->where('organization_id', $operatorOrganizationId)
+                ->whereHas('role', function ($query) use ($operatorOrganizationId, $platformRoleName) {
+                    $query->where('organization_id', $operatorOrganizationId)
+                        ->where('name', $platformRoleName);
+                })
+                ->exists();
+        });
+    }
+
+    /**
+     * Identificador de la organización operadora si existe una sola y está
+     * activa/no eliminada; en caso contrario null (fail-closed).
+     */
+    private function platformOperatorOrganizationId(): ?string
+    {
+        $ids = Organization::query()
+            ->where('type', Organization::TYPE_OPERATOR)
+            ->where('status', true)
+            ->whereNull('deleted_at')
+            ->pluck('id');
+
+        if ($ids->count() !== 1) {
+            return null;
+        }
+
+        return (string) $ids->first();
+    }
+
+    /**
      * Indica si el usuario tiene el rol indicado dentro de la organización activa.
      *
      * La organización se resuelve exclusivamente del TenantContext activo.

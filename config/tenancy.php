@@ -17,6 +17,7 @@ return [
         'admin' => 'Administrador',
         'supervisor' => 'Supervisor',
         'inspector' => 'Inspector',
+        'platform_admin' => 'Administrador de plataforma',
     ],
 
 ];
