@@ -26,16 +26,16 @@ class AuditLog extends Model
         // produccion.
         static::saving(function (self $model): void {
             if ($model->exists) {
-                throw new AuditLogImmutableException();
+                throw new AuditLogImmutableException;
             }
         });
 
         static::updating(function (self $model): void {
-            throw new AuditLogImmutableException();
+            throw new AuditLogImmutableException;
         });
 
         static::deleting(function (self $model): void {
-            throw new AuditLogImmutableException();
+            throw new AuditLogImmutableException;
         });
     }
 
