@@ -20,6 +20,8 @@ class TenantRoutingTest extends TestCase
     private const ROUTES_WITHOUT_TENANT = [
         'api/auth/login',
         'api/auth/logout',
+        'api/auth/me',
+        'api/auth/organizations',
     ];
 
     public function test_las_rutas_api_exigen_contexto_organizacional(): void

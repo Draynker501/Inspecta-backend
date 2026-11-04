@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\OrganizationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -18,5 +19,8 @@ Route::prefix('auth')->group(function () {
     // Logout solo exige autenticación: un usuario debe poder revocar su token
     // aunque su organización haya quedado inactiva.
     Route::post('logout', [AuthController::class, 'logout'])->middleware('api.auth');
-    Route::get('me', [AuthController::class, 'me'])->middleware('api.tenant');
+    // Identidad global: no requiere contexto organizacional.
+    Route::get('me', [AuthController::class, 'me'])->middleware('api.auth');
+    // Listado de organizaciones del usuario autenticado: no requiere tenant.
+    Route::get('organizations', [OrganizationController::class, 'index'])->middleware('api.auth');
 });

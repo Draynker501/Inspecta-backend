@@ -4,6 +4,8 @@ namespace App\Models\Concerns;
 
 use App\Exceptions\CrossTenantOperationException;
 use App\Exceptions\MissingTenantContextException;
+use App\Models\OrganizationMembership;
+use App\Models\User;
 use App\Support\Tenancy\OrganizationScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Model;
@@ -107,6 +109,21 @@ trait BelongsToOrganization
             $parentId = $this->getAttribute($foreignKey);
 
             if ($parentId === null) {
+                continue;
+            }
+
+            // Para FK a usuario, la pertenencia se valida por membresía
+            // activa en la organización del registro (D-07/D-20), nunca por
+            // users.organization_id. Al actualizar, solo si la columna cambió.
+            if ($parentClass === User::class) {
+                if ($this->exists && ! $this->isDirty($foreignKey)) {
+                    continue;
+                }
+
+                if (OrganizationMembership::findActive($parentId, (string) $organizationId) === null) {
+                    throw CrossTenantOperationException::relation($foreignKey);
+                }
+
                 continue;
             }
 

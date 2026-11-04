@@ -32,9 +32,33 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
-            // La columna es NOT NULL: la fábrica crea su propia organización.
-            'organization_id' => Organization::factory(),
         ];
+    }
+
+    /**
+     * Configura la fábrica: asigna organization_id directamente (bypass Fillable)
+     * porque la columna es NOT NULL en el esquema. Este valor es solo de
+     * compatibilidad; no se usa para autorización ni resolución de tenant.
+     */
+    public function configure(): static
+    {
+        return $this->afterMaking(function (User $user) {
+            if (blank($user->organization_id)) {
+                $user->organization_id = Organization::factory()->create()->id;
+            }
+        });
+    }
+
+    /**
+     * Asigna la organización de compatibilidad al usuario.
+     *
+     * No representa una membresía ni define el tenant activo.
+     */
+    public function forOrganization(Organization $organization): static
+    {
+        return $this->afterMaking(function (User $user) use ($organization) {
+            $user->organization_id = $organization->id;
+        });
     }
 
     /**

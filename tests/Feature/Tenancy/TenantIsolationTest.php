@@ -125,11 +125,13 @@ class TenantIsolationTest extends TestCase
         $orgB = $this->organization('ORG-B');
         $adminA = $this->admin($orgA);
 
+        app(TenantContext::class)->clear();
+
         $this->plant($orgA, 'A-01');
         $this->plant($orgA, 'A-02');
         $this->plant($orgB, 'B-01');
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->getJson('/api/tenant-test/plants')
             ->assertOk()
             ->assertJsonCount(2, 'data')
@@ -143,9 +145,12 @@ class TenantIsolationTest extends TestCase
         $orgA = $this->organization('ORG-A');
         $orgB = $this->organization('ORG-B');
         $adminA = $this->admin($orgA);
+
+        app(TenantContext::class)->clear();
+
         $plantB = $this->plant($orgB, 'B-01');
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->getJson("/api/tenant-test/plants/{$plantB->id}")
             ->assertNotFound()
             ->assertJsonPath('message', 'Recurso no encontrado.')
@@ -157,9 +162,12 @@ class TenantIsolationTest extends TestCase
         $orgA = $this->organization('ORG-A');
         $orgB = $this->organization('ORG-B');
         $adminA = $this->admin($orgA);
+
+        app(TenantContext::class)->clear();
+
         $plantB = $this->plant($orgB, 'B-01');
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->patchJson("/api/tenant-test/plants/{$plantB->id}", ['name' => 'Planta secuestrada'])
             ->assertNotFound();
 
@@ -174,9 +182,12 @@ class TenantIsolationTest extends TestCase
         $orgA = $this->organization('ORG-A');
         $orgB = $this->organization('ORG-B');
         $adminA = $this->admin($orgA);
+
+        app(TenantContext::class)->clear();
+
         $plantB = $this->plant($orgB, 'B-01');
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->deleteJson("/api/tenant-test/plants/{$plantB->id}")
             ->assertNotFound();
 
@@ -192,7 +203,7 @@ class TenantIsolationTest extends TestCase
         $orgB = $this->organization('ORG-B');
         $adminA = $this->admin($orgA);
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->postJson('/api/tenant-test/plants', [
                 'name' => 'Planta intrusa',
                 'code' => 'X-01',
@@ -209,7 +220,7 @@ class TenantIsolationTest extends TestCase
         $orgA = $this->organization('ORG-A');
         $adminA = $this->admin($orgA);
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->postJson('/api/tenant-test/plants', [
                 'name' => 'Planta nueva',
                 'code' => 'A-99',
@@ -228,9 +239,12 @@ class TenantIsolationTest extends TestCase
         $orgA = $this->organization('ORG-A');
         $orgB = $this->organization('ORG-B');
         $adminA = $this->admin($orgA);
+
+        app(TenantContext::class)->clear();
+
         $plantB = $this->plant($orgB, 'B-01');
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->postJson('/api/tenant-test/areas', [
                 'plant_id' => $plantB->id,
                 'name' => 'Área intrusa',
@@ -251,18 +265,20 @@ class TenantIsolationTest extends TestCase
         $orgB = $this->organization('ORG-B');
         $adminA = $this->admin($orgA);
 
+        app(TenantContext::class)->clear();
+
         $plantA = $this->plant($orgA, 'A-01');
         $this->area($plantA, 'A-AREA');
         $areaB = $this->area($this->plant($orgB, 'B-01'), 'B-AREA');
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->getJson("/api/tenant-test/plants/{$plantA->id}/areas")
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonFragment(['code' => 'A-AREA'])
             ->assertJsonMissing(['code' => 'B-AREA']);
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->getJson("/api/tenant-test/areas/{$areaB->id}")
             ->assertNotFound();
     }
@@ -272,12 +288,15 @@ class TenantIsolationTest extends TestCase
         $orgA = $this->organization('ORG-A');
         $orgB = $this->organization('ORG-B');
         $adminA = $this->admin($orgA);
+
+        app(TenantContext::class)->clear();
+
         $lineB = $this->productionLine(
             $this->area($this->plant($orgB, 'B-01'), 'B-AREA'),
             'B-LINE'
         );
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->getJson("/api/tenant-test/lines/{$lineB->id}")
             ->assertNotFound();
     }
@@ -288,12 +307,12 @@ class TenantIsolationTest extends TestCase
         $adminA = $this->admin($orgA);
         $plantA = $this->plant($orgA, 'A-01');
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->patchJson("/api/tenant-test/plants/{$plantA->id}", ['name' => 'Planta actualizada'])
             ->assertOk()
             ->assertJsonPath('data.name', 'Planta actualizada');
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->deleteJson("/api/tenant-test/plants/{$plantA->id}")
             ->assertNoContent();
 
@@ -304,17 +323,18 @@ class TenantIsolationTest extends TestCase
     {
         $orgA = $this->organization('ORG-A');
         $inspector = $this->user($orgA);
+        app(TenantContext::class)->set($orgA->id);
         $inspector->assignRole($this->role($orgA, (string) config('tenancy.roles.inspector')));
 
         $assigned = $this->plant($orgA, 'A-01');
         $unassigned = $this->plant($orgA, 'A-02');
         $inspector->assignPlant($assigned);
 
-        $this->actingAsApi($inspector)
+        $this->actingAsApiInOrganization($inspector, $orgA)
             ->getJson("/api/tenant-test/plants/{$assigned->id}")
             ->assertOk();
 
-        $this->actingAsApi($inspector)
+        $this->actingAsApiInOrganization($inspector, $orgA)
             ->getJson("/api/tenant-test/plants/{$unassigned->id}")
             ->assertForbidden();
     }
@@ -323,9 +343,10 @@ class TenantIsolationTest extends TestCase
     {
         $orgA = $this->organization('ORG-A');
         $inspector = $this->user($orgA);
+        app(TenantContext::class)->set($orgA->id);
         $inspector->assignRole($this->role($orgA, (string) config('tenancy.roles.inspector')));
 
-        $this->actingAsApi($inspector)
+        $this->actingAsApiInOrganization($inspector, $orgA)
             ->postJson('/api/tenant-test/plants', [
                 'name' => 'Planta no autorizada',
                 'code' => 'A-77',
@@ -341,7 +362,7 @@ class TenantIsolationTest extends TestCase
         $adminA = $this->admin($orgA);
         $adminA->forceFill(['status' => false])->save();
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->getJson('/api/tenant-test/plants')
             ->assertForbidden()
             ->assertJsonPath('message', 'El usuario está inactivo. Contacte al administrador.');
@@ -352,15 +373,16 @@ class TenantIsolationTest extends TestCase
         $orgA = $this->organization('ORG-A', ['status' => false]);
         $adminA = $this->admin($orgA);
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->getJson('/api/tenant-test/plants')
             ->assertForbidden()
             ->assertJsonPath('message', 'La organización está inactiva. Contacte al administrador.');
 
-        $this->actingAsApi($adminA)
+        // /auth/me expone la identidad global sin exigir contexto de tenant.
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->getJson('/api/auth/me')
-            ->assertForbidden()
-            ->assertJsonPath('message', 'La organización está inactiva. Contacte al administrador.');
+            ->assertOk()
+            ->assertJsonPath('message', 'Usuario autenticado.');
     }
 
     public function test_organizacion_eliminada_no_otorga_contexto(): void
@@ -369,10 +391,10 @@ class TenantIsolationTest extends TestCase
         $adminA = $this->admin($orgA);
         $orgA->delete();
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->getJson('/api/tenant-test/plants')
             ->assertForbidden()
-            ->assertJsonPath('message', 'La organización está inactiva. Contacte al administrador.');
+            ->assertJsonPath('message', 'La organización ha sido eliminada.');
     }
 
     public function test_sin_token_no_hay_acceso(): void
@@ -387,7 +409,7 @@ class TenantIsolationTest extends TestCase
         $orgA = $this->organization('ORG-A', ['status' => false]);
         $adminA = $this->admin($orgA);
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->postJson('/api/auth/logout')
             ->assertOk()
             ->assertJsonPath('message', 'Sesión cerrada correctamente.');
@@ -402,7 +424,7 @@ class TenantIsolationTest extends TestCase
 
         app(TenantContext::class)->set($orgA->id);
 
-        $this->actingAsApi($adminA)
+        $this->actingAsApiInOrganization($adminA, $orgA)
             ->getJson('/api/auth/me')
             ->assertOk();
 

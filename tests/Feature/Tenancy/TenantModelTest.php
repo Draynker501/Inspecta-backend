@@ -67,7 +67,6 @@ class TenantModelTest extends TestCase
         QuestionNormRequirement::class,
         Role::class,
         SyncChange::class,
-        User::class,
         UserArea::class,
         UserPlant::class,
         UserRole::class,
@@ -128,7 +127,7 @@ class TenantModelTest extends TestCase
         $this->assertSame(['A-01', 'A-02'], Plant::query()->orderBy('code')->pluck('code')->all());
         $this->assertFalse(Plant::query()->whereKey($plantB->id)->exists());
 
-        $this->assertSame(3, $context->withoutTenant(fn () => Plant::query()->count()));
+        $this->assertSame(3, $context->withoutTenant('consulta de diagnóstico sin tenant', fn () => Plant::query()->count()));
         $this->assertSame($orgA->id, $context->id());
     }
 
@@ -295,15 +294,21 @@ class TenantModelTest extends TestCase
         $orgA = $this->organization('ORG-A');
         $orgB = $this->organization('ORG-B');
 
+        app(TenantContext::class)->set($orgA->id);
+
         $admin = $this->admin($orgA);
         $inspector = $this->user($orgA);
         $inspector->assignRole($this->role($orgA, (string) config('tenancy.roles.inspector')));
 
         $plantA = $this->plant($orgA, 'A-01');
+
+        app(TenantContext::class)->clear();
+
         $plantB = $this->plant($orgB, 'B-01');
-        $inspector->assignPlant($plantA);
 
         app(TenantContext::class)->set($orgA->id);
+
+        $inspector->assignPlant($plantA);
 
         $this->assertTrue($admin->isAdmin());
         $this->assertFalse($inspector->isAdmin());

@@ -3,6 +3,7 @@
 namespace App\Support\Tenancy;
 
 use Closure;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
@@ -26,10 +27,24 @@ final class TenantContext
         return $this->organizationId !== null;
     }
 
+    /**
+     * Devuelve el identificador de la organización activa.
+     *
+     * @throws InvalidArgumentException si no hay contexto establecido.
+     */
+    public function requireId(): string
+    {
+        if ($this->organizationId === null) {
+            throw new InvalidArgumentException('No hay contexto organizacional establecido.');
+        }
+
+        return $this->organizationId;
+    }
+
     public function set(string $organizationId): void
     {
-        if (trim($organizationId) === '') {
-            throw new InvalidArgumentException('El identificador de organización no puede estar vacío.');
+        if (! Str::isUuid($organizationId)) {
+            throw new InvalidArgumentException('El identificador de organización no es un UUID válido.');
         }
 
         $this->organizationId = $organizationId;
@@ -46,6 +61,9 @@ final class TenantContext
      * Reservado para operaciones administrativas explícitas (comandos
      * Artisan, jobs y tareas de mantenimiento) que deben ser auditables.
      * No debe usarse en controladores para "saltarse" el aislamiento.
+     *
+     * El contexto anterior se restaura incluso si el callback lanza una
+     * excepción.
      */
     public function runAs(string $organizationId, Closure $callback): mixed
     {
@@ -64,8 +82,13 @@ final class TenantContext
      * Ejecuta un callback sin filtro organizacional.
      *
      * Solo para bootstrap, migraciones de datos y diagnósticos de consola.
+     * El motivo es obligatorio para dejar constancia de por qué se omite el
+     * aislamiento.
+     *
+     * El contexto anterior se restaura incluso si el callback lanza una
+     * excepción.
      */
-    public function withoutTenant(Closure $callback): mixed
+    public function withoutTenant(string $reason, Closure $callback): mixed
     {
         $previous = $this->organizationId;
 

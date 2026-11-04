@@ -16,9 +16,11 @@ use Illuminate\Support\Str;
 class OrganizationMembership extends Model
 {
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_REVOKED = 'revoked';
 
     public $incrementing = false;
+
     protected $keyType = 'string';
 
     protected $fillable = [
@@ -33,7 +35,36 @@ class OrganizationMembership extends Model
         'status' => 'string',
         'organization_id' => 'string',
         'user_id' => 'string',
+        'revoked_at' => 'datetime',
     ];
+
+    public function scopeActive($query)
+    {
+        return $query->where('status', self::STATUS_ACTIVE);
+    }
+
+    public function scopeForUser($query, string $userId)
+    {
+        return $query->where('user_id', $userId);
+    }
+
+    public function scopeForOrganization($query, string $organizationId)
+    {
+        return $query->where('organization_id', $organizationId);
+    }
+
+    public static function findActive(string $userId, string $organizationId): ?self
+    {
+        if ($userId === '' || $organizationId === '') {
+            return null;
+        }
+
+        return static::query()
+            ->forUser($userId)
+            ->forOrganization($organizationId)
+            ->active()
+            ->first();
+    }
 
     protected static function booted(): void
     {

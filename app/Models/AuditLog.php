@@ -11,6 +11,7 @@ class AuditLog extends Model
     use BelongsToOrganization;
 
     public $incrementing = false;
+
     protected $keyType = 'string';
 
     protected $fillable = [
@@ -35,9 +36,9 @@ class AuditLog extends Model
      */
     protected function tenantParentRelations(): array
     {
-        return [
-            'user_id' => User::class,
-        ];
+        // El actor se registra sin validar su membresía (D-11); la
+        // integridad del usuario la garantiza la FK de la base de datos.
+        return [];
     }
 
     public function organization(): BelongsTo

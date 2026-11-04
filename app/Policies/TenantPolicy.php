@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Models\OrganizationMembership;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Model;
@@ -55,8 +56,14 @@ abstract class TenantPolicy
     {
         $organizationId = app(TenantContext::class)->id();
 
-        return $organizationId !== null
-            && $user->organization_id === $organizationId;
+        if ($organizationId === null) {
+            return false;
+        }
+
+        // La pertenencia se verifica contra organization_memberships, nunca
+        // contra users.organization_id. Esta consulta no aplica scopes
+        // globales que dependan del contexto todavía no establecido.
+        return OrganizationMembership::findActive($user->id, $organizationId) !== null;
     }
 
     protected function ownsTenant(User $user, Model $model): bool

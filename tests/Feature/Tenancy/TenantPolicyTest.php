@@ -47,6 +47,9 @@ class TenantPolicyTest extends TestCase
         $orgA = $this->organization('ORG-A');
         $orgB = $this->organization('ORG-B');
         $adminA = $this->admin($orgA);
+
+        app(TenantContext::class)->clear();
+
         $plantB = $this->plant($orgB, 'B-01');
 
         app(TenantContext::class)->set($orgA->id);
@@ -94,13 +97,12 @@ class TenantPolicyTest extends TestCase
     {
         $orgA = $this->organization('ORG-A');
         $inspector = $this->user($orgA);
+        app(TenantContext::class)->set($orgA->id);
         $inspector->assignRole($this->role($orgA, (string) config('tenancy.roles.inspector')));
 
         $assigned = $this->plant($orgA, 'A-01');
         $unassigned = $this->plant($orgA, 'A-02');
         $inspector->assignPlant($assigned);
-
-        app(TenantContext::class)->set($orgA->id);
 
         $gate = Gate::forUser($inspector);
 
@@ -115,14 +117,13 @@ class TenantPolicyTest extends TestCase
     {
         $orgA = $this->organization('ORG-A');
         $inspector = $this->user($orgA);
+        app(TenantContext::class)->set($orgA->id);
         $inspector->assignRole($this->role($orgA, (string) config('tenancy.roles.inspector')));
 
         $plant = $this->plant($orgA, 'A-01');
         $assignedArea = $this->area($plant, 'A-AREA-01');
         $otherArea = $this->area($this->plant($orgA, 'A-02'), 'A-AREA-02');
         $inspector->assignPlant($plant);
-
-        app(TenantContext::class)->set($orgA->id);
 
         $gate = Gate::forUser($inspector);
 
@@ -134,12 +135,11 @@ class TenantPolicyTest extends TestCase
     {
         $orgA = $this->organization('ORG-A');
         $inspector = $this->user($orgA);
+        app(TenantContext::class)->set($orgA->id);
         $inspector->assignRole($this->role($orgA, (string) config('tenancy.roles.inspector')));
 
         $area = $this->area($this->plant($orgA, 'A-01'), 'A-AREA-01');
         $inspector->assignArea($area);
-
-        app(TenantContext::class)->set($orgA->id);
 
         $this->assertTrue(Gate::forUser($inspector)->allows('view', $area));
     }
@@ -148,6 +148,7 @@ class TenantPolicyTest extends TestCase
     {
         $orgA = $this->organization('ORG-A');
         $inspector = $this->user($orgA);
+        app(TenantContext::class)->set($orgA->id);
         $inspector->assignRole($this->role($orgA, (string) config('tenancy.roles.inspector')));
 
         $assignedPlant = $this->plant($orgA, 'A-01');
@@ -166,8 +167,6 @@ class TenantPolicyTest extends TestCase
         $inspector->assignPlant($assignedPlant);
         $inspector->assignArea($areaAssignedDirectly);
 
-        app(TenantContext::class)->set($orgA->id);
-
         $gate = Gate::forUser($inspector);
 
         $this->assertTrue($gate->allows('view', $lineByPlant));
@@ -180,6 +179,9 @@ class TenantPolicyTest extends TestCase
         $orgA = $this->organization('ORG-A');
         $orgB = $this->organization('ORG-B');
         $adminA = $this->admin($orgA);
+
+        app(TenantContext::class)->clear();
+
         $areaB = $this->area($this->plant($orgB, 'B-01'), 'B-AREA');
         $lineB = $this->productionLine($areaB, 'B-LINE');
 
