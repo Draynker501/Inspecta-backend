@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Exceptions\AuditLogImmutableException;
 use App\Models\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,6 +14,30 @@ class AuditLog extends Model
     public $incrementing = false;
 
     protected $keyType = 'string';
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        // Append-only: update, delete, forceDelete y save sobre un registro
+        // existente lanzan la excepcion dedicada.
+        // Nota: UPDATE/DELETE masivos con query builder no pasan por eventos
+        // del modelo; su proteccion son los permisos de la base de datos en
+        // produccion.
+        static::saving(function (self $model): void {
+            if ($model->exists) {
+                throw new AuditLogImmutableException();
+            }
+        });
+
+        static::updating(function (self $model): void {
+            throw new AuditLogImmutableException();
+        });
+
+        static::deleting(function (self $model): void {
+            throw new AuditLogImmutableException();
+        });
+    }
 
     protected $fillable = [
         'id',
