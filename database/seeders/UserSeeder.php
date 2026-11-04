@@ -122,10 +122,7 @@ class UserSeeder extends Seeder
             $userData = $record['data'];
 
             // Validar membresía activa antes de asignar pivotes.
-            $membership = OrganizationMembership::where('user_id', $user->id)
-                ->where('organization_id', $userData['organization_id'])
-                ->where('status', OrganizationMembership::STATUS_ACTIVE)
-                ->first();
+            $membership = OrganizationMembership::findActive($user->id, $userData['organization_id']);
 
             if (! $membership) {
                 throw new \RuntimeException(

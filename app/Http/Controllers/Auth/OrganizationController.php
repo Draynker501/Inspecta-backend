@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
-use App\Models\OrganizationMembership;
 use Illuminate\Http\Request;
 
 /**
@@ -21,7 +20,7 @@ class OrganizationController extends Controller
         $user = $request->user();
 
         $memberships = $user->memberships()
-            ->where('status', OrganizationMembership::STATUS_ACTIVE)
+            ->active()
             ->whereHas('organization', function ($query) {
                 $query->where('type', Organization::TYPE_CLIENT)
                     ->where('status', true)

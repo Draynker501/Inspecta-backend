@@ -79,17 +79,17 @@ class ResolveTenantContext
 
         // La membresía se consulta directamente sobre organization_memberships
         // (sin scopes dependientes del contexto todavía no establecido).
-        $membership = OrganizationMembership::where('user_id', $user->id)
+        $hasMembership = OrganizationMembership::where('user_id', $user->id)
             ->where('organization_id', $organization->id)
-            ->first();
+            ->exists();
 
-        if (! $membership) {
+        if (! $hasMembership) {
             return response()->json([
                 'message' => 'No tiene membresía en esta organización.',
             ], 403);
         }
 
-        if (! $membership->isActive()) {
+        if (OrganizationMembership::findActive($user->id, $organization->id) === null) {
             return response()->json([
                 'message' => 'La membresía no está activa.',
             ], 403);

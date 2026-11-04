@@ -85,10 +85,7 @@ class User extends Authenticatable
             return false;
         }
 
-        return OrganizationMembership::where('user_id', $this->id)
-            ->where('organization_id', $operatorOrganizationId)
-            ->where('status', OrganizationMembership::STATUS_ACTIVE)
-            ->exists();
+        return OrganizationMembership::findActive($this->id, $operatorOrganizationId) !== null;
     }
 
     /**
@@ -222,10 +219,7 @@ class User extends Authenticatable
             throw CrossTenantOperationException::write();
         }
 
-        $membership = OrganizationMembership::where('user_id', $this->id)
-            ->where('organization_id', $organizationId)
-            ->where('status', OrganizationMembership::STATUS_ACTIVE)
-            ->first();
+        $membership = OrganizationMembership::findActive($this->id, $organizationId);
 
         if (! $membership) {
             throw CrossTenantOperationException::write();
@@ -261,10 +255,7 @@ class User extends Authenticatable
             throw CrossTenantOperationException::write();
         }
 
-        $membership = OrganizationMembership::where('user_id', $this->id)
-            ->where('organization_id', $organizationId)
-            ->where('status', OrganizationMembership::STATUS_ACTIVE)
-            ->first();
+        $membership = OrganizationMembership::findActive($this->id, $organizationId);
 
         if (! $membership) {
             throw CrossTenantOperationException::write();
@@ -300,10 +291,7 @@ class User extends Authenticatable
             throw CrossTenantOperationException::write();
         }
 
-        $membership = OrganizationMembership::where('user_id', $this->id)
-            ->where('organization_id', $organizationId)
-            ->where('status', OrganizationMembership::STATUS_ACTIVE)
-            ->first();
+        $membership = OrganizationMembership::findActive($this->id, $organizationId);
 
         if (! $membership) {
             throw CrossTenantOperationException::write();

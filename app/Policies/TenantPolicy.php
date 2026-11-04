@@ -63,10 +63,7 @@ abstract class TenantPolicy
         // La pertenencia se verifica contra organization_memberships, nunca
         // contra users.organization_id. Esta consulta no aplica scopes
         // globales que dependan del contexto todavía no establecido.
-        return OrganizationMembership::where('user_id', $user->id)
-            ->where('organization_id', $organizationId)
-            ->where('status', OrganizationMembership::STATUS_ACTIVE)
-            ->exists();
+        return OrganizationMembership::findActive($user->id, $organizationId) !== null;
     }
 
     protected function ownsTenant(User $user, Model $model): bool
