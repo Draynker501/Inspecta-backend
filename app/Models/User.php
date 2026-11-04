@@ -106,6 +106,10 @@ class User extends Authenticatable
             return false;
         }
 
+        if (OrganizationMembership::findActive($this->id, $operatorOrganizationId) === null) {
+            return false;
+        }
+
         $platformRoleName = config('tenancy.roles.platform_admin');
 
         if (! is_string($platformRoleName) || $platformRoleName === '') {
