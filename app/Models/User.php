@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Exceptions\CrossTenantOperationException;
 use App\Exceptions\MissingTenantContextException;
+use App\Support\Audit\AuditLogger;
 use App\Support\Tenancy\TenantContext;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -15,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable(['id', 'name', 'email', 'password'])]
@@ -229,16 +231,26 @@ class User extends Authenticatable
             throw CrossTenantOperationException::write();
         }
 
-        $userRole = UserRole::firstOrCreate(
-            ['user_id' => $this->id, 'role_id' => $role->id],
-            ['organization_id' => $organizationId],
-        );
+        return DB::transaction(function () use ($role, $organizationId) {
+            $userRole = UserRole::firstOrCreate(
+                ['user_id' => $this->id, 'role_id' => $role->id],
+                ['organization_id' => $organizationId],
+            );
 
-        if ($userRole->organization_id !== $organizationId) {
-            throw CrossTenantOperationException::write();
-        }
+            if ($userRole->organization_id !== $organizationId) {
+                throw CrossTenantOperationException::write();
+            }
 
-        return $userRole;
+            if ($userRole->wasRecentlyCreated) {
+                app(AuditLogger::class)->record('role.assigned', $userRole, [], [
+                    'user_id' => $this->id,
+                    'role_id' => $role->id,
+                    'organization_id' => $organizationId,
+                ]);
+            }
+
+            return $userRole;
+        });
     }
 
     /**
@@ -265,16 +277,26 @@ class User extends Authenticatable
             throw CrossTenantOperationException::write();
         }
 
-        $userPlant = UserPlant::firstOrCreate(
-            ['user_id' => $this->id, 'plant_id' => $plant->id],
-            ['organization_id' => $organizationId],
-        );
+        return DB::transaction(function () use ($plant, $organizationId) {
+            $userPlant = UserPlant::firstOrCreate(
+                ['user_id' => $this->id, 'plant_id' => $plant->id],
+                ['organization_id' => $organizationId],
+            );
 
-        if ($userPlant->organization_id !== $organizationId) {
-            throw CrossTenantOperationException::write();
-        }
+            if ($userPlant->organization_id !== $organizationId) {
+                throw CrossTenantOperationException::write();
+            }
 
-        return $userPlant;
+            if ($userPlant->wasRecentlyCreated) {
+                app(AuditLogger::class)->record('plant.assigned', $userPlant, [], [
+                    'user_id' => $this->id,
+                    'plant_id' => $plant->id,
+                    'organization_id' => $organizationId,
+                ]);
+            }
+
+            return $userPlant;
+        });
     }
 
     /**
@@ -301,16 +323,26 @@ class User extends Authenticatable
             throw CrossTenantOperationException::write();
         }
 
-        $userArea = UserArea::firstOrCreate(
-            ['user_id' => $this->id, 'area_id' => $area->id],
-            ['organization_id' => $organizationId],
-        );
+        return DB::transaction(function () use ($area, $organizationId) {
+            $userArea = UserArea::firstOrCreate(
+                ['user_id' => $this->id, 'area_id' => $area->id],
+                ['organization_id' => $organizationId],
+            );
 
-        if ($userArea->organization_id !== $organizationId) {
-            throw CrossTenantOperationException::write();
-        }
+            if ($userArea->organization_id !== $organizationId) {
+                throw CrossTenantOperationException::write();
+            }
 
-        return $userArea;
+            if ($userArea->wasRecentlyCreated) {
+                app(AuditLogger::class)->record('area.assigned', $userArea, [], [
+                    'user_id' => $this->id,
+                    'area_id' => $area->id,
+                    'organization_id' => $organizationId,
+                ]);
+            }
+
+            return $userArea;
+        });
     }
 
     public function roles(): BelongsToMany
