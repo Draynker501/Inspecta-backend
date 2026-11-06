@@ -17,6 +17,8 @@ final class TenantContext
 {
     private ?string $organizationId = null;
 
+    private bool $bypassingTenant = false;
+
     public function id(): ?string
     {
         return $this->organizationId;
@@ -25,6 +27,11 @@ final class TenantContext
     public function has(): bool
     {
         return $this->organizationId !== null;
+    }
+
+    public function isBypassingTenant(): bool
+    {
+        return $this->bypassingTenant;
     }
 
     /**
@@ -91,13 +98,16 @@ final class TenantContext
     public function withoutTenant(string $reason, Closure $callback): mixed
     {
         $previous = $this->organizationId;
+        $previousBypass = $this->bypassingTenant;
 
         $this->organizationId = null;
+        $this->bypassingTenant = true;
 
         try {
             return $callback();
         } finally {
             $this->organizationId = $previous;
+            $this->bypassingTenant = $previousBypass;
         }
     }
 }

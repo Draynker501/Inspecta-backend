@@ -2,6 +2,7 @@
 
 namespace App\Support\Tenancy;
 
+use App\Exceptions\MissingTenantContextException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Scope;
@@ -9,18 +10,83 @@ use Illuminate\Database\Eloquent\Scope;
 /**
  * Filtra las consultas por la organización activa.
  *
- * Sin contexto (consola, seeders, factories y jobs) no aplica filtro:
- * esas rutas de ejecución deben pasar organization_id explícitamente o
- * envolver su trabajo en TenantContext::runAs().
+ * En modo estricto (config tenancy.strict_mode), consultar un modelo
+ * tenant-scoped sin contexto organizacional en una petición HTTP lanza
+ * MissingTenantContextException. La consola (seeders, factories, artisan),
+ * las colas NO (los jobs deben fijar tenant o usar withoutTenant) y
+ * TenantContext::withoutTenant() quedan exentos.
  */
-final class OrganizationScope implements Scope
+class OrganizationScope implements Scope
 {
     public function apply(Builder $builder, Model $model): void
     {
-        $organizationId = app(TenantContext::class)->id();
+        $context = app(TenantContext::class);
+        $organizationId = $context->id();
 
         if ($organizationId !== null) {
             $builder->where($model->qualifyColumn('organization_id'), $organizationId);
+
+            return;
         }
+
+        if (! (bool) config('tenancy.strict_mode', false)) {
+            return;
+        }
+
+        if ($context->isBypassingTenant()) {
+            return;
+        }
+
+        if ($this->isConsoleExempt()) {
+            return;
+        }
+
+        throw MissingTenantContextException::for($model::class);
+    }
+
+    /**
+     * Permite sobrescribir en pruebas para simular un contexto HTTP.
+     */
+    protected function runningInConsole(): bool
+    {
+        return app()->runningInConsole();
+    }
+
+    private function isConsoleExempt(): bool
+    {
+        if (! $this->runningInConsole()) {
+            return false;
+        }
+
+        if (! (bool) config('tenancy.allow_console_without_tenant', true)) {
+            return false;
+        }
+
+        // Los workers de cola corren en consola pero NO quedan exentos:
+        // deben fijar tenant explícito o usar withoutTenant($reason).
+        if ($this->isQueueWorker()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function isQueueWorker(): bool
+    {
+        if (! isset($_SERVER['argv']) || ! is_array($_SERVER['argv'])) {
+            return false;
+        }
+
+        foreach ($_SERVER['argv'] as $argument) {
+            if (! is_string($argument)) {
+                continue;
+            }
+
+            if (str_contains($argument, 'queue:work') || str_contains($argument, 'queue:listen') || str_contains($argument, 'queue:restart')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
