@@ -3,9 +3,11 @@
 namespace Database\Seeders;
 
 use App\Models\Area;
+use App\Models\Organization;
 use App\Models\Plant;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Ramsey\Uuid\Uuid;
 
 class AreaSeeder extends Seeder
 {
@@ -13,58 +15,62 @@ class AreaSeeder extends Seeder
 
     public function run(): void
     {
-        $plants = Plant::all();
+        $clients = Organization::query()
+            ->where('type', Organization::TYPE_CLIENT)
+            ->where('status', true)
+            ->whereNull('deleted_at')
+            ->get();
 
-        if ($plants->isEmpty()) {
-            return;
-        }
+        foreach ($clients as $organization) {
+            $plantNorte = Plant::where('organization_id', $organization->id)->where('code', 'PLN-01')->first();
+            $plantSur = Plant::where('organization_id', $organization->id)->where('code', 'PLN-02')->first();
 
-        $plantNorte = $plants->firstWhere('code', 'PLN-01');
-        $plantSur = $plants->firstWhere('code', 'PLN-02');
+            $areas = [];
 
-        $areas = [];
+            if ($plantNorte) {
+                $areas[] = [
+                    'code' => 'AR-SOLD-01',
+                    'plant' => $plantNorte,
+                    'name' => 'Área de Soldadura',
+                    'type' => 'production',
+                    'description' => 'Zona de soldadura robótica',
+                ];
+                $areas[] = [
+                    'code' => 'AR-ALM-01',
+                    'plant' => $plantNorte,
+                    'name' => 'Área de Almacén',
+                    'type' => 'warehouse',
+                    'description' => 'Zona de almacenamiento de materias primas',
+                ];
+            }
 
-        if ($plantNorte) {
-            $areas[] = [
-                'id' => '018f1a2e-3333-7e5f-8000-abcdef123456',
-                'organization_id' => $plantNorte->organization_id,
-                'plant_id' => $plantNorte->id,
-                'name' => 'Área de Soldadura',
-                'code' => 'AR-SOLD-01',
-                'type' => 'production',
-                'description' => 'Zona de soldadura robótica',
-                'status' => true,
-            ];
-            $areas[] = [
-                'id' => '018f1a2f-4444-7e5f-8000-abcdef123456',
-                'organization_id' => $plantNorte->organization_id,
-                'plant_id' => $plantNorte->id,
-                'name' => 'Área de Almacén',
-                'code' => 'AR-ALM-01',
-                'type' => 'warehouse',
-                'description' => 'Zona de almacenamiento de materias primas',
-                'status' => true,
-            ];
-        }
+            if ($plantSur) {
+                $areas[] = [
+                    'code' => 'AR-ENS-01',
+                    'plant' => $plantSur,
+                    'name' => 'Área de Ensamblaje',
+                    'type' => 'production',
+                    'description' => 'Zona de ensamblaje de productos terminados',
+                ];
+            }
 
-        if ($plantSur) {
-            $areas[] = [
-                'id' => '018f1a30-5555-7e5f-8000-fedcba654321',
-                'organization_id' => $plantSur->organization_id,
-                'plant_id' => $plantSur->id,
-                'name' => 'Área de Ensamblaje',
-                'code' => 'AR-ENS-01',
-                'type' => 'production',
-                'description' => 'Zona de ensamblaje de productos terminados',
-                'status' => true,
-            ];
-        }
+            foreach ($areas as $area) {
+                $plant = $area['plant'];
 
-        foreach ($areas as $area) {
-            Area::updateOrCreate(
-                ['id' => $area['id']],
-                $area
-            );
+                Area::updateOrCreate(
+                    ['organization_id' => $organization->id, 'code' => $area['code']],
+                    [
+                        'id' => (string) Uuid::uuid5(Uuid::NAMESPACE_DNS, $organization->id.':'.$area['code']),
+                        'organization_id' => $organization->id,
+                        'plant_id' => $plant->id,
+                        'name' => $area['name'],
+                        'code' => $area['code'],
+                        'type' => $area['type'],
+                        'description' => $area['description'],
+                        'status' => true,
+                    ]
+                );
+            }
         }
     }
 }

@@ -16,17 +16,17 @@ class SeederTest extends TestCase
      * @var array<string, int>
      */
     private const EXPECTED_COUNTS = [
-        'organizations' => 1,
-        'roles' => 3,
-        'plants' => 2,
-        'areas' => 3,
-        'production_lines' => 2,
-        'users' => 3,
-        'user_roles' => 3,
+        'organizations' => 3,
+        'roles' => 7,
+        'plants' => 4,
+        'areas' => 6,
+        'production_lines' => 4,
+        'users' => 5,
+        'user_roles' => 5,
         'user_plants' => 3,
         'user_areas' => 3,
-        'checklists' => 1,
-        'norms' => 1,
+        'checklists' => 2,
+        'norms' => 2,
     ];
 
     public function test_los_seeders_son_idempotentes_en_conteos(): void
@@ -62,19 +62,41 @@ class SeederTest extends TestCase
         );
     }
 
-    public function test_todas_las_filas_sembradas_pertenecen_a_la_organizacion_demo(): void
+    public function test_ninguna_fila_de_dominio_pertenece_a_la_operadora(): void
     {
         $this->seed();
 
-        $organizationId = DB::table('organizations')->where('code', 'INSP-01')->value('id');
+        $operatorId = DB::table('organizations')->where('type', 'operator')->value('id');
 
-        $this->assertNotNull($organizationId, 'No se creó la organización INSP-01.');
+        $this->assertNotNull($operatorId, 'No se creó la organización operadora.');
 
-        foreach (['users', 'roles', 'plants', 'areas', 'production_lines', 'checklists', 'norms', 'user_roles', 'user_plants', 'user_areas'] as $table) {
+        foreach (['plants', 'areas', 'production_lines', 'checklists', 'norms', 'user_plants', 'user_areas'] as $table) {
             $this->assertSame(
                 0,
-                DB::table($table)->where('organization_id', '!=', $organizationId)->count(),
-                "La tabla {$table} contiene filas de otra organización."
+                DB::table($table)->where('organization_id', $operatorId)->count(),
+                "La tabla {$table} contiene filas de la organización operadora."
+            );
+        }
+
+        // Roles de plataforma solo en la operadora; roles de cliente solo en clientes.
+        $this->assertSame(
+            0,
+            DB::table('roles')->where('organization_id', $operatorId)->where('name', '!=', 'Administrador de plataforma')->count(),
+            'La operadora contiene roles de cliente.'
+        );
+    }
+
+    public function test_todas_las_filas_de_dominio_pertenecen_a_organizaciones_cliente(): void
+    {
+        $this->seed();
+
+        $clientIds = DB::table('organizations')->where('type', 'client')->pluck('id')->all();
+
+        foreach (['plants', 'areas', 'production_lines', 'checklists', 'norms'] as $table) {
+            $this->assertSame(
+                0,
+                DB::table($table)->whereNotIn('organization_id', $clientIds)->count(),
+                "La tabla {$table} contiene filas fuera de organizaciones cliente."
             );
         }
     }

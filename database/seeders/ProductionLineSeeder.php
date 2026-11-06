@@ -3,9 +3,11 @@
 namespace Database\Seeders;
 
 use App\Models\Area;
+use App\Models\Organization;
 use App\Models\ProductionLine;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Ramsey\Uuid\Uuid;
 
 class ProductionLineSeeder extends Seeder
 {
@@ -13,46 +15,52 @@ class ProductionLineSeeder extends Seeder
 
     public function run(): void
     {
-        $areas = Area::all();
+        $clients = Organization::query()
+            ->where('type', Organization::TYPE_CLIENT)
+            ->where('status', true)
+            ->whereNull('deleted_at')
+            ->get();
 
-        if ($areas->isEmpty()) {
-            return;
-        }
+        foreach ($clients as $organization) {
+            $areaSoldadura = Area::where('organization_id', $organization->id)->where('code', 'AR-SOLD-01')->first();
+            $areaEnsamblaje = Area::where('organization_id', $organization->id)->where('code', 'AR-ENS-01')->first();
 
-        $areaSoldadura = $areas->firstWhere('code', 'AR-SOLD-01');
-        $areaEnsamblaje = $areas->firstWhere('code', 'AR-ENS-01');
+            $lines = [];
 
-        $lines = [];
+            if ($areaSoldadura) {
+                $lines[] = [
+                    'code' => 'LN-AUT-A',
+                    'area' => $areaSoldadura,
+                    'name' => 'Línea Automotriz A',
+                    'description' => 'Ensamblaje de chasis',
+                ];
+            }
 
-        if ($areaSoldadura) {
-            $lines[] = [
-                'id' => '018f1a31-6666-7e5f-8000-abcdef123456',
-                'organization_id' => $areaSoldadura->organization_id,
-                'area_id' => $areaSoldadura->id,
-                'name' => 'Línea Automotriz A',
-                'code' => 'LN-AUT-A',
-                'description' => 'Ensamblaje de chasis',
-                'status' => true,
-            ];
-        }
+            if ($areaEnsamblaje) {
+                $lines[] = [
+                    'code' => 'LN-ELE-B',
+                    'area' => $areaEnsamblaje,
+                    'name' => 'Línea Electrónica B',
+                    'description' => 'Ensamblaje de tarjetas electrónicas',
+                ];
+            }
 
-        if ($areaEnsamblaje) {
-            $lines[] = [
-                'id' => '018f1a32-7777-7e5f-8000-fedcba654321',
-                'organization_id' => $areaEnsamblaje->organization_id,
-                'area_id' => $areaEnsamblaje->id,
-                'name' => 'Línea Electrónica B',
-                'code' => 'LN-ELE-B',
-                'description' => 'Ensamblaje de tarjetas electrónicas',
-                'status' => true,
-            ];
-        }
+            foreach ($lines as $line) {
+                $area = $line['area'];
 
-        foreach ($lines as $line) {
-            ProductionLine::updateOrCreate(
-                ['id' => $line['id']],
-                $line
-            );
+                ProductionLine::updateOrCreate(
+                    ['organization_id' => $organization->id, 'code' => $line['code']],
+                    [
+                        'id' => (string) Uuid::uuid5(Uuid::NAMESPACE_DNS, $organization->id.':'.$line['code']),
+                        'organization_id' => $organization->id,
+                        'area_id' => $area->id,
+                        'name' => $line['name'],
+                        'code' => $line['code'],
+                        'description' => $line['description'],
+                        'status' => true,
+                    ]
+                );
+            }
         }
     }
 }

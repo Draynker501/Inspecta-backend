@@ -126,6 +126,32 @@ trait TenantFixtures
         ]);
     }
 
+    protected function platformConsultant(Organization $operator, array $clients, array $attributes = []): User
+    {
+        $user = User::factory()->create($attributes);
+
+        // Membresía en la operadora.
+        OrganizationMembership::firstOrCreate(
+            ['user_id' => $user->id, 'organization_id' => $operator->id],
+            ['id' => (string) Str::uuid7(), 'status' => OrganizationMembership::STATUS_ACTIVE],
+        );
+
+        foreach ($clients as $client) {
+            OrganizationMembership::firstOrCreate(
+                ['user_id' => $user->id, 'organization_id' => $client->id],
+                ['id' => (string) Str::uuid7(), 'status' => OrganizationMembership::STATUS_ACTIVE],
+            );
+        }
+
+        // Rol de plataforma en la operadora.
+        app(TenantContext::class)->runAs($operator->id, function () use ($user, $operator) {
+            $role = $this->role($operator, (string) config('tenancy.roles.platform_admin'));
+            $user->assignRole($role);
+        });
+
+        return $user;
+    }
+
     protected function actingAsApi(User $user): static
     {
         $token = $user->createToken('tests')->plainTextToken;
