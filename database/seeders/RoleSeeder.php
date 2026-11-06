@@ -6,7 +6,7 @@ use App\Models\Organization;
 use App\Models\Role;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
+use Ramsey\Uuid\Uuid;
 
 class RoleSeeder extends Seeder
 {
@@ -14,41 +14,57 @@ class RoleSeeder extends Seeder
 
     public function run(): void
     {
-        $organization = Organization::first();
-
-        if (!$organization) {
-            return;
-        }
-
-        $roles = [
-            [
-                'id' => '018f2b3c-4d5e-7f8a-8000-112233445566',
-                'name' => 'Administrador',
-                'description' => 'Acceso completo a todas las funciones del sistema',
-                'organization_id' => $organization->id,
-                'status' => true,
-            ],
-            [
-                'id' => '018f2b3c-4d5e-7f8a-8000-112233445567',
-                'name' => 'Inspector',
-                'description' => 'Puede realizar inspecciones y reportar incidencias',
-                'organization_id' => $organization->id,
-                'status' => true,
-            ],
-            [
-                'id' => '018f2b3c-4d5e-7f8a-8000-112233445568',
-                'name' => 'Supervisor',
-                'description' => 'Puede confirmar o rechazar inspecciones',
-                'organization_id' => $organization->id,
-                'status' => true,
-            ],
+        $clientRoles = [
+            ['name' => 'Administrador', 'description' => 'Acceso completo a todas las funciones del sistema'],
+            ['name' => 'Inspector', 'description' => 'Puede realizar inspecciones y reportar incidencias'],
+            ['name' => 'Supervisor', 'description' => 'Puede confirmar o rechazar inspecciones'],
         ];
 
-        foreach ($roles as $role) {
+        $clients = Organization::query()
+            ->where('type', Organization::TYPE_CLIENT)
+            ->where('status', true)
+            ->whereNull('deleted_at')
+            ->get();
+
+        foreach ($clients as $organization) {
+            foreach ($clientRoles as $role) {
+                Role::updateOrCreate(
+                    ['organization_id' => $organization->id, 'name' => $role['name']],
+                    [
+                        'id' => $this->deterministicId($organization->id, $role['name']),
+                        'organization_id' => $organization->id,
+                        'name' => $role['name'],
+                        'description' => $role['description'],
+                        'status' => true,
+                    ]
+                );
+            }
+        }
+
+        $operator = Organization::query()
+            ->where('type', Organization::TYPE_OPERATOR)
+            ->where('status', true)
+            ->whereNull('deleted_at')
+            ->first();
+
+        if ($operator) {
+            $platformRoleName = (string) config('tenancy.roles.platform_admin');
+
             Role::updateOrCreate(
-                ['id' => $role['id']],
-                $role
+                ['organization_id' => $operator->id, 'name' => $platformRoleName],
+                [
+                    'id' => $this->deterministicId($operator->id, $platformRoleName),
+                    'organization_id' => $operator->id,
+                    'name' => $platformRoleName,
+                    'description' => 'Administración multiempresa de la consultora',
+                    'status' => true,
+                ]
             );
         }
+    }
+
+    private function deterministicId(string $organizationId, string $name): string
+    {
+        return (string) Uuid::uuid5(Uuid::NAMESPACE_DNS, $organizationId.':'.$name);
     }
 }

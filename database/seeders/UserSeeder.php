@@ -12,7 +12,6 @@ use App\Models\UserArea;
 use App\Models\UserPlant;
 use App\Models\UserRole;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -23,18 +22,21 @@ class UserSeeder extends Seeder
 
     public function run(): void
     {
-        $organization = Organization::where('code', 'INSP-01')->first();
+        $organizations = Organization::query()
+            ->whereIn('code', ['INSP-01', 'ORG-02', 'INSPECTA-OP'])
+            ->get()
+            ->keyBy('code');
 
-        if (! $organization) {
+        $insp01 = $organizations->get('INSP-01');
+        $org02 = $organizations->get('ORG-02');
+        $operator = $organizations->get('INSPECTA-OP');
+
+        if (! $insp01) {
             return;
         }
 
-        $adminRole = Role::where('name', 'Administrador')->first();
-        $inspectorRole = Role::where('name', 'Inspector')->first();
-        $supervisorRole = Role::where('name', 'Supervisor')->first();
-
-        $plantNorte = Plant::where('code', 'PLN-01')->first();
-        $areaSoldadura = Area::where('code', 'AR-SOLD-01')->first();
+        $plantNorte = Plant::where('organization_id', $insp01->id)->where('code', 'PLN-01')->first();
+        $areaSoldadura = Area::where('organization_id', $insp01->id)->where('code', 'AR-SOLD-01')->first();
 
         $users = [
             [
@@ -42,124 +44,166 @@ class UserSeeder extends Seeder
                 'name' => 'Administrador Sistema',
                 'email' => 'admin@inspecta-demo.com',
                 'password' => Hash::make('Admin123!'),
-                'organization_id' => $organization->id,
-                'email_verified_at' => now(),
-                'status' => true,
-                'role_id' => $adminRole?->id,
+                'primary_org' => 'INSP-01',
+                'memberships' => ['INSP-01'],
+                'roles' => ['INSP-01' => 'Administrador'],
                 'plant_ids' => $plantNorte ? [$plantNorte->id] : [],
                 'area_ids' => $areaSoldadura ? [$areaSoldadura->id] : [],
+                'plant_org' => 'INSP-01',
+                'area_org' => 'INSP-01',
             ],
             [
                 'id' => '018f2b3c-4d5e-7f8a-8000-112233445591',
                 'name' => 'Inspector Demo',
                 'email' => 'inspector@inspecta-demo.com',
                 'password' => Hash::make('Inspector123!'),
-                'organization_id' => $organization->id,
-                'email_verified_at' => now(),
-                'status' => true,
-                'role_id' => $inspectorRole?->id,
+                'primary_org' => 'INSP-01',
+                'memberships' => ['INSP-01'],
+                'roles' => ['INSP-01' => 'Inspector'],
                 'plant_ids' => $plantNorte ? [$plantNorte->id] : [],
                 'area_ids' => $areaSoldadura ? [$areaSoldadura->id] : [],
+                'plant_org' => 'INSP-01',
+                'area_org' => 'INSP-01',
             ],
             [
                 'id' => '018f2b3c-4d5e-7f8a-8000-112233445592',
                 'name' => 'Supervisor Demo',
                 'email' => 'supervisor@inspecta-demo.com',
                 'password' => Hash::make('Supervisor123!'),
-                'organization_id' => $organization->id,
-                'email_verified_at' => now(),
-                'status' => true,
-                'role_id' => $supervisorRole?->id,
+                'primary_org' => 'INSP-01',
+                'memberships' => ['INSP-01'],
+                'roles' => ['INSP-01' => 'Supervisor'],
                 'plant_ids' => $plantNorte ? [$plantNorte->id] : [],
                 'area_ids' => $areaSoldadura ? [$areaSoldadura->id] : [],
+                'plant_org' => 'INSP-01',
+                'area_org' => 'INSP-01',
             ],
         ];
 
-        // 1. Crear/actualizar todos los usuarios primero.
-        $userRecords = [];
-        foreach ($users as $userData) {
-            $user = User::firstOrNew(['id' => $userData['id']]);
+        if ($org02) {
+            $users[] = [
+                'id' => '018f2b3c-4d5e-7f8a-8000-112233445593',
+                'name' => 'Administrador Org2',
+                'email' => 'admin2@inspecta-demo.com',
+                'password' => Hash::make('Admin123!'),
+                'primary_org' => 'ORG-02',
+                'memberships' => ['ORG-02'],
+                'roles' => ['ORG-02' => 'Administrador'],
+                'plant_ids' => [],
+                'area_ids' => [],
+                'plant_org' => null,
+                'area_org' => null,
+            ];
+        }
+
+        if ($operator) {
+            $clientCodes = ['INSP-01'];
+            if ($org02) {
+                $clientCodes[] = 'ORG-02';
+            }
+
+            $users[] = [
+                'id' => '018f2b3c-4d5e-7f8a-8000-112233445594',
+                'name' => 'Consultor Plataforma',
+                'email' => 'consultor@inspecta.com',
+                'password' => Hash::make('Consultor123!'),
+                'primary_org' => 'INSPECTA-OP',
+                'memberships' => array_merge(['INSPECTA-OP'], $clientCodes),
+                'roles' => ['INSPECTA-OP' => (string) config('tenancy.roles.platform_admin')],
+                'plant_ids' => [],
+                'area_ids' => [],
+                'plant_org' => null,
+                'area_org' => null,
+            ];
+        }
+
+        // 1. Crear/actualizar usuarios.
+        $records = [];
+        foreach ($users as $data) {
+            $primaryOrg = $organizations->get($data['primary_org']);
+            $user = User::firstOrNew(['id' => $data['id']]);
 
             $user->fill([
-                'name' => $userData['name'],
-                'email' => $userData['email'],
-                'organization_id' => $userData['organization_id'],
-                'email_verified_at' => $userData['email_verified_at'],
-                'status' => $userData['status'],
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'organization_id' => $primaryOrg?->id,
+                'email_verified_at' => now(),
+                'status' => true,
             ]);
 
-            // Solo se define la contraseña al crear: re-sembrar no debe
-            // regenerar el hash ni sobrescribir una contraseña ya cambiada.
             if (! $user->exists) {
-                $user->password = $userData['password'];
+                $user->password = $data['password'];
             }
 
             $user->save();
 
-            $userRecords[] = ['user' => $user, 'data' => $userData];
+            $records[] = ['user' => $user, 'data' => $data];
         }
 
-        // 2. Crear membresías explícitamente para cada usuario en su organización.
-        //    Debe ejecutarse ANTES de asignar pivotes, porque las FK compuestas
-        //    de los pivotes requieren que la membresía (user_id, organization_id)
-        //    ya exista en organization_memberships.
-        foreach ($userRecords as $record) {
+        // 2. Membresías.
+        foreach ($records as $record) {
             $user = $record['user'];
-            $userData = $record['data'];
+            $data = $record['data'];
 
-            OrganizationMembership::firstOrCreate(
-                ['user_id' => $user->id, 'organization_id' => $userData['organization_id']],
-                [
-                    'id' => (string) Str::uuid7(),
-                    'status' => OrganizationMembership::STATUS_ACTIVE,
-                ],
-            );
-        }
+            foreach ($data['memberships'] as $code) {
+                $org = $organizations->get($code);
+                if (! $org) {
+                    continue;
+                }
 
-        // 3. Asignar pivotes DESPUÉS de que existen las membresías.
-        foreach ($userRecords as $record) {
-            $user = $record['user'];
-            $userData = $record['data'];
-
-            // Validar membresía activa antes de asignar pivotes.
-            $membership = OrganizationMembership::findActive($user->id, $userData['organization_id']);
-
-            if (! $membership) {
-                throw new \RuntimeException(
-                    "Usuario {$user->id} no tiene membresía activa en {$userData['organization_id']}."
+                OrganizationMembership::firstOrCreate(
+                    ['user_id' => $user->id, 'organization_id' => $org->id],
+                    [
+                        'id' => (string) Str::uuid7(),
+                        'status' => OrganizationMembership::STATUS_ACTIVE,
+                    ],
                 );
             }
+        }
 
-            // Asignar rol y accesos con IDs de pivote estables entre siembras.
-            if ($userData['role_id']) {
-                $this->assignPivot(UserRole::class, [
-                    'user_id' => $user->id,
-                    'role_id' => $userData['role_id'],
-                ], $userData['organization_id']);
+        // 3. Pivotes.
+        foreach ($records as $record) {
+            $user = $record['user'];
+            $data = $record['data'];
+
+            foreach ($data['roles'] as $orgCode => $roleName) {
+                $org = $organizations->get($orgCode);
+                $roleModel = $org ? Role::where('organization_id', $org->id)->where('name', $roleName)->first() : null;
+
+                if ($org && $roleModel) {
+                    $this->assignPivot(UserRole::class, [
+                        'user_id' => $user->id,
+                        'role_id' => $roleModel->id,
+                    ], $org->id);
+                }
             }
 
-            foreach ($userData['plant_ids'] as $plantId) {
-                $this->assignPivot(UserPlant::class, [
-                    'user_id' => $user->id,
-                    'plant_id' => $plantId,
-                ], $userData['organization_id']);
+            if (! empty($data['plant_ids'])) {
+                $org = $organizations->get($data['plant_org']);
+                if ($org) {
+                    foreach ($data['plant_ids'] as $plantId) {
+                        $this->assignPivot(UserPlant::class, [
+                            'user_id' => $user->id,
+                            'plant_id' => $plantId,
+                        ], $org->id);
+                    }
+                }
             }
 
-            foreach ($userData['area_ids'] as $areaId) {
-                $this->assignPivot(UserArea::class, [
-                    'user_id' => $user->id,
-                    'area_id' => $areaId,
-                ], $userData['organization_id']);
+            if (! empty($data['area_ids'])) {
+                $org = $organizations->get($data['area_org']);
+                if ($org) {
+                    foreach ($data['area_ids'] as $areaId) {
+                        $this->assignPivot(UserArea::class, [
+                            'user_id' => $user->id,
+                            'area_id' => $areaId,
+                        ], $org->id);
+                    }
+                }
             }
         }
     }
 
-    /**
-     * Crea la asignación solo si no existe y conserva su id entre siembras.
-     *
-     * @param  class-string<Model>  $modelClass
-     * @param  array<string, string>  $keys
-     */
     private function assignPivot(string $modelClass, array $keys, string $organizationId): void
     {
         $pivot = $modelClass::firstOrCreate($keys, [

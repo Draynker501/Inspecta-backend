@@ -6,7 +6,7 @@ use App\Models\Organization;
 use App\Models\Plant;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
+use Ramsey\Uuid\Uuid;
 
 class PlantSeeder extends Seeder
 {
@@ -14,38 +14,42 @@ class PlantSeeder extends Seeder
 
     public function run(): void
     {
-        $organization = Organization::first();
+        $clients = Organization::query()
+            ->where('type', Organization::TYPE_CLIENT)
+            ->where('status', true)
+            ->whereNull('deleted_at')
+            ->get();
 
-        if (!$organization) {
-            return;
-        }
+        foreach ($clients as $organization) {
+            $plants = [
+                [
+                    'code' => 'PLN-01',
+                    'name' => 'Planta Norte',
+                    'address' => 'Av. Industria 100, Zona Industrial',
+                    'description' => 'Planta principal de manufactura',
+                ],
+                [
+                    'code' => 'PLN-02',
+                    'name' => 'Planta Sur',
+                    'address' => 'Carretera a Guadalajara Km 45',
+                    'description' => 'Planta secundaria de ensamblaje',
+                ],
+            ];
 
-        $plants = [
-            [
-                'id' => '018f1a2c-1111-7e5f-8000-abcdef123456',
-                'organization_id' => $organization->id,
-                'name' => 'Planta Norte',
-                'code' => 'PLN-01',
-                'address' => 'Av. Industria 100, Zona Industrial',
-                'description' => 'Planta principal de manufactura',
-                'status' => true,
-            ],
-            [
-                'id' => '018f1a2d-2222-7e5f-8000-fedcba654321',
-                'organization_id' => $organization->id,
-                'name' => 'Planta Sur',
-                'code' => 'PLN-02',
-                'address' => 'Carretera a Guadalajara Km 45',
-                'description' => 'Planta secundaria de ensamblaje',
-                'status' => true,
-            ],
-        ];
-
-        foreach ($plants as $plant) {
-            Plant::updateOrCreate(
-                ['id' => $plant['id']],
-                $plant
-            );
+            foreach ($plants as $plant) {
+                Plant::updateOrCreate(
+                    ['organization_id' => $organization->id, 'code' => $plant['code']],
+                    [
+                        'id' => (string) Uuid::uuid5(Uuid::NAMESPACE_DNS, $organization->id.':'.$plant['code']),
+                        'organization_id' => $organization->id,
+                        'name' => $plant['name'],
+                        'code' => $plant['code'],
+                        'address' => $plant['address'],
+                        'description' => $plant['description'],
+                        'status' => true,
+                    ]
+                );
+            }
         }
     }
 }

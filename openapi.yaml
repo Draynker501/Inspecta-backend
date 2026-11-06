@@ -18,9 +18,10 @@ info:
       con 422.
     - Aislamiento multi-tenant: la organización se deriva del token. Un recurso de
       otra organización se comporta como inexistente (404) y no revela su existencia.
+    - v1.4.0 (aditiva, M1.5): cabecera X-Organization-Id (UUID) obligatoria en rutas de dominio; GET /auth/organizations; campo type en Organization (client/operator); identidad global en /auth/me.
     - Coordenadas con precisión de 7 decimales (BD `DECIMAL(10,7)`):
       latitud −90..90, longitud −180..180.
-  version: 1.3.0
+  version: 1.4.0
 
 servers:
   - url: https://api.inspecta.com/v1
@@ -130,6 +131,52 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/AccessDeniedError'
+
+  /auth/organizations:
+    get:
+      summary: Listar organizaciones del usuario autenticado
+      description: |
+        Devuelve las organizaciones cliente activas en las que el usuario
+        autenticado tiene una membresía activa. No requiere la cabecera
+        X-Organization-Id ni contexto de tenant.
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de organizaciones obtenida.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        code:
+                          type: string
+                        type:
+                          type: string
+                          enum: [client]
+                        status:
+                          type: boolean
+                        membership_id:
+                          type: string
+                          format: uuid
+                        membership_status:
+                          type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
 
   # ===================================================================
   # ORGANIZATION
@@ -2709,6 +2756,15 @@ components:
         example: 4
 
   parameters:
+    organizationIdHeader:
+      in: header
+      name: X-Organization-Id
+      required: true
+      description: UUID de la organización activa (tenant). Obligatoria en rutas de dominio (grupo api.tenant); ausente en /auth/login, /auth/logout, /auth/me y /auth/organizations.
+      schema:
+        type: string
+        format: uuid
+
     plantIdParam:
       in: path
       name: plantId
@@ -3128,6 +3184,11 @@ components:
           type: string
           maxLength: 50
           example: "CN-01"
+        type:
+          type: string
+          enum: [client, operator]
+          example: "client"
+          description: Tipo de organización. `operator` es la consultora (no contiene datos de dominio).
         tax_id:
           type: string
           maxLength: 50
