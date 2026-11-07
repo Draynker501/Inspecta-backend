@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Tenancy\TenantErrorCode;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -39,12 +40,14 @@ class ResolveTenantContext
 
         if (blank($organizationId)) {
             return response()->json([
+                'code' => TenantErrorCode::ORGANIZATION_REQUIRED,
                 'message' => 'Cabecera X-Organization-Id requerida.',
             ], 400);
         }
 
         if (! Str::isUuid($organizationId)) {
             return response()->json([
+                'code' => TenantErrorCode::ORGANIZATION_INVALID,
                 'message' => 'El identificador de organización no es un UUID válido.',
             ], 400);
         }
@@ -55,24 +58,28 @@ class ResolveTenantContext
 
         if (! $organization) {
             return response()->json([
+                'code' => TenantErrorCode::ORGANIZATION_ACCESS_DENIED,
                 'message' => 'La organización no existe o no está autorizada.',
             ], 403);
         }
 
         if ($organization->trashed()) {
             return response()->json([
+                'code' => TenantErrorCode::ORGANIZATION_ACCESS_DENIED,
                 'message' => 'La organización ha sido eliminada.',
             ], 403);
         }
 
         if (! $organization->status) {
             return response()->json([
+                'code' => TenantErrorCode::ORGANIZATION_ACCESS_DENIED,
                 'message' => 'La organización está inactiva. Contacte al administrador.',
             ], 403);
         }
 
         if ($organization->type !== Organization::TYPE_CLIENT) {
             return response()->json([
+                'code' => TenantErrorCode::ORGANIZATION_NOT_TENANT,
                 'message' => 'Tipo de organización no permitido.',
             ], 403);
         }
@@ -85,12 +92,14 @@ class ResolveTenantContext
 
         if (! $hasMembership) {
             return response()->json([
+                'code' => TenantErrorCode::ORGANIZATION_ACCESS_DENIED,
                 'message' => 'No tiene membresía en esta organización.',
             ], 403);
         }
 
         if (OrganizationMembership::findActive($user->id, $organization->id) === null) {
             return response()->json([
+                'code' => TenantErrorCode::ORGANIZATION_ACCESS_DENIED,
                 'message' => 'La membresía no está activa.',
             ], 403);
         }
