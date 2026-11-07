@@ -20,4 +20,21 @@ return [
         'platform_admin' => 'Administrador de plataforma',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Modo estricto de OrganizationScope
+    |--------------------------------------------------------------------------
+    |
+    | Si está activo, consultar modelos tenant-scoped sin contexto organizacional
+    | en una petición HTTP lanza MissingTenantContextException. En consola
+    | (seeders, factories, artisan) y dentro de withoutTenant() se permite.
+    |
+    | El valor por defecto es seguro (activo); se desactiva solo de forma
+    | explícita con TENANCY_STRICT_MODE=false.
+    |
+    */
+    'strict_mode' => env('TENANCY_STRICT_MODE', true),
+
+    'allow_console_without_tenant' => env('TENANCY_ALLOW_CONSOLE_WITHOUT_TENANT', true),
+
 ];

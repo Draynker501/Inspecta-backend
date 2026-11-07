@@ -117,6 +117,41 @@ class TenantContextTest extends TestCase
         $this->assertTrue($context->has());
     }
 
+    public function test_without_tenant_restaura_flag_ante_excepcion(): void
+    {
+        $context = app(TenantContext::class);
+        $idA = (string) Str::uuid7();
+
+        $context->set($idA);
+
+        try {
+            $context->withoutTenant('diagnóstico de consola', function () {
+                throw new \RuntimeException('error simulado');
+            });
+            $this->fail('Se esperaba una excepción.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('error simulado', $e->getMessage());
+        }
+
+        $this->assertSame($idA, $context->id());
+        $this->assertTrue($context->has());
+        $this->assertFalse($context->isBypassingTenant());
+    }
+
+    public function test_without_tenant_restaura_flag_en_ejecucion_normal(): void
+    {
+        $context = app(TenantContext::class);
+        $idA = (string) Str::uuid7();
+
+        $context->set($idA);
+
+        $context->withoutTenant('diagnóstico de consola', function () use ($context) {
+            $this->assertTrue($context->isBypassingTenant());
+        });
+
+        $this->assertFalse($context->isBypassingTenant());
+    }
+
     public function test_no_hay_contaminacion_entre_ejecuciones(): void
     {
         $context = app(TenantContext::class);
