@@ -14,7 +14,7 @@ final class MissingTenantContextException extends RuntimeException
     public static function for(string $model): self
     {
         return new self(
-            "No hay contexto organizacional ni organization_id explícito al guardar {$model}."
+            "No hay contexto organizacional establecido para consultar o guardar {$model}."
         );
     }
 }
