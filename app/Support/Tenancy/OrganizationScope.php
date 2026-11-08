@@ -54,6 +54,11 @@ class OrganizationScope implements Scope
 
     private function isConsoleExempt(): bool
     {
+        // Una petición HTTP nunca queda exenta, aunque se simule consola.
+        if (app(TenantContext::class)->isHttpRequest()) {
+            return false;
+        }
+
         if (! $this->runningInConsole()) {
             return false;
         }

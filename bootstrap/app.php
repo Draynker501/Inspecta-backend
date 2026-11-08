@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureApiAuthenticated;
+use App\Http\Middleware\MarkHttpRequest;
 use App\Http\Middleware\ResetTenantContext;
 use App\Http\Middleware\ResolveTenantContext;
 use App\Providers\ExceptionServiceProvider;
@@ -26,6 +27,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // El tenant se limpia en cada petición y al terminar, incluso en
         // procesos de larga vida (Octane) y en pruebas con múltiples llamadas.
         $middleware->prepend(ResetTenantContext::class);
+
+        // Marca el inicio de una petición HTTP (D-36) antes de cualquier
+        // otro middleware, para que el modo estricto no use runningInConsole().
+        $middleware->prepend(MarkHttpRequest::class);
 
         $middleware->alias([
             'api.auth' => EnsureApiAuthenticated::class,

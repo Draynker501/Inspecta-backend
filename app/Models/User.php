@@ -7,6 +7,7 @@ use App\Exceptions\CrossTenantOperationException;
 use App\Exceptions\MissingTenantContextException;
 use App\Support\Audit\AuditLogger;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Tenancy\WithoutTenantReason;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -120,7 +121,7 @@ class User extends Authenticatable
 
         $context = app(TenantContext::class);
 
-        return (bool) $context->withoutTenant('platform-role-check', function () use ($operatorOrganizationId, $platformRoleName) {
+        return (bool) $context->withoutTenant(WithoutTenantReason::PLATFORM_ROLE_CHECK, function () use ($operatorOrganizationId, $platformRoleName) {
             return UserRole::query()
                 ->where('user_id', $this->id)
                 ->where('organization_id', $operatorOrganizationId)
