@@ -133,4 +133,32 @@ class CompositePivotForeignKeyMariaDbTest extends TestCase
             }
         }
     }
+
+    public function test_fk_compuestas_reglas_on_delete_y_on_update(): void
+    {
+        $this->skipIfNotMariaDb();
+
+        $constraints = [
+            'user_roles_user_id_organization_id_foreign',
+            'user_roles_role_id_organization_id_foreign',
+            'user_plants_user_id_organization_id_foreign',
+            'user_plants_plant_id_organization_id_foreign',
+            'user_areas_user_id_organization_id_foreign',
+            'user_areas_area_id_organization_id_foreign',
+        ];
+
+        foreach ($constraints as $constraint) {
+            $rows = DB::select(
+                'SELECT DELETE_RULE, UPDATE_RULE
+                 FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+                 WHERE CONSTRAINT_SCHEMA = DATABASE()
+                   AND CONSTRAINT_NAME = ?',
+                [$constraint]
+            );
+
+            $this->assertNotEmpty($rows, "La FK {$constraint} no existe en REFERENTIAL_CONSTRAINTS.");
+            $this->assertSame('RESTRICT', $rows[0]->DELETE_RULE, "ON DELETE incorrecto en {$constraint}.");
+            $this->assertSame('CASCADE', $rows[0]->UPDATE_RULE, "ON UPDATE incorrecto en {$constraint}.");
+        }
+    }
 }
