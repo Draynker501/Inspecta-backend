@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\Tenancy;
 
-use App\Models\Organization;
 use App\Models\Plant;
 use App\Models\Role;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -63,7 +63,7 @@ class OrganizationUniquenessTest extends TestCase
             'status' => true,
         ]);
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         Role::create([
             'id' => (string) Str::uuid7(),
@@ -126,7 +126,7 @@ class OrganizationUniquenessTest extends TestCase
             'status' => true,
         ]);
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         Plant::create([
             'id' => (string) Str::uuid7(),
@@ -141,6 +141,10 @@ class OrganizationUniquenessTest extends TestCase
 
     public function test_unicos_globales_ya_no_existen(): void
     {
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            $this->markTestSkipped('Verificación equivalente en MariaDB: OrganizationUniquenessMariaDbTest');
+        }
+
         $indexesRoles = DB::table('sqlite_master')
             ->where('type', 'index')
             ->where('tbl_name', 'roles')

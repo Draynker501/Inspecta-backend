@@ -1,0 +1,100 @@
+name: Tests (MariaDB 11.8)
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: [8.4, 8.5]
+
+    name: PHP ${{ matrix.php }} (MariaDB 11.8)
+
+    env:
+      APP_ENV: local
+      APP_KEY: ""
+      DB_CONNECTION: mariadb
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_DATABASE: inspecta_test
+      DB_USERNAME: root
+      DB_PASSWORD: testpass
+      TENANCY_STRICT_MODE: "true"
+      TENANCY_ALLOW_CONSOLE_WITHOUT_TENANT: "true"
+
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: testpass
+          MARIADB_DATABASE: inspecta_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+          --health-start-period=30s
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, pdo_sqlite
+          coverage: none
+
+      - name: Generate app key
+        run: |
+          APP_KEY_VALUE="base64:$(openssl rand -base64 32)"
+          echo "::add-mask::$APP_KEY_VALUE"
+          echo "APP_KEY=$APP_KEY_VALUE" >> "$GITHUB_ENV"
+
+      - name: Validate Composer manifest
+        run: composer validate --no-check-publish
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Audit Composer dependencies
+        run: composer audit --locked --no-interaction
+        continue-on-error: true
+
+      - name: Migrate and seed
+        run: php artisan migrate:fresh --seed
+
+      - name: Seed again (idempotency)
+        run: php artisan db:seed
+
+      - name: Execute tests
+        env:
+          APP_ENV: testing
+        run: vendor/bin/phpunit --configuration phpunit.mariadb.xml
+
+      - name: Reversibility check
+        run: |
+          php artisan migrate:fresh
+          php artisan migrate:reset
+          php artisan migrate

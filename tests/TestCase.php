@@ -4,7 +4,7 @@ namespace Tests;
 
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
-use RuntimeException;
+use Tests\Support\TestDatabaseGuard;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -36,26 +36,17 @@ abstract class TestCase extends BaseTestCase
         $environment = $app->environment();
         $driver = $connection->getDriverName();
         $database = $connection->getDatabaseName();
+        $host = $connection->getConfig('host');
 
-        $problems = [];
-
-        if ($environment !== 'testing') {
-            $problems[] = "APP_ENV efectivo '{$environment}', se esperaba 'testing'";
-        }
-
-        if ($driver !== 'sqlite') {
-            $problems[] = "driver efectivo '{$driver}', se esperaba 'sqlite'";
-        }
-
-        if ($database !== ':memory:') {
-            $problems[] = "base de datos efectiva '{$database}', se esperaba ':memory:'";
-        }
-
-        if ($problems !== []) {
-            throw new RuntimeException(
-                "Entorno de pruebas inseguro: se aborta antes de ejecutar migraciones o consultas.\n - "
-                .implode("\n - ", $problems)
-            );
-        }
+        TestDatabaseGuard::assertSafe(
+            $driver,
+            $database,
+            is_string($host) ? $host : null,
+            $environment,
+            $_ENV['TESTING_DB_ALLOW_EXTERNAL']
+                ?? $_SERVER['TESTING_DB_ALLOW_EXTERNAL']
+                ?? getenv('TESTING_DB_ALLOW_EXTERNAL')
+                ?: null
+        );
     }
 }
