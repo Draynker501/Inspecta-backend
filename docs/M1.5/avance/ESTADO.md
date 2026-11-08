@@ -5,7 +5,7 @@
 **Rama:** `docs/estado-2026-11-08` (basada en `origin/master`)
 **HEAD:** `aa0482cd Merge pull request #10 from Draynker501/feature/inspecta-p3-error-codes`
 **Sincronizada con origin/master:** sí
-**Pruebas (VERIFICADO):** pendiente de ejecución (ver paso 9 del bloque). Línea base M1: 63 pruebas, 215 aserciones (histórica).
+**Pruebas (VERIFICADO):** 251 pruebas, 595 aserciones, 0 fallos (vendor/bin/phpunit, 2026-11-08). Línea base M1: 63 pruebas, 215 aserciones (histórica).
 **Migraciones:** 44.
 **Composer:** `composer validate --no-check-publish` válido. `require.php = ^8.4`.
 **Pint:** 42 archivos con diferencias (deuda global preexistente).
@@ -76,7 +76,7 @@ D-20 y D-21 del checklist del 2-nov (unicidad organizacional / identidad global)
 
 ## 5. Validaciones actuales
 
-- Suite: 243 pruebas, 571 aserciones, 0 fallos.
+- Suite: 251 pruebas, 595 aserciones, 0 fallos.
 - `composer validate --no-check-publish`: válido.
 - `git diff --check`: limpio (en ramas publicadas).
 - Pint: 42 archivos con diferencias (deuda global preexistente).
@@ -114,7 +114,7 @@ D-20 y D-21 del checklist del 2-nov (unicidad organizacional / identidad global)
 ## 8. Cómo retomar
 
 1. Rama `docs/estado-2026-11-08`, HEAD basado en `aa0482cd` (origin/master, incluye PR #10).
-2. Suite esperada: por verificar con `vendor/bin/phpunit` tras el cambio de base.
+2. Suite medida: 251 pruebas, 595 aserciones, 0 fallos.
 3. Leer este `ESTADO.md` antes de empezar.
 4. Próximo bloque: P5 (regresión y cierre M1.5) o fusión de PR #10.
 
