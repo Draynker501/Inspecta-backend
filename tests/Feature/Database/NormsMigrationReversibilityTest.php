@@ -13,6 +13,10 @@ class NormsMigrationReversibilityTest extends TestCase
 
     public function test_rollback_aborta_si_hay_normas_duplicadas_entre_organizaciones(): void
     {
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            $this->markTestSkipped('Verificación equivalente en MariaDB: NormsMigrationReversibilityMariaDbTest');
+        }
+
         $this->seed();
 
         // Confirmar que existe el unique por organización antes del intento.
@@ -33,6 +37,10 @@ class NormsMigrationReversibilityTest extends TestCase
 
     public function test_rollback_revierte_y_remigra_si_no_hay_duplicados(): void
     {
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            $this->markTestSkipped('Verificación equivalente en MariaDB: NormsMigrationReversibilityMariaDbTest');
+        }
+
         $this->seed();
 
         // Dejar una sola organización con normas (eliminar duplicados entre orgs).

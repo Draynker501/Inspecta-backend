@@ -21,6 +21,10 @@ class CompositePivotForeignKeyTest extends TestCase
 
     public function test_seis_fk_compuestas_estan_presentes_en_esquema(): void
     {
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            $this->markTestSkipped('Verificación equivalente en MariaDB: CompositePivotForeignKeyMariaDbTest');
+        }
+
         $expected = [
             'user_roles' => [
                 'user_roles_membership_fk',
@@ -58,8 +62,12 @@ class CompositePivotForeignKeyTest extends TestCase
 
     public function test_fk_referencian_columnas_con_unico_compuesto(): void
     {
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            $this->markTestSkipped('Verificación equivalente en MariaDB: CompositePivotForeignKeyMariaDbTest');
+        }
+
         // organization_memberships debe tener único (user_id, organization_id)
-        $membershipIndexes = DB::select("PRAGMA index_list(organization_memberships)");
+        $membershipIndexes = DB::select('PRAGMA index_list(organization_memberships)');
         $membershipIndexNames = array_column($membershipIndexes, 'name');
         $this->assertContains(
             'organization_memberships_user_org_unique',
@@ -67,17 +75,17 @@ class CompositePivotForeignKeyTest extends TestCase
         );
 
         // roles debe tener único (id, organization_id) para ser referenciado por FK
-        $rolesIndexes = DB::select("PRAGMA index_list(roles)");
+        $rolesIndexes = DB::select('PRAGMA index_list(roles)');
         $rolesIndexNames = array_column($rolesIndexes, 'name');
         $this->assertContains('roles_id_org_unique', $rolesIndexNames);
 
         // plants debe tener único (id, organization_id)
-        $plantsIndexes = DB::select("PRAGMA index_list(plants)");
+        $plantsIndexes = DB::select('PRAGMA index_list(plants)');
         $plantsIndexNames = array_column($plantsIndexes, 'name');
         $this->assertContains('plants_id_org_unique', $plantsIndexNames);
 
         // areas debe tener único (id, organization_id)
-        $areasIndexes = DB::select("PRAGMA index_list(areas)");
+        $areasIndexes = DB::select('PRAGMA index_list(areas)');
         $areasIndexNames = array_column($areasIndexes, 'name');
         $this->assertContains('areas_id_org_unique', $areasIndexNames);
     }
