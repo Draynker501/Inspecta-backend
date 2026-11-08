@@ -67,17 +67,20 @@ jobs:
           coverage: none
 
       - name: Generate app key
-        run: echo "APP_KEY=$(php artisan key:generate --show)" >> "$GITHUB_ENV"
+        run: |
+          APP_KEY_VALUE="base64:$(openssl rand -base64 32)"
+          echo "::add-mask::$APP_KEY_VALUE"
+          echo "APP_KEY=$APP_KEY_VALUE" >> "$GITHUB_ENV"
 
       - name: Validate Composer manifest
         run: composer validate --no-check-publish
 
-      - name: Audit Composer dependencies
-        run: composer audit --no-interaction
-        continue-on-error: true
-
       - name: Install Composer dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Audit Composer dependencies
+        run: composer audit --locked --no-interaction
+        continue-on-error: true
 
       - name: Migrate and seed
         run: php artisan migrate:fresh --seed
@@ -86,6 +89,8 @@ jobs:
         run: php artisan db:seed
 
       - name: Execute tests
+        env:
+          APP_ENV: testing
         run: vendor/bin/phpunit --configuration phpunit.mariadb.xml
 
       - name: Reversibility check
