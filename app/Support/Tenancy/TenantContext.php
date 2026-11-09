@@ -19,6 +19,8 @@ final class TenantContext
 
     private bool $bypassingTenant = false;
 
+    private bool $httpRequest = false;
+
     public function id(): ?string
     {
         return $this->organizationId;
@@ -60,6 +62,21 @@ final class TenantContext
     public function clear(): void
     {
         $this->organizationId = null;
+    }
+
+    public function markHttpRequest(): void
+    {
+        $this->httpRequest = true;
+    }
+
+    public function clearHttpRequest(): void
+    {
+        $this->httpRequest = false;
+    }
+
+    public function isHttpRequest(): bool
+    {
+        return $this->httpRequest;
     }
 
     /**
