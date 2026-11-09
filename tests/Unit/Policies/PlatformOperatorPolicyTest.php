@@ -371,6 +371,6 @@ class PlatformOperatorPolicyTest extends TestCase
             ->withHeader('X-Organization-Id', $operatorOrg->id)
             ->getJson('/api/resolve-tenant-test/ping')
             ->assertForbidden()
-            ->assertJsonPath('message', 'Tipo de organización no permitido.');
+            ->assertJsonPath('message', 'No tienes acceso a la organización indicada.');
     }
 }

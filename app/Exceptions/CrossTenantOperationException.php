@@ -2,6 +2,8 @@
 
 namespace App\Exceptions;
 
+use App\Support\Api\ApiErrorCode;
+use App\Support\Api\ApiErrorResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -29,8 +31,8 @@ final class CrossTenantOperationException extends RuntimeException
             return null;
         }
 
-        return response()->json([
-            'message' => $this->getMessage(),
-        ], 422);
+        // Sobre uniforme con code cross_tenant_operation (D-31c); el
+        // mensaje es el de la excepción concreta.
+        return ApiErrorResponse::make(ApiErrorCode::CrossTenantOperation, message: $this->getMessage());
     }
 }

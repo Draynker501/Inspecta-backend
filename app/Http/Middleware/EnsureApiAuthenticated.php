@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Api\ApiErrorCode;
+use App\Support\Api\ApiErrorResponse;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,38 +14,26 @@ class EnsureApiAuthenticated
     /**
      * Handle an incoming request.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Closure  $next
      * @return mixed
      */
     public function handle(Request $request, Closure $next)
     {
         $token = $request->bearerToken();
 
-        if (!$token) {
-            return response()->json([
-                'message' => 'No autenticado. Token de acceso ausente.',
-            ], 401);
+        if (! $token) {
+            return ApiErrorResponse::make(ApiErrorCode::Unauthenticated);
         }
 
         $accessToken = PersonalAccessToken::findToken($token);
 
-        if (!$accessToken) {
-            return response()->json([
-                'message' => 'No autenticado. Token de acceso inválido.',
-            ], 401);
+        // Token inválido o usuario emisor eliminado son indistinguibles:
+        // mismo código unauthenticated y mismo mensaje (D-31b).
+        if (! $accessToken || ! $accessToken->tokenable) {
+            return ApiErrorResponse::make(ApiErrorCode::Unauthenticated);
         }
 
-        if (!$accessToken->tokenable) {
-            return response()->json([
-                'message' => 'No autenticado. Token de acceso inválido.',
-            ], 401);
-        }
-
-        if (!$accessToken->tokenable->status) {
-            return response()->json([
-                'message' => 'El usuario está inactivo. Contacte al administrador.',
-            ], 403);
+        if (! $accessToken->tokenable->status) {
+            return ApiErrorResponse::make(ApiErrorCode::UserInactive);
         }
 
         Auth::setUser($accessToken->tokenable);

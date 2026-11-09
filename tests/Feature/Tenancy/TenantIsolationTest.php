@@ -376,7 +376,7 @@ class TenantIsolationTest extends TestCase
         $this->actingAsApiInOrganization($adminA, $orgA)
             ->getJson('/api/tenant-test/plants')
             ->assertForbidden()
-            ->assertJsonPath('message', 'La organización está inactiva. Contacte al administrador.');
+            ->assertJsonPath('message', 'No tienes acceso a la organización indicada.');
 
         // /auth/me expone la identidad global sin exigir contexto de tenant.
         $this->actingAsApiInOrganization($adminA, $orgA)
@@ -394,14 +394,14 @@ class TenantIsolationTest extends TestCase
         $this->actingAsApiInOrganization($adminA, $orgA)
             ->getJson('/api/tenant-test/plants')
             ->assertForbidden()
-            ->assertJsonPath('message', 'La organización ha sido eliminada.');
+            ->assertJsonPath('message', 'No tienes acceso a la organización indicada.');
     }
 
     public function test_sin_token_no_hay_acceso(): void
     {
         $this->getJson('/api/tenant-test/plants')
             ->assertUnauthorized()
-            ->assertJsonPath('message', 'No autenticado. Token de acceso ausente.');
+            ->assertJsonPath('message', 'No autenticado. Token de acceso ausente o inválido.');
     }
 
     public function test_logout_sigue_disponible_aunque_la_organizacion_este_inactiva(): void

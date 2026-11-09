@@ -70,7 +70,7 @@ class OrganizationSelectionTest extends TestCase
             ->withHeader('X-Organization-Id', $orgOperator->id)
             ->getJson('/api/resolve-tenant-test/ping')
             ->assertForbidden()
-            ->assertJsonPath('message', 'Tipo de organización no permitido.');
+            ->assertJsonPath('message', 'No tienes acceso a la organización indicada.');
     }
 
     public function test_usuario_sin_membresia_no_puede_seleccionar_organizacion(): void
@@ -82,7 +82,7 @@ class OrganizationSelectionTest extends TestCase
             ->withHeader('X-Organization-Id', $organization->id)
             ->getJson('/api/resolve-tenant-test/ping')
             ->assertForbidden()
-            ->assertJsonPath('message', 'No tiene membresía en esta organización.');
+            ->assertJsonPath('message', 'No tienes acceso a la organización indicada.');
     }
 
     public function test_membresia_revocada_no_permite_seleccionar_organizacion(): void
@@ -98,7 +98,7 @@ class OrganizationSelectionTest extends TestCase
             ->withHeader('X-Organization-Id', $organization->id)
             ->getJson('/api/resolve-tenant-test/ping')
             ->assertForbidden()
-            ->assertJsonPath('message', 'La membresía no está activa.');
+            ->assertJsonPath('message', 'No tienes acceso a la organización indicada.');
     }
 
     public function test_organizacion_inactiva_no_puede_seleccionarse(): void
@@ -114,7 +114,7 @@ class OrganizationSelectionTest extends TestCase
             ->assertForbidden()
             ->assertJsonPath(
                 'message',
-                'La organización está inactiva. Contacte al administrador.'
+                'No tienes acceso a la organización indicada.'
             );
     }
 
@@ -129,7 +129,7 @@ class OrganizationSelectionTest extends TestCase
             ->withHeader('X-Organization-Id', $organization->id)
             ->getJson('/api/resolve-tenant-test/ping')
             ->assertForbidden()
-            ->assertJsonPath('message', 'La organización ha sido eliminada.');
+            ->assertJsonPath('message', 'No tienes acceso a la organización indicada.');
     }
 
     public function test_cabecera_organization_id_es_obligatoria(): void
@@ -170,7 +170,7 @@ class OrganizationSelectionTest extends TestCase
             ->assertForbidden()
             ->assertJsonPath(
                 'message',
-                'La organización no existe o no está autorizada.'
+                'No tienes acceso a la organización indicada.'
             );
     }
 }
