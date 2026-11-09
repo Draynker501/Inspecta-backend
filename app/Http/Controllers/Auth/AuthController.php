@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
-use App\Models\User;
+use App\Support\Api\ApiErrorCode;
+use App\Support\Api\ApiErrorResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
@@ -19,21 +19,20 @@ class AuthController extends Controller
     {
         $credentials = $request->validated();
 
-        if (!Auth::attempt($credentials)) {
-            return response()->json([
-                'message' => 'Las credenciales proporcionadas son incorrectas.',
-            ], 401);
+        // La contraseña se valida antes que el estado: un usuario inactivo
+        // con contraseña incorrecta recibe invalid_credentials, no
+        // user_inactive, para no revelar el estado sin conocer el secreto.
+        if (! Auth::attempt($credentials)) {
+            return ApiErrorResponse::make(ApiErrorCode::InvalidCredentials);
         }
 
         $user = Auth::user();
 
         // Usuario inactivo no puede autenticarse
-        if (!$user->status) {
+        if (! $user->status) {
             Auth::logout();
 
-            return response()->json([
-                'message' => 'El usuario está inactivo. Contacte al administrador.',
-            ], 403);
+            return ApiErrorResponse::make(ApiErrorCode::UserInactive);
         }
 
         // Crear token personal de Sanctum (bearer token para API)

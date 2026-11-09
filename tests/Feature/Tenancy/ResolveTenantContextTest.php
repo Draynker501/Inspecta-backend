@@ -85,7 +85,7 @@ class ResolveTenantContextTest extends TestCase
             ->withHeader('X-Organization-Id', (string) Str::uuid7())
             ->getJson('/api/resolve-tenant-test/ping')
             ->assertStatus(403)
-            ->assertJsonPath('message', 'La organización no existe o no está autorizada.');
+            ->assertJsonPath('message', 'No tienes acceso a la organización indicada.');
     }
 
     public function test_organizacion_inactiva_devuelve_403(): void
@@ -97,7 +97,7 @@ class ResolveTenantContextTest extends TestCase
             ->withHeader('X-Organization-Id', $organization->id)
             ->getJson('/api/resolve-tenant-test/ping')
             ->assertStatus(403)
-            ->assertJsonPath('message', 'La organización está inactiva. Contacte al administrador.');
+            ->assertJsonPath('message', 'No tienes acceso a la organización indicada.');
     }
 
     public function test_organizacion_eliminada_logicamente_devuelve_403(): void
@@ -110,7 +110,7 @@ class ResolveTenantContextTest extends TestCase
             ->withHeader('X-Organization-Id', $organization->id)
             ->getJson('/api/resolve-tenant-test/ping')
             ->assertStatus(403)
-            ->assertJsonPath('message', 'La organización ha sido eliminada.');
+            ->assertJsonPath('message', 'No tienes acceso a la organización indicada.');
     }
 
     public function test_organizacion_tipo_no_client_devuelve_403(): void
@@ -128,7 +128,7 @@ class ResolveTenantContextTest extends TestCase
             ->withHeader('X-Organization-Id', $organization->id)
             ->getJson('/api/resolve-tenant-test/ping')
             ->assertStatus(403)
-            ->assertJsonPath('message', 'Tipo de organización no permitido.');
+            ->assertJsonPath('message', 'No tienes acceso a la organización indicada.');
     }
 
     public function test_membresia_inexistente_devuelve_403(): void
@@ -142,7 +142,7 @@ class ResolveTenantContextTest extends TestCase
             ->withHeader('X-Organization-Id', $orgB->id)
             ->getJson('/api/resolve-tenant-test/ping')
             ->assertStatus(403)
-            ->assertJsonPath('message', 'No tiene membresía en esta organización.');
+            ->assertJsonPath('message', 'No tienes acceso a la organización indicada.');
     }
 
     public function test_membresia_inactiva_devuelve_403(): void
@@ -159,14 +159,14 @@ class ResolveTenantContextTest extends TestCase
             ->withHeader('X-Organization-Id', $organization->id)
             ->getJson('/api/resolve-tenant-test/ping')
             ->assertStatus(403)
-            ->assertJsonPath('message', 'La membresía no está activa.');
+            ->assertJsonPath('message', 'No tienes acceso a la organización indicada.');
     }
 
     public function test_usuario_no_autenticado_devuelve_401(): void
     {
         $this->getJson('/api/resolve-tenant-test/ping')
             ->assertUnauthorized()
-            ->assertJsonPath('message', 'No autenticado. Token de acceso ausente.');
+            ->assertJsonPath('message', 'No autenticado. Token de acceso ausente o inválido.');
     }
 
     public function test_consultor_con_dos_membresias_activas_seleccion_independiente(): void
