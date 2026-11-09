@@ -22,7 +22,7 @@ class UserSeeder extends Seeder
 
     public static function allowsFixedPasswordUsers(): bool
     {
-        return app()->environment(['local', 'testing']);
+        return DemoData::allowed();
     }
 
     public function run(): void

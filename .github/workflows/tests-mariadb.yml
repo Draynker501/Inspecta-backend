@@ -98,3 +98,22 @@ jobs:
           php artisan migrate:fresh
           php artisan migrate:reset
           php artisan migrate
+
+      - name: Production seed verification
+        env:
+          APP_ENV: production
+        run: |
+          php artisan migrate:fresh --force
+          php artisan db:seed --force
+          php artisan db:seed --force
+          php -r '
+            $pdo = new PDO("mysql:host=" . getenv("DB_HOST") . ";port=" . getenv("DB_PORT") . ";dbname=" . getenv("DB_DATABASE"), getenv("DB_USERNAME"), getenv("DB_PASSWORD"));
+            $op = (int) $pdo->query("SELECT COUNT(*) FROM organizations WHERE type = \"operator\"")->fetchColumn();
+            $clients = (int) $pdo->query("SELECT COUNT(*) FROM organizations WHERE type = \"client\"")->fetchColumn();
+            $users = (int) $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+            if ($op < 1 || $clients !== 0 || $users !== 0) {
+                fwrite(STDERR, "FAIL op=$op clients=$clients users=$users\n");
+                exit(1);
+            }
+            echo "OK op=$op clients=$clients users=$users\n";
+          '

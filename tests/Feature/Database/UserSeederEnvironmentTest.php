@@ -39,7 +39,9 @@ class UserSeederEnvironmentTest extends TestCase
 
         $this->assertFalse(User::where('email', 'admin@inspecta-demo.com')->exists());
         $this->assertFalse(User::where('email', 'inspector@inspecta-demo.com')->exists());
-        $this->assertTrue(Organization::where('code', 'INSP-01')->exists());
+        $this->assertTrue(Organization::where('code', 'INSPECTA-OP')->where('type', Organization::TYPE_OPERATOR)->exists());
+        $this->assertFalse(Organization::where('code', 'INSP-01')->exists());
+        $this->assertFalse(Organization::where('code', 'ORG-02')->exists());
     }
 
     public function test_no_usuarios_en_staging(): void
@@ -53,7 +55,8 @@ class UserSeederEnvironmentTest extends TestCase
         }
 
         $this->assertFalse(User::where('email', 'admin@inspecta-demo.com')->exists());
-        $this->assertTrue(Organization::where('code', 'INSP-01')->exists());
+        $this->assertTrue(Organization::where('code', 'INSPECTA-OP')->where('type', Organization::TYPE_OPERATOR)->exists());
+        $this->assertFalse(Organization::where('code', 'INSP-01')->exists());
     }
 
     public function test_idempotente_en_production(): void
@@ -68,6 +71,7 @@ class UserSeederEnvironmentTest extends TestCase
         }
 
         $this->assertFalse(User::where('email', 'admin@inspecta-demo.com')->exists());
-        $this->assertTrue(Organization::where('code', 'INSP-01')->exists());
+        $this->assertTrue(Organization::where('code', 'INSPECTA-OP')->where('type', Organization::TYPE_OPERATOR)->exists());
+        $this->assertFalse(Organization::where('code', 'INSP-01')->exists());
     }
 }
