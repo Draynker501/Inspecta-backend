@@ -20,8 +20,19 @@ class UserSeeder extends Seeder
 {
     use WithoutModelEvents;
 
+    public static function allowsFixedPasswordUsers(): bool
+    {
+        return app()->environment(['local', 'testing']);
+    }
+
     public function run(): void
     {
+        if (! static::allowsFixedPasswordUsers()) {
+            fwrite(STDOUT, "WARNING: UserSeeder: usuarios con contraseñas fijas omitidos (entorno no local/testing).\n");
+
+            return;
+        }
+
         $organizations = Organization::query()
             ->whereIn('code', ['INSP-01', 'ORG-02', 'INSPECTA-OP'])
             ->get()
