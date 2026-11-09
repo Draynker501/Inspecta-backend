@@ -73,6 +73,37 @@ class HttpRequestFlagTest extends TestCase
         $this->assertTrue(true);
     }
 
+    public function test_flag_http_prevalece_sobre_consola(): void
+    {
+        config(['tenancy.strict_mode' => true]);
+        config(['tenancy.allow_console_without_tenant' => true]);
+
+        $context = app(TenantContext::class);
+        $context->markHttpRequest();
+
+        try {
+            $this->expectException(MissingTenantContextException::class);
+
+            $scope = new OrganizationScope;
+            $builder = Plant::query();
+            $scope->apply($builder, new Plant);
+        } finally {
+            $context->clearHttpRequest();
+        }
+    }
+
+    public function test_sin_flag_consola_exenta(): void
+    {
+        config(['tenancy.strict_mode' => true]);
+        config(['tenancy.allow_console_without_tenant' => true]);
+
+        $scope = new OrganizationScope;
+        $builder = Plant::query();
+        $scope->apply($builder, new Plant);
+
+        $this->assertTrue(true);
+    }
+
     public function test_worker_de_cola_sin_contexto_lanza_excepcion(): void
     {
         config(['tenancy.strict_mode' => true]);

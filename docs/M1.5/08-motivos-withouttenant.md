@@ -13,3 +13,7 @@ Reglas:
 - `withoutTenant()` está prohibido en `app/Http/Controllers/`.
 - En `app/` y `database/` solo está permitido en `app/Models/User.php` (rol de plataforma).
 - Todo otro uso requiere justificación y adición explícita a la lista permitida.
+
+## Límites conocidos
+- Los motivos son constantes y no se validan en tiempo de ejecución.
+- Las consultas crudas (`DB::table` y similares) sobre tablas de organización no son detectadas por el escaneo estático y deben revisarse a mano en M2.

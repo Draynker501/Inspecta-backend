@@ -52,6 +52,35 @@ class WithoutTenantUsageTest extends TestCase
         $this->assertSame([], $violations, 'withoutTenant() no está permitido en controladores: '.implode(', ', $violations));
     }
 
+    public function test_sin_bypass_de_scope_en_app(): void
+    {
+        $allowed = [];
+
+        $files = $this->phpFiles('app');
+
+        $violations = [];
+
+        foreach ($files as $file) {
+            $relative = str_replace(base_path().'/', '', $file);
+
+            if (in_array($relative, $allowed, true)) {
+                continue;
+            }
+
+            $contents = file_get_contents($file);
+
+            if (
+                str_contains($contents, 'withoutGlobalScope(')
+                || str_contains($contents, 'withoutGlobalScopes(')
+                || str_contains($contents, 'OrganizationScope::class')
+            ) {
+                $violations[] = $relative;
+            }
+        }
+
+        $this->assertSame([], $violations, 'Bypass de scope no permitido: '.implode(', ', $violations));
+    }
+
     /**
      * @return list<string>
      */
