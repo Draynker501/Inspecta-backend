@@ -78,10 +78,6 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
-      - name: Audit Composer dependencies
-        run: composer audit --locked --no-interaction
-        continue-on-error: true
-
       - name: Migrate and seed
         run: php artisan migrate:fresh --seed
 
