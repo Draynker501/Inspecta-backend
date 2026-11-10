@@ -20,28 +20,40 @@ class CreatePlatformUserCommandTest extends TestCase
     use RefreshDatabase;
     use TenantFixtures;
 
+    private const VALID_PASSWORD = 'Secret12345678!';
+
     private function makeOperator(): Organization
     {
         return $this->operatorOrganization();
     }
 
+    private function createPlatformUser(string $email = 'plat@test.com'): void
+    {
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => $email,
+            '--name' => 'Plat User',
+        ])
+            ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
+            ->assertExitCode(0);
+    }
+
     public function test_caso_feliz_crea_usuario_membresia_rol_y_auditoria(): void
     {
         $operator = $this->makeOperator();
-        // role may or may not exist; command creates it
         Role::where('organization_id', $operator->id)->delete();
 
         $this->artisan('inspecta:create-platform-user', [
             '--email' => 'plat@test.com',
             '--name' => 'Plat User',
         ])
-            ->expectsQuestion('Contraseña', 'secret123')
-            ->expectsQuestion('Confirmar contraseña', 'secret123')
+            ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
             ->assertExitCode(0);
 
         $user = User::where('email', 'plat@test.com')->first();
         $this->assertNotNull($user);
-        $this->assertTrue(Hash::check('secret123', $user->password));
+        $this->assertTrue(Hash::check(self::VALID_PASSWORD, $user->password));
 
         $this->assertNotNull(OrganizationMembership::findActive($user->id, $operator->id));
 
@@ -64,8 +76,12 @@ class CreatePlatformUserCommandTest extends TestCase
             '--email' => 'plat2@test.com',
             '--name' => 'Plat 2',
         ])
-            ->expectsQuestion('Contraseña', 'secret123')
-            ->expectsQuestion('Confirmar contraseña', 'different')
+            ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Confirmar contraseña', 'Different12345678!')
+            ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Confirmar contraseña', 'Different12345678!')
+            ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Confirmar contraseña', 'Different12345678!')
             ->assertExitCode(1);
 
         $this->assertFalse(User::where('email', 'plat2@test.com')->exists());
@@ -78,8 +94,8 @@ class CreatePlatformUserCommandTest extends TestCase
             '--email' => 'plat3@test.com',
             '--name' => 'Plat 3',
         ])
-            ->expectsQuestion('Contraseña', 'secret123')
-            ->expectsQuestion('Confirmar contraseña', 'secret123')
+            ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
             ->expectsOutputToContain('no existe')
             ->assertExitCode(1);
     }
@@ -95,8 +111,8 @@ class CreatePlatformUserCommandTest extends TestCase
             '--email' => 'dup@test.com',
             '--name' => 'Dup',
         ])
-            ->expectsQuestion('Contraseña', 'secret123')
-            ->expectsQuestion('Confirmar contraseña', 'secret123')
+            ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
             ->expectsOutputToContain('Ya existe')
             ->assertExitCode(1);
 
@@ -120,8 +136,8 @@ class CreatePlatformUserCommandTest extends TestCase
             '--email' => 'plat4@test.com',
             '--name' => 'Plat 4',
         ])
-            ->expectsQuestion('Contraseña', 'secret123')
-            ->expectsQuestion('Confirmar contraseña', 'secret123')
+            ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
             ->assertExitCode(0);
 
         $roles = Role::where('organization_id', $operator->id)->where('name', $platformRoleName)->get();
@@ -137,8 +153,8 @@ class CreatePlatformUserCommandTest extends TestCase
             '--email' => 'plat5@test.com',
             '--name' => 'Plat 5',
         ])
-            ->expectsQuestion('Contraseña', 'secret123')
-            ->expectsQuestion('Confirmar contraseña', 'secret123')
+            ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
             ->assertExitCode(0);
 
         $log = AuditLog::where('action', 'platform_user.created')->first();
@@ -146,7 +162,7 @@ class CreatePlatformUserCommandTest extends TestCase
         $values = $log->new_values;
         $this->assertFalse($values->has('password'));
         $serialized = json_encode($log->toArray());
-        $this->assertStringNotContainsString('secret123', $serialized);
+        $this->assertStringNotContainsString(self::VALID_PASSWORD, $serialized);
     }
 
     public function test_usuario_resultante_pasa_policy_y_puede_iniciar_sesion(): void
@@ -157,18 +173,17 @@ class CreatePlatformUserCommandTest extends TestCase
             '--email' => 'plat7@test.com',
             '--name' => 'Plat 7',
         ])
-            ->expectsQuestion('Contraseña', 'secret123')
-            ->expectsQuestion('Confirmar contraseña', 'secret123')
+            ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
             ->assertExitCode(0);
 
         $user = User::where('email', 'plat7@test.com')->first();
         $this->assertTrue(app(PlatformOperatorPolicy::class)->viewMemberships($user));
         $this->assertTrue(app(PlatformOperatorPolicy::class)->manageMemberships($user));
 
-        // login
         $response = $this->postJson('/api/auth/login', [
             'email' => 'plat7@test.com',
-            'password' => 'secret123',
+            'password' => self::VALID_PASSWORD,
         ]);
         $response->assertOk();
     }
@@ -177,7 +192,6 @@ class CreatePlatformUserCommandTest extends TestCase
     {
         $this->makeOperator();
 
-        // Force failure by making AuditLogger throw via a subclass binding
         $this->app->bind(AuditLogger::class, function () {
             return new class
             {
@@ -192,11 +206,111 @@ class CreatePlatformUserCommandTest extends TestCase
             '--email' => 'plat8@test.com',
             '--name' => 'Plat 8',
         ])
-            ->expectsQuestion('Contraseña', 'secret123')
-            ->expectsQuestion('Confirmar contraseña', 'secret123')
+            ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
             ->assertExitCode(1);
 
         $this->assertFalse(User::where('email', 'plat8@test.com')->exists());
         $this->assertSame(0, OrganizationMembership::whereHas('user', fn ($q) => $q->where('email', 'plat8@test.com'))->count());
+    }
+
+    public function test_segundo_usuario_de_plataforma_rechazado_sin_efectos(): void
+    {
+        $this->makeOperator();
+
+        $this->createPlatformUser('first@test.com');
+
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => 'second@test.com',
+            '--name' => 'Second',
+        ])
+            ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
+            ->expectsOutputToContain('Ya existe un usuario de plataforma')
+            ->assertExitCode(1);
+
+        $this->assertFalse(User::where('email', 'second@test.com')->exists());
+        $this->assertSame(1, User::count());
+    }
+
+    public function test_password_corta_rechazada_por_prompt(): void
+    {
+        $this->makeOperator();
+
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => 'short@test.com',
+            '--name' => 'Short',
+        ])
+            ->expectsQuestion('Contraseña', 'short')
+            ->expectsQuestion('Confirmar contraseña', 'short')
+            ->expectsQuestion('Contraseña', 'short')
+            ->expectsQuestion('Confirmar contraseña', 'short')
+            ->expectsQuestion('Contraseña', 'short')
+            ->expectsQuestion('Confirmar contraseña', 'short')
+            ->expectsOutputToContain('al menos')
+            ->assertExitCode(1);
+
+        $this->assertFalse(User::where('email', 'short@test.com')->exists());
+    }
+
+    public function test_password_vacia_rechazada_por_prompt(): void
+    {
+        $this->makeOperator();
+
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => 'empty@test.com',
+            '--name' => 'Empty',
+        ])
+            ->expectsQuestion('Contraseña', '')
+            ->expectsQuestion('Confirmar contraseña', '')
+            ->expectsQuestion('Contraseña', '')
+            ->expectsQuestion('Confirmar contraseña', '')
+            ->expectsQuestion('Contraseña', '')
+            ->expectsQuestion('Confirmar contraseña', '')
+            ->expectsOutputToContain('vacía')
+            ->assertExitCode(1);
+
+        $this->assertFalse(User::where('email', 'empty@test.com')->exists());
+    }
+
+    public function test_password_solo_espacios_rechazada_por_prompt(): void
+    {
+        $this->makeOperator();
+
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => 'spaces@test.com',
+            '--name' => 'Spaces',
+        ])
+            ->expectsQuestion('Contraseña', '            ')
+            ->expectsQuestion('Confirmar contraseña', '            ')
+            ->expectsQuestion('Contraseña', '            ')
+            ->expectsQuestion('Confirmar contraseña', '            ')
+            ->expectsQuestion('Contraseña', '            ')
+            ->expectsQuestion('Confirmar contraseña', '            ')
+            ->expectsOutputToContain('vacía')
+            ->assertExitCode(1);
+
+        $this->assertFalse(User::where('email', 'spaces@test.com')->exists());
+    }
+
+    public function test_password_no_aparece_en_salida_ni_auditoria_en_rechazo(): void
+    {
+        $this->makeOperator();
+
+        $bad = 'BadPassword1!'; // 13 chars but mismatched confirmation
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => 'reject@test.com',
+            '--name' => 'Reject',
+        ])
+            ->expectsQuestion('Contraseña', $bad)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Contraseña', $bad)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Contraseña', $bad)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
+            ->expectsOutputToContain('no coinciden')
+            ->assertExitCode(1);
+
+        $this->assertSame(0, AuditLog::where('action', 'platform_user.created')->count());
     }
 }
