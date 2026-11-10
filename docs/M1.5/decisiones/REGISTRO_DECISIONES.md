@@ -17,9 +17,9 @@ Fuente de verdad para las decisiones D-01 a D-36 y la sección de discrepancias.
 | D-07 | FK a usuario validada por membresía activa, solo si el campo cambia | Implementada | P3.3.6 (`0b85193`, PR #6); `AuditLog.user_id` exento |
 | D-08 | Falla cerrada en las fronteras (P3) y scope estricto (P5) | Implementada | Frontera HTTP y modo estricto activo por defecto (PR #9); lista de motivos de `withoutTenant` (PR #13, D-08). Aprobada 08-nov-2026 |
 | D-09 | Únicos por organización en `roles` y `plants` | Implementada | P2; verificada en MariaDB |
-| D-10 | Expand/contract con doble escritura temporal | Implementada | La doble escritura se retiró en P3.2 sin registrar la enmienda |
+| D-10 | Expand/contract con doble escritura temporal | Implementada | La doble escritura se retiró en P3.2 sin registrar la enmienda. Enmienda (P5 cierre): la doble escritura temporal se retiró en P3.2 (PR #7); un usuario creado fuera de las fixtures y de los seeders no recibe membresía automática y esta debe crearse explícitamente |
 | D-11 | Auditoría append-only con `AuditLogger` | Implementada | P3.4: `AuditLogger` y asignaciones auditadas |
-| D-12 | Separación A/B/C y orden de fases P0 a P5 | Aprobada | Las fases se ejecutaron en otro orden y con otros alcances |
+| D-12 | Separación A/B/C y orden de fases P0 a P5 | Aprobada | Las fases se ejecutaron en otro orden y con otros alcances. Enmienda (P5 cierre): el orden real de fases difiere del planeado; la fuente vigente es `docs/M1.5/avance/ESTADO.md` y el informe de cierre `docs/M1.5/12-informe-cierre-m1-5.md` |
 | D-13 | MariaDB 11.8 LTS como versión objetivo | Aprobada | Para desarrollo (11.8.9 verificada); la ventana de mantenimiento queda para producción |
 | D-14 | Preflight de solo lectura y backup verificable | Aprobada | Se aplica antes de producción; el backup no se ha verificado |
 | D-15 | Membresía en asignaciones de roles, plantas y áreas (opción A: FK compuestas) | Implementada | P2; rechazo verificado en MariaDB y por pruebas |
@@ -59,8 +59,8 @@ Fuente de verdad para las decisiones D-01 a D-36 y la sección de discrepancias.
 
 ## Discrepancias que conviene resolver
 
-1. **Dos numeraciones en tus documentos.** (Pendiente: sigue vigente la aclaración; el registro vigente prevalece.) Tu checklist del 2 de noviembre usa D-20 para "unicidad organizacional" y D-21 para "identidad global". Aquí D-20 es la evaluación contra la organización activa y D-21 es `User` fuera del scope. Y `PLAN_TRABAJO_PENDIENTE.md` marca "D-21 pendiente". Quien lea esos archivos mezclará decisiones distintas con el mismo ID.
+1. **Dos numeraciones en tus documentos.** (Documentada: el registro vigente prevalece — ver `ESTADO.md`, sección de concordancia de numeración; los archivos antiguos fuera de `docs/M1.5/` no se modificaron.) Tu checklist del 2 de noviembre usa D-20 para "unicidad organizacional" y D-21 para "identidad global". Aquí D-20 es la evaluación contra la organización activa y D-21 es `User` fuera del scope. Y `PLAN_TRABAJO_PENDIENTE.md` marca "D-21 pendiente". Quien lea esos archivos mezclará decisiones distintas con el mismo ID.
 2. **D-30 y D-31 no tienen aprobación explícita.** (Resuelta: aprobadas explícitamente el 08-nov-2026; ver tabla.)
-3. **D-10 tiene una enmienda sin registrar.** El hook de doble escritura se retiró en P3.2. Un usuario creado fuera de las fixtures y de los seeders no recibe membresía automática.
-4. **D-12 describe un orden de fases que ya no es el real.** Las fases se ejecutaron con otros alcances.
+3. **D-10 tiene una enmienda sin registrar.** (Resuelta por enmienda en el registro: la doble escritura temporal se retiró en P3.2 (PR #7); un usuario creado fuera de las fixtures y de los seeders no recibe membresía automática y esta debe crearse explícitamente.)
+4. **D-12 describe un orden de fases que ya no es el real.** (Resuelta por enmienda: el orden real de fases difiere del planeado; la fuente vigente es `docs/M1.5/avance/ESTADO.md` y el informe de cierre.)
 5. **La versión 2.0.0 de D-16 está aprobada y no aplicada.** (Resuelta: aplicada en P5.4b, PR #16; contrato en 2.0.0.)

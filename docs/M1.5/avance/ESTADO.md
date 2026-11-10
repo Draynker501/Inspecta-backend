@@ -97,6 +97,7 @@ D-20 y D-21 del checklist del 2-nov (unicidad organizacional / identidad global)
 - `vendor/bin/pint --test`: en verde (0 diferencias).
 - `git diff --check`: limpio.
 - OpenAPI: 2.0.0, válido con `openapi-spec-validator 0.8.4`.
+- Cierre de P5: 9 cumplidos, 2 cumplidos con salvedad (CORS, decisiones finales), 1 abierto (riesgos residuales). Ver `docs/M1.5/12-informe-cierre-m1-5.md`.
 
 ## Trazabilidad verificada
 
@@ -107,8 +108,8 @@ D-20 y D-21 del checklist del 2-nov (unicidad organizacional / identidad global)
 | Riesgo | Estado |
 |--------|--------|
 | Deuda de estilo global | RESUELTA (P5.5c: Pint en verde, migraciones excluidas) |
-| D-10 con enmienda sin registrar (doble escritura retirada en P3.2) | ABIERTA |
-| D-12 con orden de fases desactualizado | ABIERTA |
+| D-10 con enmienda sin registrar (doble escritura retirada en P3.2) | RESUELTA (enmienda registrada en P5 cierre) |
+| D-12 con orden de fases desactualizado | RESUELTA (enmienda registrada en P5 cierre) |
 | `TenantController` base ausente | DIFERIDO a M2 |
 | Factories de dominio ausentes | DIFERIDO a M2 |
 | Servicio de revocación de membresías ausente | DIFERIDO a M2 |

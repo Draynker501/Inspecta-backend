@@ -44,9 +44,11 @@ Verificación en MariaDB 11.8: cada bloque con migraciones se validó con `migra
 | Migraciones y backfills | CUMPLIDO | Backfill idempotente; `migrate:reset` + `migrate` verificado en CI |
 | Seeders | CUMPLIDO | 2 clientes + operadora INSPECTA-OP; contraseñas fijas solo local/testing |
 | Contrato OpenAPI | CUMPLIDO | 2.0.0; 11 códigos; validado con `openapi-spec-validator 0.8.4` (OK) |
-| CORS | CUMPLIDO | `X-Organization-Id` permitido; `supports_credentials=false` |
+| CORS | CUMPLIDO CON SALVEDAD | `X-Organization-Id` permitido; `supports_credentials=false` (cumplido). Salvedad: el origen por defecto es `*` (D-18 parcial) y debe restringirse por entorno antes de cualquier despliegue |
 | Riesgos residuales | ABIERTO | Ver sección 5 |
-| Decisiones finales | CUMPLIDO | Registro actualizado (41 decisiones); D-28b rechazada documentada |
+
+Recuento: 9 cumplidos, 2 cumplidos con salvedad, 1 abierto (12 puntos).
+| Decisiones finales | CUMPLIDO CON SALVEDAD | Registro consolidado de D-01 a D-38 (41 decisiones). Salvedades: D-18 parcial; D-27 y D-32 a D-35 diferidas a M2; D-38 propuesta aprobada; discrepancias del registro según el paso 3 del ajuste |
 
 ## 4. Correcciones de rumbo honestas
 
