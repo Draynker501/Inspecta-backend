@@ -181,3 +181,15 @@ la unión de `TenantErrorCode` y `ApiErrorCode`; todos los `$ref` internos se
 resuelven; y las operaciones implementadas con autenticación documentan 401.
 La versión `2.0.0` se comprueba en
 `tests/Feature/Documentation/OpenApiContractTest.php`.
+
+## Marca de rutas planeadas (P5.5b)
+
+Los 45 paths de dominio no implementados se marcan a nivel de path con la
+extensión de vendedor `x-status: planned`. Los 4 paths implementados
+(`/auth/login`, `/auth/logout`, `/auth/me`, `/auth/organizations`) no llevan
+la marca. Mientras un path esté marcado como `planned`, el servidor devuelve
+`not_found` (404, código `not_found`); no debe considerarse disponible para
+consumo. La marca se calcula comparando `php artisan route:list` con los paths
+del contrato (normalizando parámetros `{x}` a `{}` y el prefijo `/api`).
+
+No hay cambio de versión del contrato (sigue siendo 2.0.0).

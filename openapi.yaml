@@ -39,6 +39,11 @@ info:
     **Decisión por código:** los clientes deben decidir por `code` y no por el
     texto de `message` (por ejemplo, `cross_tenant_operation` tiene dos textos
     posibles).
+
+    - Los paths marcados con `x-status: planned` están diseñados pero aún no
+      implementados en el servidor; mientras tanto devuelven `not_found`
+      (404, código `not_found`). No deben considerarse disponibles para consumo.
+
   version: 2.0.0
 
 servers:
@@ -206,6 +211,7 @@ paths:
   # ===================================================================
 
   /plants:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -328,6 +334,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /plants/{plantId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -506,6 +513,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /plants/{plantId}/areas:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -630,6 +638,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /areas/{areaId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -806,6 +815,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /areas/{areaId}/lines:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -930,6 +940,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /production-lines/{productionLineId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -1110,6 +1121,7 @@ paths:
   # ===================================================================
 
   /users:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -1233,6 +1245,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /users/{userId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -1412,6 +1425,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /users/{userId}/password:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     put:
@@ -1434,17 +1448,17 @@ paths:
                 current_password:
                   type: string
                   format: password
-                  example: "PasswordActual123!"
+                  example: <password>
                 new_password:
                   type: string
                   format: password
                   minLength: 8
                   maxLength: 255
-                  example: "NuevoPassword456!"
+                  example: <password>
                 new_password_confirmation:
                   type: string
                   format: password
-                  example: "NuevoPassword456!"
+                  example: <password>
       responses:
         '200':
           description: Contraseña actualizada.
@@ -1500,6 +1514,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /roles:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -1560,6 +1575,7 @@ paths:
   # ===================================================================
 
   /checklists:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -1677,6 +1693,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /checklists/{checklistId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -1853,6 +1870,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /checklists/{checklistId}/versions:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -1984,6 +2002,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /checklists/{checklistId}/versions/{versionId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -2185,6 +2204,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /checklists/{checklistId}/active-version:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -2238,6 +2258,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /versions/{versionId}/sections:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -2377,6 +2398,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /sections/{sectionId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -2563,6 +2585,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /sections/{sectionId}/questions:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -2687,6 +2710,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /questions/{questionId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -2867,6 +2891,7 @@ paths:
   # ===================================================================
 
   /norms:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -2985,6 +3010,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /norms/{normId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -3161,6 +3187,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /norms/{normId}/requirements:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -3286,6 +3313,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /requirements/{requirementId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -3403,6 +3431,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /questions/{questionId}/norm-requirements:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -3534,6 +3563,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /questions/{questionId}/norm-requirements/{linkId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     delete:
@@ -3591,6 +3621,7 @@ paths:
   # ===================================================================
 
   /inspections:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -3751,6 +3782,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /inspections/{inspectionId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -3804,6 +3836,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /inspections/{inspectionId}/status:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     put:
@@ -3878,6 +3911,7 @@ paths:
   # ===================================================================
 
   /incidents:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -4038,6 +4072,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /incidents/{incidentId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -4090,6 +4125,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /incidents/{incidentId}/status:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     patch:
@@ -4164,6 +4200,7 @@ paths:
   # ===================================================================
 
   /evidences:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -4300,6 +4337,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /evidences/{evidenceId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -4364,6 +4402,7 @@ paths:
   # ===================================================================
 
   /corrective-actions:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -4499,6 +4538,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /corrective-actions/{actionId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -4618,6 +4658,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /corrective-actions/{actionId}/updates:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -4746,6 +4787,7 @@ paths:
   # ===================================================================
 
   /audit-logs:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -4838,6 +4880,7 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
 
   /audit-logs/{logId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -4895,6 +4938,7 @@ paths:
   # ===================================================================
 
   /organizations:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -5018,6 +5062,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /organizations/{organizationId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -5200,6 +5245,7 @@ paths:
   # ===================================================================
 
   /sync/bootstrap:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -5284,6 +5330,7 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
 
   /sync/changes:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -5362,6 +5409,7 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
 
   /sync/operations:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     post:
@@ -5435,6 +5483,7 @@ paths:
           $ref: '#/components/responses/ServiceUnavailable'
 
   /devices:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -5557,6 +5606,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /devices/{deviceId}:
+    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -6246,7 +6296,7 @@ components:
           type: string
           maxLength: 150
           nullable: true
-          example: "contacto@constructoranorte.com"
+          example: "contacto@example.com"
         status:
           type: boolean
           example: true
@@ -6303,7 +6353,7 @@ components:
           type: string
           maxLength: 150
           nullable: true
-          example: "contacto@constructoranorte.com"
+          example: "contacto@example.com"
         status:
           type: boolean
           default: true
@@ -6576,7 +6626,7 @@ components:
           type: string
           format: email
           maxLength: 150
-          example: "ulises.rocha@inspecta.com"
+          example: "usuario@example.com"
         status:
           type: boolean
           example: true
@@ -6622,13 +6672,13 @@ components:
           type: string
           format: email
           maxLength: 150
-          example: "yajaira.estrada@inspecta.com"
+          example: "persona@example.com"
         password:
           type: string
           format: password
           minLength: 8
           maxLength: 255
-          example: "PasswordSeguro123!"
+          example: <password>
         organization_id:
           type: string
           format: uuid
@@ -6665,7 +6715,7 @@ components:
           type: string
           format: email
           maxLength: 150
-          example: "ulises.rocha@inspecta.com"
+          example: "usuario@example.com"
         status:
           type: boolean
           example: true
@@ -7665,7 +7715,7 @@ components:
           type: string
           maxLength: 500
           description: "Ruta relativa o URL firmada para descargar el archivo."
-          example: "https://inspecta.s3.amazonaws.com/evidences/IMG_20261012_101500.jpg"
+          example: "https://storage.example.com/evidences/IMG_20261012_101500.jpg"
         mime_type:
           type: string
           maxLength: 100
