@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\OrganizationController;
+use App\Http\Controllers\ChecklistController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -24,3 +25,13 @@ Route::prefix('auth')->group(function () {
     // Listado de organizaciones del usuario autenticado: no requiere tenant.
     Route::get('organizations', [OrganizationController::class, 'index'])->middleware('api.auth');
 });
+
+Route::middleware('api.tenant')->group(function () {
+    Route::get('checklists', [ChecklistController::class, 'index']);
+    Route::post('checklists', [ChecklistController::class, 'store']);
+
+    Route::get('checklists/{id}', [ChecklistController::class, 'show']);
+    Route::put('checklists/{id}', [ChecklistController::class, 'update']);
+    Route::patch('checklists/{id}/status', [ChecklistController::class, 'updateStatus']);
+});
+
