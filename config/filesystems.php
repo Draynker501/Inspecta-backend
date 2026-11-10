@@ -33,7 +33,10 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            // Desactivado: el servido por URL firmada no se usa hoy (EvidenceController
+            // es stub). Reactivar solo si se adopta descarga de archivos privados
+            // por URL firmada (actualizar la prueba de superficie de rutas).
+            'serve' => false,
             'throw' => false,
             'report' => false,
         ],
