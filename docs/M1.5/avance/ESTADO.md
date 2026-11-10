@@ -53,6 +53,7 @@
 - **Identidad global:** `User` sin `BelongsToOrganization`, `organization_id` fuera de Fillable. Pertenencia solo por `organization_memberships`.
 - **Organizaciones:** `GET /api/auth/organizations` lista clientes activos del usuario (sin tenant).
 - **Platform operator:** `PlatformOperatorPolicy` + `User::isPlatformOperator()`/`hasPlatformRole()` (membresía activa en operadora única).
+- **Comando de consola:** `inspecta:create-platform-user` crea el primer usuario de plataforma en producción (D-38), con membresía activa, rol y auditoría redactada.
 - **Auditoría:** `AuditLog` append-only (excepción dedicada), `AuditLogger` con contexto obligatorio y redacción; auditoría de asignaciones de rol/planta/área.
 - **Modo estricto:** `OrganizationScope` lanza `MissingTenantContextException` en HTTP sin contexto cuando `strict_mode=true` (default); consola y `withoutTenant()` exentos; workers de cola no exentos; flag HTTP `TENANCY_STRICT_MODE`.
 - **Seeders:** 2 clientes (INSP-01, ORG-02) + operadora INSPECTA-OP; catálogo por organización; consultor de plataforma con membresía en operadora y clientes. Contraseñas fijas solo en local/testing.
@@ -69,16 +70,15 @@
 - Factories de dominio (solo Organization, OrganizationMembership, User).
 - Servicio de revocación/re-concesión de membresías (M2).
 - Rutas de dominio (solo `/auth/*` implementadas; 45 paths planeados).
-- Comando de consola para crear el primer usuario de plataforma (D-38).
 - Servicio de aprovisionamiento de roles y normas por cliente.
 - Errores fuera del catálogo (403 de policies, 405, 500) sin `code`.
 
 ## 4. Decisiones relevantes
 
-Resumen derivado del [registro oficial de decisiones](../decisiones/REGISTRO_DECISIONES.md). Conteo por estado: Implementada 25, Propuesta 6, Aprobada 7, Parcial 1, Superada 1, Aprobada de hecho 0, Rechazada 1 (total 41).
+Resumen derivado del [registro oficial de decisiones](../decisiones/REGISTRO_DECISIONES.md). Conteo por estado: Implementada 26, Propuesta 5, Aprobada 7, Parcial 1, Superada 1, Aprobada de hecho 0, Rechazada 1 (total 41).
 
-- **Implementadas (25):** D-01, D-02, D-06, D-07, D-08, D-09, D-10, D-11, D-15, D-16, D-17, D-20, D-21, D-22, D-23, D-24, D-25, D-26, D-28, D-30, D-31, D-31b, D-31c, D-36, D-37.
-- **Propuestas (6):** D-27, D-32, D-33, D-34, D-35, D-38.
+- **Implementadas (26):** D-01, D-02, D-06, D-07, D-08, D-09, D-10, D-11, D-15, D-16, D-17, D-20, D-21, D-22, D-23, D-24, D-25, D-26, D-28, D-30, D-31, D-31b, D-31c, D-36, D-37, D-38.
+- **Propuestas (5):** D-27, D-32, D-33, D-34, D-35.
 - **Aprobadas (7):** D-03, D-04, D-05, D-12, D-13, D-14, D-19.
 - **Parciales (1):** D-18.
 - **Superadas (1):** D-29.

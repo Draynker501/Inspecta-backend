@@ -53,7 +53,7 @@ Fuente de verdad para las decisiones D-01 a D-36 y la sección de discrepancias.
 | D-35 | Diferir a M2 las pruebas de jobs y comandos con organización (T20 a T22) | Propuesta | Sin decidir |
 | D-36 | Marcar "dentro de una petición HTTP" con un flag del middleware global en vez de `runningInConsole()` | Implementada | PR #13 (e321739): flag HTTP para modo estricto. Aprobada 08-nov-2026 |
 | D-37 | Separar seeders de arranque y de demostración | Implementada | Implementada en P5.3b (PR #14, commit 2014a06): `UserSeeder` con contraseñas fijas solo en local/testing. Aprobada 08-nov-2026 |
-| D-38 | Comando de consola para crear el primer usuario de plataforma en producción | Propuesta | Aprobada como propuesta 08-nov-2026; pendiente de implementación en M2 (primer bloque tras el cierre de P5 o preparación de despliegue) |
+| D-38 | Comando de consola para crear el primer usuario de plataforma en producción | Implementada | Implementado en bloque D-38 (rama feat/d38-primer-usuario-plataforma): comando `inspecta:create-platform-user` con `--email`, `--name`, `--password-stdin`, transacción, auditoría redactada y pruebas SQLite/MariaDB. |
 
 **Fuera de la numeración:** P33-D07, diferir `TenantController` a M2, está aprobada (según tus documentos `PLAN_TRABAJO_PENDIENTE.md` y `CHECKLIST_HU_06_07_10.md`).
 
