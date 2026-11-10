@@ -14,9 +14,11 @@ class Organization extends Model
     use HasFactory, SoftDeletes;
 
     public const TYPE_CLIENT = 'client';
+
     public const TYPE_OPERATOR = 'operator';
 
     public $incrementing = false;
+
     protected $keyType = 'string';
 
     protected $fillable = [

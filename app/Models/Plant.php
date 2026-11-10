@@ -13,6 +13,7 @@ class Plant extends Model
     use BelongsToOrganization, SoftDeletes;
 
     public $incrementing = false;
+
     protected $keyType = 'string';
 
     protected $fillable = [

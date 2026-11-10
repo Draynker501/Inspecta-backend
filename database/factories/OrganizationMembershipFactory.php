@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\OrganizationMembership;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 /**
@@ -14,7 +15,7 @@ class OrganizationMembershipFactory extends Factory
     /**
      * The model class of the factory.
      *
-     * @var class-string<\Illuminate\Database\Eloquent\Model>
+     * @var class-string<Model>
      */
     protected $model = OrganizationMembership::class;
 

@@ -11,6 +11,7 @@ class CorrectiveActionUpdate extends Model
     use BelongsToOrganization;
 
     public $incrementing = false;
+
     protected $keyType = 'string';
 
     protected $fillable = [
