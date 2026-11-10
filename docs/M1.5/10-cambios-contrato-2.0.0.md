@@ -193,3 +193,10 @@ consumo. La marca se calcula comparando `php artisan route:list` con los paths
 del contrato (normalizando parámetros `{x}` a `{}` y el prefijo `/api`).
 
 No hay cambio de versión del contrato (sigue siendo 2.0.0).
+
+## Ajuste de la URL de producción (P5 cierre)
+
+La URL de producción en `servers` se cambió de `https://api.inspecta.com/v1`
+a `https://api.inspecta.com/api` para que coincida con el prefijo real de las
+rutas de Laravel (`/api`). No hubo cambio de versión del contrato (sigue 2.0.0)
+ni de ningún path ni operación.
