@@ -5,7 +5,7 @@
 **Rama:** `docs/cierre-m1-5` (basada en `origin/master`)
 **HEAD:** `3edf5cb2506780f918de9af84a5dd8f6e7c96bcc` (merge de P5.5c, PR #19)
 **Sincronizada con origin/master:** sí
-**Pruebas (VERIFICADO):** SQLite 307 pruebas, 301 aprobadas, 6 omitidas, 878 aserciones, 0 fallos; MariaDB 11.8 307 pruebas, 302 aprobadas, 5 omitidas, 906 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-10).
+**Pruebas (VERIFICADO):** SQLite 320 pruebas, 314 aprobadas, 6 omitidas, 974 aserciones, 0 fallos; MariaDB 11.8 320 pruebas, 315 aprobadas, 5 omitidas, 1002 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-10).
 **Migraciones:** 44.
 **Composer:** `composer validate --no-check-publish` válido. `composer audit`: 0 advisories. `require.php = ^8.4`.
 **Pint:** `vendor/bin/pint --test` en verde (0 diferencias) con `database/migrations` excluido permanentemente.
@@ -91,7 +91,7 @@ D-20 y D-21 del checklist del 2-nov (unicidad organizacional / identidad global)
 
 ## 5. Validaciones actuales
 
-- Suite: 307 pruebas, 0 fallos (SQLite y MariaDB).
+- Suite: 320 pruebas, 0 fallos (SQLite y MariaDB).
 - `composer validate --no-check-publish`: válido.
 - `composer audit`: 0 advisories.
 - `vendor/bin/pint --test`: en verde (0 diferencias).
@@ -129,7 +129,7 @@ D-20 y D-21 del checklist del 2-nov (unicidad organizacional / identidad global)
 ## 8. Cómo retomar
 
 1. Rama `docs/cierre-m1-5`, HEAD basado en `3edf5cb` (origin/master, incluye P5.5c).
-2. Suite medida: 307 pruebas, 0 fallos en SQLite y MariaDB.
+2. Suite medida: 320 pruebas, 0 fallos en SQLite y MariaDB.
 3. Leer este `ESTADO.md` y el [informe de cierre](../12-informe-cierre-m1-5.md) antes de empezar.
 4. Próximo bloque: aprobación formal del cierre de M1.5 (acta en `docs/M1.5/13-acta-aprobacion-m2.md`) y, tras ella, M2.
 
