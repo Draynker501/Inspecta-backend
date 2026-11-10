@@ -19,9 +19,27 @@ info:
     - Aislamiento multi-tenant: la organización se deriva del token. Un recurso de
       otra organización se comporta como inexistente (404) y no revela su existencia.
     - v1.4.0 (aditiva, M1.5): cabecera X-Organization-Id (UUID) obligatoria en rutas de dominio; GET /auth/organizations; campo type en Organization (client/operator); identidad global en /auth/me.
+    - v2.0.0 (D-16, D-31b, D-31c): sobre de error uniforme `{ message, code, errors? }`
+      con códigos estables del catálogo (ver components/schemas/ErrorCode).
+      Regla transversal: el mismo código implica el mismo estado HTTP y el mismo
+      texto de message. Los errores fuera del catálogo (403 de policies, 405,
+      500) pueden omitir `code`.
+
     - Coordenadas con precisión de 7 decimales (BD `DECIMAL(10,7)`):
       latitud −90..90, longitud −180..180.
-  version: 1.4.0
+
+    **Flujo de sesión:** `POST /auth/login` → `GET /auth/organizations`
+    (organizaciones cliente con membresía activa) → el cliente selecciona una
+    organización y la envía como cabecera `X-Organization-Id` en cada petición
+    con contexto de dominio. `GET /auth/me` devuelve solo la identidad global
+    del usuario, sin depender de la organización seleccionada. Ante un
+    `organization_access_denied` con una selección previa, el cliente debe
+    volver a consultar `GET /auth/organizations` y pedir otra selección.
+
+    **Decisión por código:** los clientes deben decidir por `code` y no por el
+    texto de `message` (por ejemplo, `cross_tenant_operation` tiene dos textos
+    posibles).
+  version: 2.0.0
 
 servers:
   - url: https://api.inspecta.com/v1
@@ -116,8 +134,11 @@ paths:
     get:
       summary: Obtener el usuario autenticado
       description: |
-        Devuelve la identidad del usuario dueño del token Bearer.
-        Requiere que el usuario y su organización existan y estén activos.
+        Devuelve la identidad global del usuario dueño del token Bearer.
+        No requiere la cabecera X-Organization-Id ni contexto de tenant.
+        No refleja la organización seleccionada: la identidad de sesión en las
+        rutas de dominio depende de la organización que el usuario selecciona
+        y envía con X-Organization-Id (D-28b).
       tags:
         - Authentication
       responses:
@@ -130,7 +151,7 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/AccessDeniedError'
+          $ref: '#/components/responses/InactiveUserError'
 
   /auth/organizations:
     get:
@@ -177,12 +198,16 @@ paths:
                           type: string
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/InactiveUserError'
 
   # ===================================================================
   # ORGANIZATION
   # ===================================================================
 
   /plants:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Plantas
       description: Obtiene una lista paginada de todas las plantas registradas. Ideal para la sincronización offline.
@@ -210,10 +235,36 @@ paths:
                       $ref: '#/components/schemas/Plant'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
     post:
       summary: Crear Planta
       tags:
@@ -234,14 +285,51 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Plant'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /plants/{plantId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener Planta
       tags:
@@ -258,6 +346,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Plant'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     put:
@@ -282,10 +400,49 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Plant'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
     patch:
       summary: Activar/Desactivar Planta
       description: Cambia el estado lógico de la planta (activa o inactiva).
@@ -315,10 +472,42 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Plant'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
   /plants/{plantId}/areas:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Áreas de una Planta
       tags:
@@ -341,6 +530,36 @@ paths:
                       $ref: '#/components/schemas/Area'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     post:
@@ -366,12 +585,53 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Area'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /areas/{areaId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener Área
       tags:
@@ -388,6 +648,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Area'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     put:
@@ -412,10 +702,49 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Area'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
     patch:
       summary: Activar/Desactivar Área
       tags:
@@ -443,10 +772,42 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Area'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
   /areas/{areaId}/lines:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Líneas de Producción de un Área
       tags:
@@ -469,6 +830,36 @@ paths:
                       $ref: '#/components/schemas/ProductionLine'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     post:
@@ -494,12 +885,53 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ProductionLine'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /production-lines/{productionLineId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener Línea de Producción
       tags:
@@ -516,6 +948,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ProductionLine'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     put:
@@ -540,10 +1002,49 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ProductionLine'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
     patch:
       summary: Activar/Desactivar Línea de Producción
       tags:
@@ -571,6 +1072,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ProductionLine'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
@@ -579,6 +1110,8 @@ paths:
   # ===================================================================
 
   /users:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Usuarios
       description: Obtiene una lista paginada de todos los usuarios registrados.
@@ -606,10 +1139,36 @@ paths:
                       $ref: '#/components/schemas/User'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
     post:
       summary: Crear Usuario
       description: Crea un nuevo usuario. Permite enviar arreglos opcionales con IDs de roles, plantas y áreas para configurar sus permisos inmediatamente.
@@ -631,14 +1190,51 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/User'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener detalle de Usuario
       description: Retorna la información de un usuario, incluyendo los roles, plantas y áreas a las que tiene acceso.
@@ -656,6 +1252,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/UserDetail'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     put:
@@ -681,10 +1307,49 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/User'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
     patch:
       summary: Activar/Desactivar Usuario
       description: Cambia el estado lógico del usuario (activa o inactiva).
@@ -713,10 +1378,42 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/User'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
   /users/{userId}/password:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     put:
       summary: Cambiar Contraseña
       description: Actualiza la contraseña del usuario.
@@ -758,12 +1455,53 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/User'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /roles:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Roles
       description: Obtiene la lista paginada de roles disponibles para asignar a los usuarios.
@@ -786,16 +1524,44 @@ paths:
                       $ref: '#/components/schemas/Role'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
 
   # ===================================================================
   # CHECKLISTS
   # ===================================================================
 
   /checklists:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Checklists
       description: Obtiene la lista paginada de checklists disponibles.
@@ -818,10 +1584,36 @@ paths:
                       $ref: '#/components/schemas/ChecklistBase'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
     post:
       summary: Crear Checklist Base
       tags:
@@ -842,14 +1634,51 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ChecklistBase'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /checklists/{checklistId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener Checklist
       tags:
@@ -866,6 +1695,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ChecklistBase'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     put:
@@ -890,10 +1749,49 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ChecklistBase'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
     patch:
       summary: Activar/Desactivar Checklist
       tags:
@@ -921,10 +1819,42 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ChecklistBase'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
   /checklists/{checklistId}/versions:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Versiones de un Checklist
       tags:
@@ -947,6 +1877,36 @@ paths:
                       $ref: '#/components/schemas/ChecklistVersion'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     post:
@@ -979,12 +1939,53 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ChecklistVersion'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /checklists/{checklistId}/versions/{versionId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener Versión de Checklist
       tags:
@@ -1002,6 +2003,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ChecklistVersion'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     put:
@@ -1036,10 +2067,49 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ChecklistVersion'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
     patch:
       summary: Publicar Versión de Checklist
       description: Cambia el estado de la versión. `publicada` la marca como versión activa y registra `published_at`.
@@ -1070,12 +2140,53 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ChecklistVersion'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /checklists/{checklistId}/active-version:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Descargar Estructura Completa del Checklist
       description: Retorna la versión activa/publicada de un checklist con todo su árbol de dependencias (secciones y preguntas). Este es el endpoint que consumirá la PWA para sincronización offline.
@@ -1093,10 +2204,42 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ChecklistFullTree'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
   /versions/{versionId}/sections:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Secciones de una Versión
       tags:
@@ -1119,6 +2262,36 @@ paths:
                       $ref: '#/components/schemas/ChecklistSection'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     post:
@@ -1159,12 +2332,53 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ChecklistSection'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /sections/{sectionId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener Sección
       tags:
@@ -1181,6 +2395,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ChecklistSection'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     put:
@@ -1215,10 +2459,49 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ChecklistSection'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
     patch:
       summary: Activar/Desactivar Sección
       tags:
@@ -1246,10 +2529,42 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ChecklistSection'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
   /sections/{sectionId}/questions:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Preguntas de una Sección
       tags:
@@ -1272,6 +2587,36 @@ paths:
                       $ref: '#/components/schemas/Question'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     post:
@@ -1297,12 +2642,53 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Question'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /questions/{questionId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener Pregunta
       tags:
@@ -1319,6 +2705,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Question'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     put:
@@ -1343,10 +2759,49 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Question'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
     patch:
       summary: Activar/Desactivar Pregunta
       tags:
@@ -1374,6 +2829,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Question'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
@@ -1382,6 +2867,8 @@ paths:
   # ===================================================================
 
   /norms:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Normas
       description: Obtiene el catálogo paginado de normas registradas en el sistema.
@@ -1404,10 +2891,36 @@ paths:
                       $ref: '#/components/schemas/Norm'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
     post:
       summary: Crear Norma
       description: Registra una nueva normativa, estándar o marco legal.
@@ -1429,14 +2942,51 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Norm'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /norms/{normId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener Norma
       tags:
@@ -1453,6 +3003,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Norm'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     put:
@@ -1477,10 +3057,49 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Norm'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
     patch:
       summary: Activar/Desactivar Norma
       tags:
@@ -1508,10 +3127,42 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Norm'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
   /norms/{normId}/requirements:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Requerimientos de una Norma
       description: Retorna todos los artículos o cláusulas específicas pertenecientes a una norma.
@@ -1535,6 +3186,36 @@ paths:
                       $ref: '#/components/schemas/NormRequirement'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     post:
@@ -1560,12 +3241,53 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/NormRequirement'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /requirements/{requirementId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener Requerimiento de Norma
       tags:
@@ -1582,6 +3304,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/NormRequirement'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     put:
@@ -1606,12 +3358,53 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/NormRequirement'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /questions/{questionId}/norm-requirements:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Requerimientos Normativos vinculados a una Pregunta
       tags:
@@ -1634,6 +3427,36 @@ paths:
                       $ref: '#/components/schemas/NormRequirement'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     post:
@@ -1666,12 +3489,53 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/QuestionNormRequirement'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /questions/{questionId}/norm-requirements/{linkId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     delete:
       summary: Desvincular Requerimiento de Pregunta
       description: Elimina la vinculación entre una pregunta y un requerimiento normativo.
@@ -1689,6 +3553,36 @@ paths:
       responses:
         '204':
           description: Vinculación eliminada.
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
@@ -1697,6 +3591,8 @@ paths:
   # ===================================================================
 
   /inspections:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Inspecciones
       description: Obtiene una lista paginada de inspecciones. Útil para el dashboard web de supervisores.
@@ -1761,10 +3657,36 @@ paths:
                       $ref: '#/components/schemas/InspectionBase'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
     post:
       summary: Sincronizar/Crear Inspección
       description: Crea una inspección completa incluyendo sus respuestas en una sola transacción. Es el endpoint principal que consume la PWA al recuperar la conexión a internet.
@@ -1786,14 +3708,51 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/InspectionDetail'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /inspections/{inspectionId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Detalle de Inspección
       description: Obtiene todos los datos de la inspección, incluyendo las respuestas a cada pregunta para su revisión.
@@ -1811,10 +3770,42 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/InspectionDetail'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
   /inspections/{inspectionId}/status:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     put:
       summary: Evaluar Inspección (Supervisor)
       description: Permite al supervisor confirmar o rechazar una inspección completada en campo, añadiendo observaciones. El `supervisor_id` se toma del token JWT.
@@ -1838,16 +3829,57 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/InspectionDetail'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   # ===================================================================
   # INCIDENTS
   # ===================================================================
 
   /incidents:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Incidencias
       description: Obtiene una lista paginada de incidencias, ideal para tableros de control y seguimiento.
@@ -1912,10 +3944,36 @@ paths:
                       $ref: '#/components/schemas/Incident'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
     post:
       summary: Reportar Incidencia
       description: Crea una nueva incidencia. Puede estar vinculada a una inspección previa o ser un reporte aislado. El `reported_by` se toma del token JWT.
@@ -1937,14 +3995,51 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Incident'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /incidents/{incidentId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Detalle de Incidencia
       tags:
@@ -1961,10 +4056,42 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Incident'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
   /incidents/{incidentId}/status:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     patch:
       summary: Actualizar Estado de Incidencia
       description: Permite cambiar el estado de una incidencia (ej. de 'open' a 'resolved').
@@ -1988,16 +4115,57 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Incident'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   # ===================================================================
   # EVIDENCES
   # ===================================================================
 
   /evidences:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Evidencias
       description: Obtiene una lista paginada de evidencias con filtros opcionales.
@@ -2038,10 +4206,36 @@ paths:
                       $ref: '#/components/schemas/Evidence'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
     post:
       summary: Subir Evidencia Multimedia
       description: Endpoint especializado para la recepción de archivos (fotos, documentos). Utiliza form-data en lugar de JSON. El `uploaded_by` se toma del token JWT.
@@ -2063,14 +4257,51 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Evidence'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /evidences/{evidenceId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener Evidencia
       description: Devuelve los metadatos de la evidencia, incluyendo `storage_path` (URL firmada para descarga).
@@ -2095,6 +4326,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Evidence'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
@@ -2103,6 +4364,8 @@ paths:
   # ===================================================================
 
   /corrective-actions:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Acciones Correctivas
       description: Obtiene una lista paginada de acciones. Permite filtrar por asignado (Mis Tareas), por incidencia o por estado.
@@ -2142,10 +4405,36 @@ paths:
                       $ref: '#/components/schemas/CorrectiveAction'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
     post:
       summary: Crear Acción Correctiva
       description: Asigna una nueva tarea correctiva derivada de una incidencia.
@@ -2167,14 +4456,51 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/CorrectiveAction'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /corrective-actions/{actionId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Detalle de Acción Correctiva
       description: Muestra los datos de la tarea y todo el historial de actualizaciones y comentarios.
@@ -2192,6 +4518,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/CorrectiveActionDetail'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     patch:
@@ -2217,12 +4573,53 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/CorrectiveAction'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /corrective-actions/{actionId}/updates:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Actualizaciones de una Acción
       tags:
@@ -2245,6 +4642,36 @@ paths:
                       $ref: '#/components/schemas/CorrectiveActionUpdate'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     post:
@@ -2270,16 +4697,57 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/CorrectiveActionUpdate'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   # ===================================================================
   # AUDIT LOGS
   # ===================================================================
 
   /audit-logs:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Registros de Auditoría
       description: Obtiene el historial de cambios en el sistema. Los resultados pueden filtrarse por usuario, modelo afectado o tipo de acción.
@@ -2338,12 +4806,40 @@ paths:
                       $ref: '#/components/schemas/AuditLog'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
 
   /audit-logs/{logId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Detalle de Registro de Auditoría
       description: Obtiene los detalles exactos de un cambio, incluyendo el estado anterior y nuevo de los campos modificados.
@@ -2361,6 +4857,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/AuditLog'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
@@ -2369,6 +4895,8 @@ paths:
   # ===================================================================
 
   /organizations:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Organizaciones
       description: Obtiene una lista paginada de organizaciones. Cada organización es el raíz de separación de responsabilidades (multi-tenancy).
@@ -2396,10 +4924,36 @@ paths:
                       $ref: '#/components/schemas/Organization'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
     post:
       summary: Crear Organización
       description: Crea una nueva empresa u organización.
@@ -2421,14 +4975,51 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Organization'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /organizations/{organizationId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener Organización
       tags:
@@ -2445,6 +5036,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Organization'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
     put:
@@ -2469,10 +5090,49 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Organization'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
     patch:
       summary: Activar/Desactivar Organización
       description: Cambia el estado lógico de la organización (activa o inactiva).
@@ -2502,6 +5162,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Organization'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
@@ -2510,6 +5200,8 @@ paths:
   # ===================================================================
 
   /sync/bootstrap:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Descargar Snapshot Inicial
       description: >
@@ -2560,12 +5252,40 @@ paths:
                         $ref: '#/components/schemas/SyncCursor'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
 
   /sync/changes:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Descargar Cambios Incrementales
       description: >
@@ -2610,12 +5330,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SyncChangeList'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
 
   /sync/operations:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     post:
       summary: Enviar Operaciones Pendientes
       description: >
@@ -2640,18 +5388,55 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SyncBatchResponse'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
   /devices:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Dispositivos
       description: Obtiene los dispositivos registrados para sincronización.
@@ -2676,10 +5461,36 @@ paths:
                       $ref: '#/components/schemas/Device'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
     post:
       summary: Registrar Dispositivo
       description: Registra un dispositivo móvil para habilitar la sincronización offline.
@@ -2703,14 +5514,51 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Device'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Datos inválidos o referencia a recursos de otra organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+                crossTenantOperation:
+                  $ref: '#/components/examples/CrossTenantRelation'
 
   /devices/{deviceId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener Dispositivo
       tags:
@@ -2729,6 +5577,36 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/Device'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
 
@@ -2929,6 +5807,78 @@ components:
         maximum: 100
         default: 15
 
+  examples:
+    Unauthenticated:
+      summary: Token ausente, inválido o revocado (401).
+      value:
+        message: "No autenticado. Token de acceso ausente o inválido."
+        code: unauthenticated
+    InvalidCredentials:
+      summary: Credenciales incorrectas (401).
+      value:
+        message: "Las credenciales proporcionadas son incorrectas."
+        code: invalid_credentials
+    UserInactive:
+      summary: Usuario inactivo (403).
+      value:
+        message: "El usuario está inactivo. Contacte al administrador."
+        code: user_inactive
+    ValidationFailed:
+      summary: Error de validación (422).
+      value:
+        message: "El correo electrónico es obligatorio."
+        code: validation_failed
+        errors:
+          email: ["El correo electrónico es obligatorio."]
+    TooManyAttempts:
+      summary: Límite de intentos excedido (429).
+      value:
+        message: "Demasiados intentos. Inténtalo de nuevo más tarde."
+        code: too_many_attempts
+    NotFound:
+      summary: Recurso inexistente o de otra organización (404).
+      value:
+        message: "Recurso no encontrado."
+        code: not_found
+    CrossTenantWrite:
+      summary: Escritura sobre otra organización (422).
+      value:
+        message: "La operación intenta escribir datos de otra organización."
+        code: cross_tenant_operation
+    CrossTenantRelation:
+      summary: Referencia a un recurso de otra organización (422).
+      value:
+        message: "El campo 'plant_id' referencia un recurso inexistente o de otra organización."
+        code: cross_tenant_operation
+    OrganizationRequired:
+      summary: Falta la cabecera X-Organization-Id (400).
+      value:
+        message: "Cabecera X-Organization-Id requerida."
+        code: organization_required
+    OrganizationInvalid:
+      summary: X-Organization-Id no es un UUID válido (400).
+      value:
+        message: "El identificador de organización no es un UUID válido."
+        code: organization_invalid
+    OrganizationAccessDenied:
+      summary: Sin acceso a la organización indicada (403).
+      value:
+        message: "No tienes acceso a la organización indicada."
+        code: organization_access_denied
+    OrganizationNotTenant:
+      summary: La organización indicada no es de tipo cliente (403).
+      value:
+        message: "No tienes acceso a la organización indicada."
+        code: organization_not_tenant
+    ForbiddenPolicy:
+      summary: Permiso insuficiente, fuera del catálogo (403).
+      value:
+        message: "This action is unauthorized."
+    ServiceUnavailableExample:
+      summary: Servicio no disponible, fuera del catálogo (503).
+      value:
+        message: "Servicio temporalmente no disponible."
+
   responses:
     UnauthorizedError:
       description: No autenticado. Token de acceso ausente, inválido o revocado.
@@ -2937,106 +5887,137 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
           examples:
-            tokenAusente:
-              summary: Sin cabecera Authorization
-              value:
-                message: "No autenticado. Token de acceso ausente."
-            tokenInvalido:
-              summary: Token inexistente o revocado
-              value:
-                message: "No autenticado. Token de acceso inválido."
+            unauthenticated:
+              $ref: '#/components/examples/Unauthenticated'
     InvalidCredentialsError:
       description: El email no existe o la contraseña es incorrecta.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-          example:
-            message: "Las credenciales proporcionadas son incorrectas."
+          examples:
+            invalidCredentials:
+              $ref: '#/components/examples/InvalidCredentials'
     InactiveUserError:
       description: Credenciales válidas, pero el usuario tiene `status = false`.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-          example:
-            message: "El usuario está inactivo. Contacte al administrador."
-    AccessDeniedError:
-      description: |
-        Acceso denegado por el estado del usuario o de su organización.
-        El usuario debe existir, estar activo y pertenecer a una organización
-        existente y activa.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
           examples:
-            usuarioInactivo:
-              value:
-                message: "El usuario está inactivo. Contacte al administrador."
-            organizacionInactiva:
-              value:
-                message: "La organización está inactiva. Contacte al administrador."
-            organizacionInexistente:
-              value:
-                message: "La organización del usuario no existe."
-            sinOrganizacion:
-              value:
-                message: "El usuario no tiene una organización asignada."
-    ForbiddenError:
-      description: Prohibido. No tienes permiso para realizar esta acción.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-          example:
-            message: "This action is unauthorized."
-    NotFoundError:
-      description: Recurso no encontrado.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-          example:
-            message: "Recurso no encontrado."
+            userInactive:
+              $ref: '#/components/examples/UserInactive'
     ValidationError:
       description: Error de validación en los datos enviados.
       content:
         application/json:
           schema:
-            type: object
-            properties:
-              message:
-                type: string
-                example: "Los datos proporcionados no son válidos."
-              errors:
-                type: object
-                additionalProperties:
-                  type: array
-                  items:
-                    type: string
-                example:
-                  code: ["El código PLN-01 ya ha sido registrado."]
+            $ref: '#/components/schemas/Error'
+          examples:
+            validationFailed:
+              $ref: '#/components/examples/ValidationFailed'
     TooManyRequests:
       description: |
-        Límite de peticiones excedido. La respuesta actual del backend no
-        incluye `Retry-After` ni `X-RateLimit-*`: el cliente debe aplicar su
-        propio backoff. En `POST /auth/login` el límite es de 5 intentos por
-        minuto.
+        Límite de peticiones excedido. Incluye Retry-After (segundos hasta
+        poder reintentar) y X-RateLimit-*. En `POST /auth/login` el límite es
+        de 5 intentos por minuto.
+      headers:
+        Retry-After:
+          description: Segundos que el cliente debe esperar antes de reintentar.
+          schema:
+            type: integer
+            example: 60
+        X-RateLimit-Limit:
+          $ref: '#/components/headers/RateLimitLimit'
+        X-RateLimit-Remaining:
+          $ref: '#/components/headers/RateLimitRemaining'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-          example:
-            message: "Too Many Attempts."
+          examples:
+            tooManyAttempts:
+              $ref: '#/components/examples/TooManyAttempts'
+    NotFoundError:
+      description: Recurso no encontrado (inexistente o de otra organización).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            notFound:
+              $ref: '#/components/examples/NotFound'
+    CrossTenantError:
+      description: |
+        La operación intenta leer o escribir datos de otra organización.
+        Dos textos posibles: escritura directa y referencia de FK.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            crossTenantWrite:
+              $ref: '#/components/examples/CrossTenantWrite'
+            crossTenantRelation:
+              $ref: '#/components/examples/CrossTenantRelation'
+    OrganizationRequiredError:
+      description: Falta la cabecera X-Organization-Id en una ruta de dominio.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            organizationRequired:
+              $ref: '#/components/examples/OrganizationRequired'
+    OrganizationInvalidError:
+      description: La cabecera X-Organization-Id no es un UUID válido.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            organizationInvalid:
+              $ref: '#/components/examples/OrganizationInvalid'
+    OrganizationAccessDeniedError:
+      description: El usuario no tiene acceso a la organización indicada.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            organizationAccessDenied:
+              $ref: '#/components/examples/OrganizationAccessDenied'
+    OrganizationNotTenantError:
+      description: La organización indicada no es de tipo cliente.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            organizationNotTenant:
+              $ref: '#/components/examples/OrganizationNotTenant'
+    ForbiddenError:
+      description: |
+        Permiso insuficiente (policy). Fuera del catálogo: la respuesta
+        puede no incluir `code`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            forbiddenPolicy:
+              $ref: '#/components/examples/ForbiddenPolicy'
     ServiceUnavailable:
-      description: Servicio temporalmente no disponible. El cliente debe reintentar más tarde.
+      description: |
+        Servicio temporalmente no disponible. Fuera del catálogo: la
+        respuesta puede no incluir `code`.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-          example:
-            message: "Servicio temporalmente no disponible."
+          examples:
+            serviceUnavailable:
+              $ref: '#/components/examples/ServiceUnavailableExample'
 
   schemas:
 
@@ -3134,14 +6115,68 @@ components:
     # Common
     # -------------------------------------------------------------------
 
+    ErrorCode:
+      type: string
+      description: |
+        Código estable de error del catálogo (D-31b, D-31c). Los clientes
+        deben decidir por `code` y nunca por el texto de `message`.
+
+        Presente en todos los errores del catálogo. Las respuestas fuera
+        del catálogo (403 de policies, 405, 500) pueden omitirlo.
+
+        - `unauthenticated` (401): token ausente, inválido o revocado.
+        - `invalid_credentials` (401): login con email o contraseña incorrectos.
+        - `user_inactive` (403): usuario con status = false; se emite en login
+          y al usar el token de un usuario inactivo. Solo se evalúa después
+          de validar la contraseña.
+        - `validation_failed` (422): error de validación; el sobre incluye
+          `errors` con el detalle por campo.
+        - `too_many_attempts` (429): límite de intentos excedido; incluye
+          la cabecera Retry-After.
+        - `not_found` (404): recurso inexistente o de otra organización; el
+          mensaje no distingue el caso.
+        - `cross_tenant_operation` (422): operación sobre datos de otra
+          organización; tiene dos textos posibles.
+        - `organization_required` (400): falta la cabecera X-Organization-Id.
+        - `organization_invalid` (400): X-Organization-Id no es un UUID válido.
+        - `organization_access_denied` (403): sin acceso a la organización
+          indicada (inexistente, eliminada, inactiva o sin membresía activa).
+        - `organization_not_tenant` (403): la organización indicada no es de
+          tipo cliente.
+
+        Regla transversal: el mismo código produce siempre el mismo estado
+        HTTP y el mismo texto de message en toda la API.
+      enum:
+        - unauthenticated
+        - invalid_credentials
+        - user_inactive
+        - validation_failed
+        - too_many_attempts
+        - not_found
+        - cross_tenant_operation
+        - organization_required
+        - organization_invalid
+        - organization_access_denied
+        - organization_not_tenant
+
     Error:
       type: object
+      description: |
+        Sobre de error uniforme: `{ message, code, errors? }`. `code`
+        identifica el error de forma estable (ver ErrorCode); `message` es
+        solo informativo. `errors` solo aparece con `validation_failed`.
+      required:
+        - message
       properties:
         message:
           type: string
+          description: Texto humano del error. No usarlo para lógica de cliente.
           example: "Mensaje de error."
+        code:
+          $ref: '#/components/schemas/ErrorCode'
         errors:
           type: object
+          description: Solo presente con code validation_failed. Detalle por campo.
           additionalProperties:
             type: array
             items:
