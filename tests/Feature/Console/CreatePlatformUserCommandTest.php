@@ -432,6 +432,27 @@ class CreatePlatformUserCommandTest extends TestCase
         $this->assertFalse(User::where('email', 'race@test.com')->exists());
     }
 
+    public function test_password_no_aparece_en_salida_caso_exitoso(): void
+    {
+        $this->makeOperator();
+
+        $subclass = new class extends CreatePlatformUserCommand
+        {
+            protected function readPasswordFromStdin(): ?string
+            {
+                return 'Secret12345678!';
+            }
+        };
+
+        $subclass->setLaravel($this->app);
+        $input = new StringInput('--email=safe@test.com --name=Safe --password-stdin');
+        $output = new BufferedOutput;
+        $exitCode = $subclass->run($input, $output);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringNotContainsString('Secret12345678!', $output->fetch());
+    }
+
     public function test_password_no_aparece_en_salida_ni_auditoria_en_rechazo(): void
     {
         $this->makeOperator();
