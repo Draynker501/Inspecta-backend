@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Console;
 
+use App\Console\Commands\CreatePlatformUserCommand;
 use App\Models\AuditLog;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
@@ -94,8 +95,6 @@ class CreatePlatformUserCommandTest extends TestCase
             '--email' => 'plat3@test.com',
             '--name' => 'Plat 3',
         ])
-            ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
-            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
             ->expectsOutputToContain('no existe')
             ->assertExitCode(1);
     }
@@ -224,8 +223,6 @@ class CreatePlatformUserCommandTest extends TestCase
             '--email' => 'second@test.com',
             '--name' => 'Second',
         ])
-            ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
-            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
             ->expectsOutputToContain('Ya existe un usuario de plataforma')
             ->assertExitCode(1);
 
@@ -312,5 +309,153 @@ class CreatePlatformUserCommandTest extends TestCase
             ->assertExitCode(1);
 
         $this->assertSame(0, AuditLog::where('action', 'platform_user.created')->count());
+    }
+
+    public function test_password_stdin_vacia(): void
+    {
+        $this->makeOperator();
+
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => 'stdinempty@test.com',
+            '--name' => 'StdinEmpty',
+            '--password-stdin' => true,
+        ])
+            ->expectsOutputToContain('vacía')
+            ->assertExitCode(1);
+
+        $this->assertFalse(User::where('email', 'stdinempty@test.com')->exists());
+    }
+
+    public function test_tres_reintentos_interactivos_abortan(): void
+    {
+        $this->makeOperator();
+
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => 'retry@test.com',
+            '--name' => 'Retry',
+        ])
+            ->expectsQuestion('Contraseña', 'short')
+            ->expectsQuestion('Confirmar contraseña', 'short')
+            ->expectsQuestion('Contraseña', 'short')
+            ->expectsQuestion('Confirmar contraseña', 'short')
+            ->expectsQuestion('Contraseña', 'short')
+            ->expectsQuestion('Confirmar contraseña', 'short')
+            ->expectsOutputToContain('intentos')
+            ->assertExitCode(1);
+
+        $this->assertFalse(User::where('email', 'retry@test.com')->exists());
+    }
+
+    public function test_si_existe_plataforma_no_pide_contrasena_interactivo(): void
+    {
+        $this->makeOperator();
+        $this->createPlatformUser('first@test.com');
+
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => 'second@test.com',
+            '--name' => 'Second',
+        ])
+            ->expectsOutputToContain('Ya existe un usuario de plataforma')
+            ->assertExitCode(1);
+    }
+
+    public function test_si_existe_plataforma_no_consume_stdin(): void
+    {
+        $this->makeOperator();
+        $this->createPlatformUser('first2@test.com');
+
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => 'second2@test.com',
+            '--name' => 'Second2',
+            '--password-stdin' => true,
+        ])
+            ->expectsOutputToContain('Ya existe un usuario de plataforma')
+            ->assertExitCode(1);
+
+        $this->assertFalse(User::where('email', 'second2@test.com')->exists());
+    }
+
+    public function test_comprobacion_dentro_de_transaccion_protege(): void
+    {
+        $this->makeOperator();
+
+        // La comprobación previa pasa (false), pero la del interior falla
+        // (true), simulando un usuario creado entre ambas.
+        CreatePlatformUserCommand::$platformUserExistsOverride = static function (): bool {
+            static $calls = 0;
+            $calls++;
+
+            return $calls >= 2;
+        };
+
+        try {
+            $this->artisan('inspecta:create-platform-user', [
+                '--email' => 'race@test.com',
+                '--name' => 'Race',
+            ])
+                ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
+                ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
+                ->expectsOutputToContain('Ya existe un usuario de plataforma')
+                ->assertExitCode(1);
+        } finally {
+            CreatePlatformUserCommand::$platformUserExistsOverride = null;
+        }
+
+        $this->assertFalse(User::where('email', 'race@test.com')->exists());
+    }
+
+    protected function tearDown(): void
+    {
+        CreatePlatformUserCommand::$platformUserExistsOverride = null;
+        CreatePlatformUserCommand::$stdinPasswordOverride = null;
+        parent::tearDown();
+    }
+
+    public function test_password_stdin_corta(): void
+    {
+        $this->makeOperator();
+        CreatePlatformUserCommand::$stdinPasswordOverride = 'short';
+
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => 'stdinshort@test.com',
+            '--name' => 'StdinShort',
+            '--password-stdin' => true,
+        ])
+            ->expectsOutputToContain('al menos')
+            ->assertExitCode(1);
+
+        $this->assertFalse(User::where('email', 'stdinshort@test.com')->exists());
+    }
+
+    public function test_password_stdin_vacia_hook(): void
+    {
+        $this->makeOperator();
+        CreatePlatformUserCommand::$stdinPasswordOverride = '';
+
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => 'stdinempty2@test.com',
+            '--name' => 'StdinEmpty2',
+            '--password-stdin' => true,
+        ])
+            ->expectsOutputToContain('vacía')
+            ->assertExitCode(1);
+
+        $this->assertFalse(User::where('email', 'stdinempty2@test.com')->exists());
+    }
+
+    public function test_password_stdin_solo_espacios_hook(): void
+    {
+        $this->makeOperator();
+        CreatePlatformUserCommand::$stdinPasswordOverride = '            ';
+
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => 'stdinspace@test.com',
+            '--name' => 'StdinSpace',
+            '--password-stdin' => true,
+        ])
+            ->expectsOutputToContain('vacía')
+            ->assertExitCode(1);
+
+        $this->assertFalse(User::where('email', 'stdinspace@test.com')->exists());
     }
 }

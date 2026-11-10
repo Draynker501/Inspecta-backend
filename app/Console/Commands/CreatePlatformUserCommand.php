@@ -20,6 +20,22 @@ class CreatePlatformUserCommand extends Command
      */
     public const MIN_PASSWORD_LENGTH = 12;
 
+    /**
+     * Gancho para pruebas: si no es null, se usa como implementación de
+     * platformUserExists() (recibe operador y nombre del rol).
+     *
+     * @var \\Closure|null
+     */
+    public static $platformUserExistsOverride = null;
+
+    /**
+     * Gancho para pruebas: si no es null, readPasswordFromStdin() devuelve
+     * este valor sin leer php://stdin.
+     *
+     * @var string|null
+     */
+    public static $stdinPasswordOverride = null;
+
     protected $signature = 'inspecta:create-platform-user
         {--email= : Email del usuario de plataforma}
         {--name= : Nombre del usuario de plataforma}
@@ -66,18 +82,6 @@ class CreatePlatformUserCommand extends Command
             return self::FAILURE;
         }
 
-        if ((bool) $this->option('password-stdin')) {
-            $password = $this->readPasswordFromStdin();
-            if ($password === null) {
-                return self::FAILURE;
-            }
-        } else {
-            $password = $this->readPasswordInteractively();
-            if ($password === null) {
-                return self::FAILURE;
-            }
-        }
-
         $operator = Organization::query()
             ->where('code', 'INSPECTA-OP')
             ->where('status', true)
@@ -92,6 +96,39 @@ class CreatePlatformUserCommand extends Command
 
         $platformRoleName = (string) config('tenancy.roles.platform_admin');
 
+        // Comprobación previa (optimización de UX): evita pedir la contraseña
+        // si ya existe un usuario de plataforma. La autoridad sigue siendo la
+        // comprobación dentro de la transacción con lockForUpdate.
+        if ($this->platformUserExists($operator, $platformRoleName)) {
+            $this->error('Ya existe un usuario de plataforma. No se realizaron cambios.');
+
+            return self::FAILURE;
+        }
+
+        if ((bool) $this->option('password-stdin')) {
+            $password = $this->readPasswordFromStdin();
+            if ($password === null) {
+                return self::FAILURE;
+            }
+        } else {
+            $password = $this->readPasswordInteractively();
+            if ($password === null) {
+                return self::FAILURE;
+            }
+        }
+
+        if (! is_string($password) || trim($password) === '') {
+            $this->error('La contraseña no puede estar vacía ni contener solo espacios.');
+
+            return self::FAILURE;
+        }
+
+        if (strlen($password) < self::MIN_PASSWORD_LENGTH) {
+            $this->error('La contraseña debe tener al menos '.self::MIN_PASSWORD_LENGTH.' caracteres.');
+
+            return self::FAILURE;
+        }
+
         try {
             DB::transaction(function () use ($email, $name, $password, $operator, $platformRoleName): void {
                 // Bloqueo de la fila de la operadora para serializar ejecuciones
@@ -105,18 +142,7 @@ class CreatePlatformUserCommand extends Command
                     throw new \RuntimeException('La operadora INSPECTA-OP no existe.');
                 }
 
-                $platformUserExists = User::query()
-                    ->whereHas('memberships', function ($query) use ($operator): void {
-                        $query->where('organization_id', $operator->id)
-                            ->where('status', OrganizationMembership::STATUS_ACTIVE);
-                    })
-                    ->whereHas('roles', function ($query) use ($operator, $platformRoleName): void {
-                        $query->where('roles.organization_id', $operator->id)
-                            ->where('roles.name', $platformRoleName);
-                    })
-                    ->exists();
-
-                if ($platformUserExists) {
+                if ($this->platformUserExists($operator, $platformRoleName)) {
                     throw new \RuntimeException('Ya existe un usuario de plataforma. No se realizaron cambios.');
                 }
 
@@ -183,6 +209,29 @@ class CreatePlatformUserCommand extends Command
         return self::SUCCESS;
     }
 
+    /**
+     * Indica si ya existe un usuario de plataforma (membresía activa en la
+     * operadora + rol de plataforma). Centralizado para permitir pruebas del
+     * flujo de comprobación dentro de la transacción.
+     */
+    protected function platformUserExists(Organization $operator, string $platformRoleName): bool
+    {
+        if (self::$platformUserExistsOverride !== null) {
+            return (bool) (self::$platformUserExistsOverride)($operator, $platformRoleName);
+        }
+
+        return User::query()
+            ->whereHas('memberships', function ($query) use ($operator): void {
+                $query->where('organization_id', $operator->id)
+                    ->where('status', OrganizationMembership::STATUS_ACTIVE);
+            })
+            ->whereHas('roles', function ($query) use ($operator, $platformRoleName): void {
+                $query->where('roles.organization_id', $operator->id)
+                    ->where('roles.name', $platformRoleName);
+            })
+            ->exists();
+    }
+
     private function isInteractive(): bool
     {
         return (bool) ($this->input?->isInteractive() ?? false);
@@ -227,6 +276,13 @@ class CreatePlatformUserCommand extends Command
 
     private function readPasswordFromStdin(): ?string
     {
+        if (self::$stdinPasswordOverride !== null) {
+            $value = self::$stdinPasswordOverride;
+            self::$stdinPasswordOverride = null;
+
+            return $value;
+        }
+
         $raw = stream_get_contents(STDIN);
 
         if ($raw === false) {
@@ -248,18 +304,6 @@ class CreatePlatformUserCommand extends Command
             $password = rtrim($parts[0], "\r");
             $confirmation = rtrim($parts[1] ?? '', "\r");
 
-            if (trim($password) === '') {
-                $this->error('La contraseña no puede estar vacía ni contener solo espacios.');
-
-                return null;
-            }
-
-            if (strlen($password) < self::MIN_PASSWORD_LENGTH) {
-                $this->error('La contraseña debe tener al menos '.self::MIN_PASSWORD_LENGTH.' caracteres.');
-
-                return null;
-            }
-
             if ($password !== $confirmation) {
                 $this->error('Las contraseñas no coinciden.');
 
@@ -269,20 +313,6 @@ class CreatePlatformUserCommand extends Command
             return $password;
         }
 
-        $password = $raw;
-
-        if (trim($password) === '') {
-            $this->error('La contraseña no puede estar vacía ni contener solo espacios.');
-
-            return null;
-        }
-
-        if (strlen($password) < self::MIN_PASSWORD_LENGTH) {
-            $this->error('La contraseña debe tener al menos '.self::MIN_PASSWORD_LENGTH.' caracteres.');
-
-            return null;
-        }
-
-        return $password;
+        return $raw;
     }
 }

@@ -5,7 +5,7 @@
 **Rama:** `docs/cierre-m1-5` (basada en `origin/master`)
 **HEAD:** `3edf5cb2506780f918de9af84a5dd8f6e7c96bcc` (merge de P5.5c, PR #19)
 **Sincronizada con origin/master:** sí
-**Pruebas (VERIFICADO):** SQLite 320 pruebas, 314 aprobadas, 6 omitidas, 974 aserciones, 0 fallos; MariaDB 11.8 320 pruebas, 315 aprobadas, 5 omitidas, 1002 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-10).
+**Pruebas (VERIFICADO):** SQLite 328 pruebas, 322 aprobadas, 6 omitidas, 1007 aserciones, 0 fallos; MariaDB 11.8 328 pruebas, 323 aprobadas, 5 omitidas, 1035 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-10).
 **Migraciones:** 44.
 **Composer:** `composer validate --no-check-publish` válido. `composer audit`: 0 advisories. `require.php = ^8.4`.
 **Pint:** `vendor/bin/pint --test` en verde (0 diferencias) con `database/migrations` excluido permanentemente.
@@ -53,7 +53,7 @@
 - **Identidad global:** `User` sin `BelongsToOrganization`, `organization_id` fuera de Fillable. Pertenencia solo por `organization_memberships`.
 - **Organizaciones:** `GET /api/auth/organizations` lista clientes activos del usuario (sin tenant).
 - **Platform operator:** `PlatformOperatorPolicy` + `User::isPlatformOperator()`/`hasPlatformRole()` (membresía activa en operadora única).
-- **Comando de consola:** `inspecta:create-platform-user` crea el primer usuario de plataforma en producción (D-38), con membresía activa, rol y auditoría redactada.
+- **Comando de consola:** `inspecta:create-platform-user` crea el primer usuario de plataforma en producción (D-38), con membresía activa, rol y auditoría redactada. Uso recomendado en producción (evita dejar la contraseña en el historial de la shell): `read -rs PASS && printf '%s' "$PASS" | php artisan inspecta:create-platform-user --email=... --name=... --password-stdin; unset PASS`.
 - **Auditoría:** `AuditLog` append-only (excepción dedicada), `AuditLogger` con contexto obligatorio y redacción; auditoría de asignaciones de rol/planta/área.
 - **Modo estricto:** `OrganizationScope` lanza `MissingTenantContextException` en HTTP sin contexto cuando `strict_mode=true` (default); consola y `withoutTenant()` exentos; workers de cola no exentos; flag HTTP `TENANCY_STRICT_MODE`.
 - **Seeders:** 2 clientes (INSP-01, ORG-02) + operadora INSPECTA-OP; catálogo por organización; consultor de plataforma con membresía en operadora y clientes. Contraseñas fijas solo en local/testing.
@@ -91,7 +91,7 @@ D-20 y D-21 del checklist del 2-nov (unicidad organizacional / identidad global)
 
 ## 5. Validaciones actuales
 
-- Suite: 320 pruebas, 0 fallos (SQLite y MariaDB).
+- Suite: 328 pruebas, 0 fallos (SQLite y MariaDB).
 - `composer validate --no-check-publish`: válido.
 - `composer audit`: 0 advisories.
 - `vendor/bin/pint --test`: en verde (0 diferencias).
@@ -129,7 +129,7 @@ D-20 y D-21 del checklist del 2-nov (unicidad organizacional / identidad global)
 ## 8. Cómo retomar
 
 1. Rama `docs/cierre-m1-5`, HEAD basado en `3edf5cb` (origin/master, incluye P5.5c).
-2. Suite medida: 320 pruebas, 0 fallos en SQLite y MariaDB.
+2. Suite medida: 328 pruebas, 0 fallos en SQLite y MariaDB.
 3. Leer este `ESTADO.md` y el [informe de cierre](../12-informe-cierre-m1-5.md) antes de empezar.
 4. Próximo bloque: aprobación formal del cierre de M1.5 (acta en `docs/M1.5/13-acta-aprobacion-m2.md`) y, tras ella, M2.
 
