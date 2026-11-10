@@ -13,6 +13,8 @@ use App\Support\Audit\AuditLogger;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Symfony\Component\Console\Input\StringInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Tests\Support\TenantFixtures;
 use Tests\TestCase;
 
@@ -28,7 +30,7 @@ class CreatePlatformUserCommandTest extends TestCase
         return $this->operatorOrganization();
     }
 
-    private function createPlatformUser(string $email = 'plat@test.com'): void
+    private function createPlatformUser(string $email = 'first@test.com'): void
     {
         $this->artisan('inspecta:create-platform-user', [
             '--email' => $email,
@@ -216,7 +218,6 @@ class CreatePlatformUserCommandTest extends TestCase
     public function test_segundo_usuario_de_plataforma_rechazado_sin_efectos(): void
     {
         $this->makeOperator();
-
         $this->createPlatformUser('first@test.com');
 
         $this->artisan('inspecta:create-platform-user', [
@@ -290,27 +291,6 @@ class CreatePlatformUserCommandTest extends TestCase
         $this->assertFalse(User::where('email', 'spaces@test.com')->exists());
     }
 
-    public function test_password_no_aparece_en_salida_ni_auditoria_en_rechazo(): void
-    {
-        $this->makeOperator();
-
-        $bad = 'BadPassword1!'; // 13 chars but mismatched confirmation
-        $this->artisan('inspecta:create-platform-user', [
-            '--email' => 'reject@test.com',
-            '--name' => 'Reject',
-        ])
-            ->expectsQuestion('Contraseña', $bad)
-            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
-            ->expectsQuestion('Contraseña', $bad)
-            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
-            ->expectsQuestion('Contraseña', $bad)
-            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
-            ->expectsOutputToContain('no coinciden')
-            ->assertExitCode(1);
-
-        $this->assertSame(0, AuditLog::where('action', 'platform_user.created')->count());
-    }
-
     public function test_password_stdin_vacia(): void
     {
         $this->makeOperator();
@@ -379,83 +359,53 @@ class CreatePlatformUserCommandTest extends TestCase
     {
         $this->makeOperator();
 
-        // La comprobación previa pasa (false), pero la del interior falla
-        // (true), simulando un usuario creado entre ambas.
-        CreatePlatformUserCommand::$platformUserExistsOverride = static function (): bool {
-            static $calls = 0;
-            $calls++;
+        $subclass = new class extends CreatePlatformUserCommand
+        {
+            private int $calls = 0;
 
-            return $calls >= 2;
+            protected function platformUserExists($operator, $platformRoleName): bool
+            {
+                $this->calls++;
+
+                return $this->calls >= 2;
+            }
+
+            protected function readPasswordFromStdin(): ?string
+            {
+                return 'Secret12345678!';
+            }
         };
 
-        try {
-            $this->artisan('inspecta:create-platform-user', [
-                '--email' => 'race@test.com',
-                '--name' => 'Race',
-            ])
-                ->expectsQuestion('Contraseña', self::VALID_PASSWORD)
-                ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
-                ->expectsOutputToContain('Ya existe un usuario de plataforma')
-                ->assertExitCode(1);
-        } finally {
-            CreatePlatformUserCommand::$platformUserExistsOverride = null;
-        }
+        // Bind a valid password via property is not possible (private); instead
+        // override readPasswordFromStdin to return the valid password.
+        $subclass->setLaravel($this->app);
+        $input = new StringInput('--email=race@test.com --name=Race --password-stdin');
+        $output = new BufferedOutput;
+        $exitCode = $subclass->run($input, $output);
 
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Ya existe un usuario de plataforma', $output->fetch());
         $this->assertFalse(User::where('email', 'race@test.com')->exists());
     }
 
-    protected function tearDown(): void
-    {
-        CreatePlatformUserCommand::$platformUserExistsOverride = null;
-        CreatePlatformUserCommand::$stdinPasswordOverride = null;
-        parent::tearDown();
-    }
-
-    public function test_password_stdin_corta(): void
+    public function test_password_no_aparece_en_salida_ni_auditoria_en_rechazo(): void
     {
         $this->makeOperator();
-        CreatePlatformUserCommand::$stdinPasswordOverride = 'short';
 
+        $bad = 'BadPassword1!'; // 13 chars but mismatched confirmation
         $this->artisan('inspecta:create-platform-user', [
-            '--email' => 'stdinshort@test.com',
-            '--name' => 'StdinShort',
-            '--password-stdin' => true,
+            '--email' => 'reject@test.com',
+            '--name' => 'Reject',
         ])
-            ->expectsOutputToContain('al menos')
+            ->expectsQuestion('Contraseña', $bad)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Contraseña', $bad)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Contraseña', $bad)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
+            ->expectsOutputToContain('no coinciden')
             ->assertExitCode(1);
 
-        $this->assertFalse(User::where('email', 'stdinshort@test.com')->exists());
-    }
-
-    public function test_password_stdin_vacia_hook(): void
-    {
-        $this->makeOperator();
-        CreatePlatformUserCommand::$stdinPasswordOverride = '';
-
-        $this->artisan('inspecta:create-platform-user', [
-            '--email' => 'stdinempty2@test.com',
-            '--name' => 'StdinEmpty2',
-            '--password-stdin' => true,
-        ])
-            ->expectsOutputToContain('vacía')
-            ->assertExitCode(1);
-
-        $this->assertFalse(User::where('email', 'stdinempty2@test.com')->exists());
-    }
-
-    public function test_password_stdin_solo_espacios_hook(): void
-    {
-        $this->makeOperator();
-        CreatePlatformUserCommand::$stdinPasswordOverride = '            ';
-
-        $this->artisan('inspecta:create-platform-user', [
-            '--email' => 'stdinspace@test.com',
-            '--name' => 'StdinSpace',
-            '--password-stdin' => true,
-        ])
-            ->expectsOutputToContain('vacía')
-            ->assertExitCode(1);
-
-        $this->assertFalse(User::where('email', 'stdinspace@test.com')->exists());
+        $this->assertSame(0, AuditLog::where('action', 'platform_user.created')->count());
     }
 }

@@ -20,22 +20,6 @@ class CreatePlatformUserCommand extends Command
      */
     public const MIN_PASSWORD_LENGTH = 12;
 
-    /**
-     * Gancho para pruebas: si no es null, se usa como implementación de
-     * platformUserExists() (recibe operador y nombre del rol).
-     *
-     * @var \\Closure|null
-     */
-    public static $platformUserExistsOverride = null;
-
-    /**
-     * Gancho para pruebas: si no es null, readPasswordFromStdin() devuelve
-     * este valor sin leer php://stdin.
-     *
-     * @var string|null
-     */
-    public static $stdinPasswordOverride = null;
-
     protected $signature = 'inspecta:create-platform-user
         {--email= : Email del usuario de plataforma}
         {--name= : Nombre del usuario de plataforma}
@@ -216,10 +200,6 @@ class CreatePlatformUserCommand extends Command
      */
     protected function platformUserExists(Organization $operator, string $platformRoleName): bool
     {
-        if (self::$platformUserExistsOverride !== null) {
-            return (bool) (self::$platformUserExistsOverride)($operator, $platformRoleName);
-        }
-
         return User::query()
             ->whereHas('memberships', function ($query) use ($operator): void {
                 $query->where('organization_id', $operator->id)
@@ -274,15 +254,8 @@ class CreatePlatformUserCommand extends Command
         return null;
     }
 
-    private function readPasswordFromStdin(): ?string
+    protected function readPasswordFromStdin(): ?string
     {
-        if (self::$stdinPasswordOverride !== null) {
-            $value = self::$stdinPasswordOverride;
-            self::$stdinPasswordOverride = null;
-
-            return $value;
-        }
-
         $raw = stream_get_contents(STDIN);
 
         if ($raw === false) {
