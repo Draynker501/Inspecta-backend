@@ -306,6 +306,50 @@ class CreatePlatformUserCommandTest extends TestCase
         $this->assertFalse(User::where('email', 'stdinempty@test.com')->exists());
     }
 
+    public function test_password_stdin_corta(): void
+    {
+        $this->makeOperator();
+
+        $subclass = new class extends CreatePlatformUserCommand
+        {
+            protected function readPasswordFromStdin(): ?string
+            {
+                return 'short';
+            }
+        };
+
+        $subclass->setLaravel($this->app);
+        $input = new StringInput('--email=stdinshort@test.com --name=StdinShort --password-stdin');
+        $output = new BufferedOutput;
+        $exitCode = $subclass->run($input, $output);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('al menos', $output->fetch());
+        $this->assertFalse(User::where('email', 'stdinshort@test.com')->exists());
+    }
+
+    public function test_password_stdin_solo_espacios(): void
+    {
+        $this->makeOperator();
+
+        $subclass = new class extends CreatePlatformUserCommand
+        {
+            protected function readPasswordFromStdin(): ?string
+            {
+                return '            ';
+            }
+        };
+
+        $subclass->setLaravel($this->app);
+        $input = new StringInput('--email=stdinspace@test.com --name=StdinSpace --password-stdin');
+        $output = new BufferedOutput;
+        $exitCode = $subclass->run($input, $output);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('vacía', $output->fetch());
+        $this->assertFalse(User::where('email', 'stdinspace@test.com')->exists());
+    }
+
     public function test_tres_reintentos_interactivos_abortan(): void
     {
         $this->makeOperator();
