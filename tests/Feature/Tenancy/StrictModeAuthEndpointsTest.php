@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Tenancy;
 
+use App\Exceptions\MissingTenantContextException;
 use App\Models\Plant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
@@ -142,7 +143,7 @@ class StrictModeAuthEndpointsTest extends TestCase
 
         $token = $this->user->createToken('t')->plainTextToken;
 
-        $this->expectException(\App\Exceptions\MissingTenantContextException::class);
+        $this->expectException(MissingTenantContextException::class);
 
         $this->withHeader('Authorization', 'Bearer '.$token)
             ->get('/api/strict-probe-no-tenant/plants');

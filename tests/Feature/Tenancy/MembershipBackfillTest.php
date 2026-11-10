@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\Tenancy;
 
+use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Support\Tenancy\MembershipBackfill;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class MembershipBackfillTest extends TestCase
@@ -14,12 +16,12 @@ class MembershipBackfillTest extends TestCase
 
     private function crearUsuarioSinMembresia(string $organizationId): array
     {
-        $id = (string) \Illuminate\Support\Str::uuid7();
+        $id = (string) Str::uuid7();
 
         DB::table('users')->insert([
             'id' => $id,
             'name' => 'Usuario sin membresía',
-            'email' => 'sin-membresia-'.\Illuminate\Support\Str::random(8).'@example.test',
+            'email' => 'sin-membresia-'.Str::random(8).'@example.test',
             'password' => '$2y$10$dummyhashforbackfilltest',
             'organization_id' => $organizationId,
             'status' => true,
@@ -32,7 +34,7 @@ class MembershipBackfillTest extends TestCase
 
     public function test_backfill_crea_membresia_para_usuario_sin_ella(): void
     {
-        $organization = \App\Models\Organization::factory()->create();
+        $organization = Organization::factory()->create();
         $usuario = $this->crearUsuarioSinMembresia($organization->id);
 
         $resultado = MembershipBackfill::run();
@@ -52,7 +54,7 @@ class MembershipBackfillTest extends TestCase
 
     public function test_backfill_es_idempotente_no_duplica(): void
     {
-        $organization = \App\Models\Organization::factory()->create();
+        $organization = Organization::factory()->create();
         $usuario = $this->crearUsuarioSinMembresia($organization->id);
 
         $primero = MembershipBackfill::run();
@@ -72,12 +74,12 @@ class MembershipBackfillTest extends TestCase
 
     public function test_backfill_no_reactiva_membresia_revocada(): void
     {
-        $organization = \App\Models\Organization::factory()->create();
+        $organization = Organization::factory()->create();
         $usuario = $this->crearUsuarioSinMembresia($organization->id);
 
         // Crear membresía revocada directamente en la BD
         DB::table('organization_memberships')->insert([
-            'id' => (string) \Illuminate\Support\Str::uuid7(),
+            'id' => (string) Str::uuid7(),
             'user_id' => $usuario['id'],
             'organization_id' => $organization->id,
             'status' => OrganizationMembership::STATUS_REVOKED,
@@ -102,8 +104,8 @@ class MembershipBackfillTest extends TestCase
 
     public function test_backfill_devuelve_conteo_correcto_con_varios_usuarios(): void
     {
-        $orgA = \App\Models\Organization::factory()->create();
-        $orgB = \App\Models\Organization::factory()->create();
+        $orgA = Organization::factory()->create();
+        $orgB = Organization::factory()->create();
 
         // userA1: sin membresía previa → backfill debe crearla
         $userA1 = $this->crearUsuarioSinMembresia($orgA->id);
@@ -112,7 +114,7 @@ class MembershipBackfillTest extends TestCase
         // userB: con membresía activa previa → backfill ya existente
         $userB = $this->crearUsuarioSinMembresia($orgB->id);
         DB::table('organization_memberships')->insert([
-            'id' => (string) \Illuminate\Support\Str::uuid7(),
+            'id' => (string) Str::uuid7(),
             'user_id' => $userB['id'],
             'organization_id' => $orgB->id,
             'status' => OrganizationMembership::STATUS_ACTIVE,

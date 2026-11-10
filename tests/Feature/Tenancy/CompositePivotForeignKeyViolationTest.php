@@ -3,6 +3,7 @@
 namespace Tests\Feature\Tenancy;
 
 use App\Models\Organization;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -54,7 +55,7 @@ class CompositePivotForeignKeyViolationTest extends TestCase
         DB::table('users')->insert([
             'id' => $userId,
             'name' => 'Usuario Test',
-            'email' => 'test-' . Str::random(8) . '@example.test',
+            'email' => 'test-'.Str::random(8).'@example.test',
             'password' => '$2y$10$dummyhash',
             'organization_id' => $organizationId,
             'status' => true,
@@ -88,7 +89,7 @@ class CompositePivotForeignKeyViolationTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /* user_roles                                                         */
+    /* user_roles */
     /* ------------------------------------------------------------------ */
 
     public function test_user_roles_rechaza_usuario_sin_membresia_en_organizacion_b(): void
@@ -121,7 +122,7 @@ class CompositePivotForeignKeyViolationTest extends TestCase
                 'updated_at' => now(),
             ]);
             $this->fail('Se esperaba QueryException por FK de membresía.');
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             // Esperado: la FK de membresía rechaza la inserción.
         }
 
@@ -158,7 +159,7 @@ class CompositePivotForeignKeyViolationTest extends TestCase
                 'updated_at' => now(),
             ]);
             $this->fail('Se esperaba QueryException por FK de recurso.');
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             // Esperado: la FK de recurso rechaza la inserción.
         }
 
@@ -199,7 +200,7 @@ class CompositePivotForeignKeyViolationTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /* user_plants                                                        */
+    /* user_plants */
     /* ------------------------------------------------------------------ */
 
     public function test_user_plants_rechaza_usuario_sin_membresia_en_organizacion_b(): void
@@ -234,7 +235,7 @@ class CompositePivotForeignKeyViolationTest extends TestCase
                 'updated_at' => now(),
             ]);
             $this->fail('Se esperaba QueryException por FK de membresía.');
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             // Esperado.
         }
 
@@ -273,7 +274,7 @@ class CompositePivotForeignKeyViolationTest extends TestCase
                 'updated_at' => now(),
             ]);
             $this->fail('Se esperaba QueryException por FK de recurso.');
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             // Esperado.
         }
 
@@ -316,7 +317,7 @@ class CompositePivotForeignKeyViolationTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /* user_areas                                                         */
+    /* user_areas */
     /* ------------------------------------------------------------------ */
 
     public function test_user_areas_rechaza_usuario_sin_membresia_en_organizacion_b(): void
@@ -365,7 +366,7 @@ class CompositePivotForeignKeyViolationTest extends TestCase
                 'updated_at' => now(),
             ]);
             $this->fail('Se esperaba QueryException por FK de membresía.');
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             // Esperado.
         }
 
@@ -418,7 +419,7 @@ class CompositePivotForeignKeyViolationTest extends TestCase
                 'updated_at' => now(),
             ]);
             $this->fail('Se esperaba QueryException por FK de recurso.');
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             // Esperado.
         }
 
@@ -475,7 +476,7 @@ class CompositePivotForeignKeyViolationTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /* RESTRICT y estado de membresía                                     */
+    /* RESTRICT y estado de membresía */
     /* ------------------------------------------------------------------ */
 
     public function test_eliminar_membership_con_pivote_lanza_query_exception_restrict(): void
@@ -509,7 +510,7 @@ class CompositePivotForeignKeyViolationTest extends TestCase
             ->where('organization_id', $orgA['id'])
             ->value('id');
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
         DB::table('organization_memberships')->where('id', $membershipId)->delete();
     }
 
