@@ -344,6 +344,36 @@ class PermissionAuthorizationTest extends TestCase
         ]);
     }
 
+    public function test_cache_refleja_actualizacion_de_role_id_misma_instancia(): void
+    {
+        $org = $this->clientOrganization('ORG-A');
+        $roleConPermiso = $this->role($org, 'Administrador');
+        $roleSinPermiso = $this->role($org, 'Supervisor');
+        $user = $this->user($org);
+
+        app(TenantContext::class)->set($org->id);
+        $user->assignRole($roleConPermiso);
+
+        RolePermission::create([
+            'role_id' => $roleConPermiso->id,
+            'organization_id' => $org->id,
+            'permission' => Permission::PlantsView->value,
+        ]);
+
+        app(TenantContext::class)->set($org->id);
+        $this->assertTrue($user->hasPermission(Permission::PlantsView));
+
+        // Actualizar role_id del UserRole (evento updated invalida la caché).
+        $ur = UserRole::where('user_id', $user->id)
+            ->where('role_id', $roleConPermiso->id)
+            ->where('organization_id', $org->id)
+            ->first();
+        $ur->role_id = $roleSinPermiso->id;
+        $ur->save();
+
+        $this->assertFalse($user->hasPermission(Permission::PlantsView));
+    }
+
     public function test_cache_no_persiste_entre_peticiones_simuladas(): void
     {
         $org = $this->clientOrganization('ORG-A');
