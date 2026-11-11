@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\DB;
 
 class ChecklistSectionController extends Controller
 {
@@ -16,7 +17,7 @@ class ChecklistSectionController extends Controller
      * GET /api/versions/{versionId}/sections
      * Lista las secciones de una versión.
      */
-    public function index(Request $request,string $versionId): JsonResponse 
+    public function index(Request $request, string $versionId): JsonResponse
     {
         $version = ChecklistVersion::findOrFail($versionId);
 
@@ -45,30 +46,35 @@ class ChecklistSectionController extends Controller
      * POST /api/versions/{versionId}/sections
      * Crea una sección dentro de una versión en borrador.
      */
-    public function store(Request $request,string $versionId,TenantContext $tenantContext): JsonResponse 
+
+    public function store(Request $request, string $versionId, TenantContext $tenantContext): JsonResponse
     {
-        $version = ChecklistVersion::findOrFail($versionId);
-
-        if ($version->status !== 'draft') {
-            throw ValidationException::withMessages([
-                'version' => 'Solo se pueden agregar secciones a versiones en borrador.',
-            ]);
-        }
-
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'description' => ['sometimes', 'nullable', 'string', 'max:65535'],
             'display_order' => ['sometimes', 'integer', 'min:0'],
         ]);
 
-        $section = ChecklistSection::create([
-            'id' => (string) Str::uuid(),
-            'checklist_version_id' => $version->id,
-            'organization_id' => $tenantContext->requireId(),
-            'name' => $validated['name'],
-            'description' => $validated['description'] ?? null,
-            'display_order' => $validated['display_order'] ?? 0,
-        ]);
+        $section = DB::transaction(function () use ($versionId, $validated, $tenantContext) {
+            // Bloquear la versión mientras se crea la sección.
+            $version = ChecklistVersion::query()
+                ->lockForUpdate()
+                ->findOrFail($versionId);
+
+            // Verificar que todavía permita modificaciones.
+            $this->ensureDraft($version);
+
+            $section = ChecklistSection::create([
+                'id' => (string) Str::uuid(),
+                'checklist_version_id' => $version->id,
+                'organization_id' => $tenantContext->requireId(),
+                'name' => $validated['name'],
+                'description' => $validated['description'] ?? null,
+                'display_order' => $validated['display_order'] ?? 0,
+            ]);
+
+            return $section;
+        });
 
         return response()->json([
             'data' => $section,
@@ -92,26 +98,45 @@ class ChecklistSectionController extends Controller
      * PUT /api/sections/{id}
      * Actualiza una sección de una versión en borrador.
      */
-    public function update(Request $request,string $id): JsonResponse 
+
+    public function update(Request $request, string $id): JsonResponse
     {
-        $section = ChecklistSection::findOrFail($id);
-
-        if ($section->checklistVersion->status !== 'draft') {
-            throw ValidationException::withMessages([
-                'version' => 'Solo se pueden modificar secciones de versiones en borrador.',
-            ]);
-        }
-
         $validated = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:150'],
             'description' => ['sometimes', 'nullable', 'string', 'max:65535'],
             'display_order' => ['sometimes', 'integer', 'min:0'],
         ]);
 
-        $section->update($validated);
+        $section = DB::transaction(function () use ($id, $validated) {
+            // Buscar la sección que se desea modificar.
+            $section = ChecklistSection::findOrFail($id);
+
+            // Bloquear la versión a la que pertenece.
+            $version = ChecklistVersion::query()
+                ->lockForUpdate()
+                ->findOrFail($section->checklist_version_id);
+
+            // Solo se permiten cambios en versiones draft.
+            $this->ensureDraft($version);
+
+            // Actualizar la sección.
+            $section->update($validated);
+
+            return $section->refresh();
+        });
 
         return response()->json([
-            'data' => $section->refresh(),
+            'data' => $section,
         ]);
+    }
+
+
+    private function ensureDraft(ChecklistVersion $version): void 
+    {
+        if ($version->status !== 'draft') {
+            throw ValidationException::withMessages([
+                'version' => 'Solo se pueden modificar secciones de versiones en borrador.',
+            ]);
+        }
     }
 }
