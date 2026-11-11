@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\UserArea;
 use Illuminate\Http\Request;
 
-class UserAreaController extends Controller
+class UserAreaController extends TenantController
 {
     /**
      * Display a listing of the resource.

@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\InspectionAnswer;
 use Illuminate\Http\Request;
 
-class InspectionAnswerController extends Controller
+class InspectionAnswerController extends TenantController
 {
     /**
      * Display a listing of the resource.

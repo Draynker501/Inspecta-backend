@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ProductionLine;
 use Illuminate\Http\Request;
 
-class ProductionLineController extends Controller
+class ProductionLineController extends TenantController
 {
     /**
      * Display a listing of the resource.
