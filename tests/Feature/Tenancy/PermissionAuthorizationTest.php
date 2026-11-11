@@ -11,6 +11,7 @@ use App\Models\UserRole;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Tests\Support\TenantFixtures;
@@ -389,11 +390,17 @@ class PermissionAuthorizationTest extends TestCase
         app(TenantContext::class)->set($org->id);
         $this->assertTrue($user->hasPermission(Permission::PlantsView));
 
+        // Revocar el permiso directamente (sin eventos) entre peticiones.
+        DB::table('role_permissions')
+            ->where('role_id', $role->id)
+            ->where('organization_id', $org->id)
+            ->delete();
+
         // ResetTenantContext limpia la caché al final de la petición.
         app(TenantContext::class)->clear();
 
-        // Segunda petición simulada: la caché se recarga.
+        // Segunda petición simulada: la caché se recarga (permiso revocado).
         app(TenantContext::class)->set($org->id);
-        $this->assertTrue($user->hasPermission(Permission::PlantsView));
+        $this->assertFalse($user->hasPermission(Permission::PlantsView));
     }
 }
