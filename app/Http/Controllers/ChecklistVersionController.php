@@ -92,7 +92,7 @@ class ChecklistVersionController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update( Request $request,string $id,string $versionId): JsonResponse 
+    public function update(Request $request, string $id, string $versionId): JsonResponse
     {
         $checklist = Checklist::findOrFail($id);
 
@@ -125,7 +125,7 @@ class ChecklistVersionController extends Controller
         ]);
     }
 
-    public function updateStatus(Request $request,string $id,string $versionId): JsonResponse 
+    public function updateStatus(Request $request, string $id, string $versionId): JsonResponse
     {
         $validated = $request->validate([
             'status' => [
@@ -134,17 +134,14 @@ class ChecklistVersionController extends Controller
             ],
         ]);
 
-        $version = DB::transaction(function () use (
-            $id,
-            $versionId,
-            $validated
-        ) {
+        $version = DB::transaction(function () use ($id, $versionId, $validated) {
             // Bloqueamos el checklist para serializarlas publicaciones de sus versiones.
             $checklist = Checklist::query()
                 ->lockForUpdate()
                 ->findOrFail($id);
 
             $version = $checklist->checklistVersions()
+                ->lockForUpdate()
                 ->findOrFail($versionId);
 
             $newStatus = $validated['status'];
