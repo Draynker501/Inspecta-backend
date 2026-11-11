@@ -1,6 +1,6 @@
 # Estado del avance — M1.5 de INSPECTA (actualizado)
 
-Última actualización: 2026-11-10
+Última actualización: 2026-11-11
 
 **Rama:** `docs/cierre-m1-5` (basada en `origin/master`)
 **HEAD:** `3edf5cb2506780f918de9af84a5dd8f6e7c96bcc` (merge de P5.5c, PR #19)
@@ -65,23 +65,33 @@
 - **Pint:** `vendor/bin/pint --test` en verde; `database/migrations` excluido permanentemente.
 - **CI:** workflows `tests` (SQLite), `tests-mariadb` (MariaDB 11.8), `security` (audit bloqueante), `style` (Pint bloqueante).
 - **Rutas implementadas:** `/`, `api/auth/login`, `api/auth/logout`, `api/auth/me`, `api/auth/organizations`, `up` (6 rutas).
+- **Ruta de producción de M2:** ninguna aún. D-41 permite un único endpoint de lectura como corte vertical (candidato `GET /plants`, a confirmar en M2.6); el resto se prueba con rutas temporales y llega con los catálogos organizacionales.
 
 ## 3. Qué NO existe todavía
 
 - Factories de dominio (solo Organization, OrganizationMembership, User).
-- Servicio de revocación/re-concesión de membresías (M2).
-- Rutas de dominio (solo `/auth/*` implementadas; 45 paths planeados).
+- Servicio de revocación/re-concesión de membresías (M2.5, D-44).
+- Rutas de dominio (solo `/auth/*` implementadas; 45 paths planeados; M2 añade a lo sumo un endpoint de lectura de corte vertical).
+- Servicio de aprovisionamiento de roles y normas por cliente.
+- Errores fuera del catálogo (403 de policies, 405, 500) sin `code`.
 - Servicio de aprovisionamiento de roles y normas por cliente.
 - Errores fuera del catálogo (403 de policies, 405, 500) sin `code`.
 
 ## 4. Decisiones relevantes
 
-Resumen derivado del [registro oficial de decisiones](../decisiones/REGISTRO_DECISIONES.md). Conteo por estado (filas D-xx): Implementada 26, Propuesta 5, Aprobada 7, Parcial 1, Superada 1, Aprobada de hecho 0, Rechazada 1 (total 41). Además, P33-D07 (fuera de la numeración D-xx) está Implementada, lo que lleva el total general a 42 decisiones.
+Resumen derivado del [registro oficial de decisiones](../decisiones/REGISTRO_DECISIONES.md). Conteo medido por estado (filas D-xx): Implementada 27, Propuesta 1, Aprobada 16, Parcial 1, Superada 1, Rechazada 1 (total 47). Además, P33-D07 (fuera de la numeración D-xx) está Implementada, lo que lleva el total general a 48 decisiones. Se corrigió el conteo anterior de ESTADO.md (26 implementadas / 41 total): la tabla del registro lista 27 implementadas y 42 filas D-xx antes de M2.1.
 
-- **Implementadas (26, filas D-xx):** D-01, D-02, D-06, D-07, D-08, D-09, D-10, D-11, D-15, D-16, D-17, D-20, D-21, D-22, D-23, D-24, D-25, D-26, D-28, D-30, D-31, D-31b, D-31c, D-36, D-37, D-38, D-39.
+- **Implementadas (27, filas D-xx):** D-01, D-02, D-06, D-07, D-08, D-09, D-10, D-11, D-15, D-16, D-17, D-20, D-21, D-22, D-23, D-24, D-25, D-26, D-28, D-30, D-31, D-31b, D-31c, D-36, D-37, D-38, D-39.
 - **Implementada fuera de la numeración:** P33-D07 (diferir `TenantController` a M2, ahora implementada en este bloque).
-- **Propuestas (5):** D-27, D-32, D-33, D-34, D-35.
-- **Aprobadas (7, filas D-xx):** D-03, D-04, D-05, D-12, D-13, D-14, D-19.
+- **Propuestas (1):** D-27 (sigue Propuesta; se resuelve en un bloque aparte, no en M2.1).
+- **Aprobadas (16, filas D-xx):** D-03, D-04, D-05, D-12, D-13, D-14, D-19, D-32, D-33, D-34, D-35, D-40, D-41, D-42, D-43, D-44.
+- **Parciales (1):** D-18.
+- **Superadas (1):** D-29.
+- **Rechazadas (1):** D-28b.
+
+### Próximos bloques de M2
+
+M2.2 a M2.7 según `docs/M2/01-modelo-de-autorizacion.md` (sección 6): `role_permissions` y `hasPermission()` (M2.2), policies con alcance por asignación (M2.3), endpoint de corte vertical `GET /plants` y contrato 2.2.0 (M2.4-M2.6), revocación y prueba de desactivado → 401 (M2.5), contexto explícito en jobs y comandos con pruebas T20-T22 (M2.7).
 - **Parciales (1):** D-18.
 - **Superadas (1):** D-29.
 - **Rechazadas (1):** D-28b.
@@ -112,12 +122,17 @@ D-20 y D-21 del checklist del 2-nov (unicidad organizacional / identidad global)
 | Deuda de estilo global | RESUELTA (P5.5c: Pint en verde, migraciones excluidas) |
 | D-10 con enmienda sin registrar (doble escritura retirada en P3.2) | RESUELTA (enmienda registrada en P5 cierre) |
 | D-12 con orden de fases desactualizado | RESUELTA (enmienda registrada en P5 cierre) |
-| `TenantController` base ausente | DIFERIDO a M2 |
+| `TenantController` base ausente | DIFERIDO a M2 (implementada como P33-D07) |
 | Factories de dominio ausentes | DIFERIDO a M2 |
-| Servicio de revocación de membresías ausente | DIFERIDO a M2 |
+| Servicio de revocación de membresías ausente | DIFERIDO a M2 (M2.5, D-44) |
 | OpenAPI 2.0.0 | RESUELTA (P5.4b, PR #16) |
-| 45 paths del contrato planeados | ABIERTA (se implementarán en M2) |
-| M2 bloqueada hasta cierre formal de P5 | ABIERTA (pendiente de aprobación del usuario) |
+| 45 paths del contrato planeados | ABIERTA (M2 añade a lo sumo un endpoint de lectura de corte vertical, D-41) |
+| M2 bloqueada hasta cierre formal de P5 | RESUELTA (acta firmada 10-11-2026; M2 autorizada) |
+| Tokens sin expiración (`sanctum.expiration`) | ABIERTA (riesgo de despliegue; depende de la PWA sin conexión, D-44) |
+| `Organization` sin scope de aislamiento | ABIERTA (aislamiento vía TenantContext y membresías, no a nivel de tabla) |
+| Auditoría sin escritor automático | ABIERTA (`AuditLogger` requiere contexto explícito) |
+| `devices` y `sync_operations` sin `organization_id` | ABIERTA (sin `organization_id` no hay aislamiento de fila; riesgo en sync/dispositivos) |
+| 401 vs 403 de usuario desactivado | ABIERTA (D-44 espera 401; código devuelve 403 hoy; verificar en M2.5) |
 
 ## 7. Restricciones permanentes
 
