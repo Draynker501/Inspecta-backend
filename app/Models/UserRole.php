@@ -40,6 +40,16 @@ class UserRole extends Model
                 ->flushPermissionCache($model->user_id, $model->organization_id);
         });
 
+        static::updated(function (UserRole $model): void {
+            app(TenantContext::class)
+                ->flushPermissionCache($model->user_id, $model->organization_id);
+
+            if ($model->wasChanged('organization_id')) {
+                app(TenantContext::class)
+                    ->flushPermissionCache($model->user_id, $model->getOriginal('organization_id'));
+            }
+        });
+
         static::deleted(function (UserRole $model): void {
             app(TenantContext::class)
                 ->flushPermissionCache($model->user_id, $model->organization_id);
