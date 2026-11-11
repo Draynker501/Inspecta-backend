@@ -14,6 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use ReflectionClass;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Tests\Support\TenantFixtures;
 use Tests\TestCase;
 
@@ -51,6 +52,14 @@ class ApiErrorCodesTest extends TestCase
 
             Route::get('authz', function () {
                 throw new AuthorizationException('otro mensaje secreto');
+            });
+
+            Route::get('authz-policy', function () {
+                throw new AuthorizationException('policy.view on App\Models\Plant: no tiene permiso');
+            });
+
+            Route::get('deny-as-not-found', function () {
+                throw new NotFoundHttpException('recurso no existe desde policy');
             });
         });
     }
@@ -405,6 +414,50 @@ class ApiErrorCodesTest extends TestCase
 
         $response = $this->actingAsApiInOrganization($user, $org)
             ->getJson('/api/error-probe/plants/'.(string) Str::uuid7());
+
+        $this->assertEnvelope($response, 404, 'not_found', 'Recurso no encontrado.');
+    }
+
+    // ---------- forbidden: no fuga ----------
+
+    public function test_forbidden_no_filtra_mensaje_personalizado_abort(): void
+    {
+        $user = $this->user($this->organization('ORG-FORB-A'));
+        $org = Organization::where('code', 'ORG-FORB-A')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/forbidden');
+
+        $this->assertEnvelope($response, 403, 'forbidden', ApiErrorCode::FORBIDDEN_MESSAGE);
+        $this->assertStringNotContainsString('mensaje personalizado que no debe aparecer', (string) $response->getContent());
+    }
+
+    public function test_forbidden_no_filtra_nombre_policy_ni_recurso(): void
+    {
+        $user = $this->user($this->organization('ORG-FORB-B'));
+        $org = Organization::where('code', 'ORG-FORB-B')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/authz-policy');
+
+        $this->assertEnvelope($response, 403, 'forbidden', ApiErrorCode::FORBIDDEN_MESSAGE);
+        $content = (string) $response->getContent();
+        $this->assertStringNotContainsString('policy.view', $content);
+        $this->assertStringNotContainsString('App\Models\Plant', $content);
+        $this->assertStringNotContainsString('no tiene permiso', $content);
+    }
+
+    // ---------- forbidden: alcance API ----------
+
+    // ---------- forbidden: policy denyAsNotFound -> 404 ----------
+
+    public function test_forbidden_policy_deny_as_not_found_devuelve_404_no_forbidden(): void
+    {
+        $user = $this->user($this->organization('ORG-FORB-D'));
+        $org = Organization::where('code', 'ORG-FORB-D')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/deny-as-not-found');
 
         $this->assertEnvelope($response, 404, 'not_found', 'Recurso no encontrado.');
     }
