@@ -7,6 +7,7 @@ use App\Http\Controllers\ChecklistVersionController;
 use App\Http\Controllers\ChecklistSectionController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\NormController;
+use App\Http\Controllers\NormRequirementController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -72,4 +73,12 @@ Route::middleware('api.tenant')->group(function () {
     Route::get('norms/{id}', [NormController::class, 'show']);
     Route::put('norms/{id}', [NormController::class, 'update']);
     Route::patch('norms/{id}/status', [NormController::class, 'updateStatus']);
+});
+
+Route::middleware('api.tenant')->group(function () {
+    Route::get('norms/{normId}/requirements', [NormRequirementController::class, 'index']);
+    Route::post('norms/{normId}/requirements', [NormRequirementController::class, 'store']);
+
+    Route::get('requirements/{id}', [NormRequirementController::class, 'show']);
+    Route::put('requirements/{id}', [NormRequirementController::class, 'update']);
 });
