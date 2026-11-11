@@ -1,6 +1,6 @@
 # Registro oficial de decisiones — M1.5 de INSPECTA
 
-Fuente de verdad para las decisiones D-01 a D-36 y la sección de discrepancias. Transcrito sin reinterpretar.
+Fuente de verdad para las decisiones D-01 a D-44 y la sección de discrepancias. Transcrito sin reinterpretar salvo las enmiendas autorizadas en M2.1 (cambio de estados D-32 a D-35 y reescritura de D-33).
 
 **Estados:** *Aprobada* (decidida y sin código verificable) · *Implementada* (aprobada y con código) · *Parcial* · *Propuesta* (nadie la ha aprobado) · *Rechazada* (decidida en contra, no se implementa).
 
@@ -27,7 +27,7 @@ Fuente de verdad para las decisiones D-01 a D-36 y la sección de discrepancias.
 | D-17 | Único de `norms (code, version)` por organización | Implementada | P4; el `down()` rechaza revertir con duplicados entre organizaciones |
 | D-18 | CORS permite `X-Organization-Id` | Parcial | `config/cors.php` lo permite; el origen por defecto es `*` |
 
-## D-19 a D-36 (surgidas en el proyecto)
+## D-19 a D-39 (surgidas en el proyecto)
 
 | ID | Decisión | Estado | Evidencia o nota |
 |---|---|---|---|
@@ -39,7 +39,7 @@ Fuente de verdad para las decisiones D-01 a D-36 y la sección de discrepancias.
 | D-24 | `UserSeeder` usa contraseñas fijas solo en entorno local | Implementada | PR #14 (2014a06): contraseñas fijas solo en local/testing. Aprobada 08-nov-2026 |
 | D-25 | Job de CI con MariaDB 11.8 que ejecute `migrate:fresh --seed` | Implementada | PR #12: job MariaDB 11.8 en CI. Aprobada 08-nov-2026 |
 | D-26 | PHP 8.4 como versión mínima | Implementada | PR #5; la CI corre en 8.4 y 8.5 |
-| D-27 | Fijar `config.platform.php` en 8.4.1 | Propuesta | No implementada |
+| D-27 | Fijar `config.platform.php` en 8.4.1 | Propuesta | No implementada. Sigue como Propuesta; se resuelve en un bloque aparte (no en M2.1). |
 | D-28 | Cabecera `X-Organization-Id` obligatoria | Implementada | 400 sin cabecera o con UUID inválido; sin fallback a la columna legada |
 | D-28b | Sin endpoint de "seleccionar organización"; `login` y `me` añaden la lista de membresías | Rechazada | Rechazada en P5.4b: login y me no listan membresías; la identidad de la sesión depende de `X-Organization-Id` y el frontend obtiene el listado con `GET /api/auth/organizations`. Motivo en `docs/M1.5/10-cambios-contrato-2.0.0.md` |
 | D-29 | Retirar `organization_id` del fillable de `User` | Superada | Ya se retiró en P3.2, antes de lo planeado |
@@ -47,14 +47,24 @@ Fuente de verdad para las decisiones D-01 a D-36 y la sección de discrepancias.
 | D-31 | Campo `code` en los rechazos 400 y 403 del contexto | Implementada | PR #10 (aa0482c) fusionado; D-31b/c en PR #15. Aprobada 08-nov-2026 |
 | D-31b | Unificar los mensajes del 403 | Implementada | PR #15 (8f28239): texto 403 unificado. Aprobada 08-nov-2026 |
 | D-31c | Códigos para los demás errores (`unauthenticated`, `invalid_credentials`, `user_inactive`, `validation_failed`) | Implementada | PR #15 (8f28239): ApiErrorCode + ApiErrorResponse. Aprobada 08-nov-2026 |
-| D-32 | `viewMemberships` exige también el rol de plataforma | Propuesta | Hoy basta ser miembro activo de la operadora |
-| D-33 | FK compuestas a membresías en las tablas de dominio | Propuesta | Para el inicio de M2 |
-| D-34 | El responsable asignado debe tener `users.status` activo | Propuesta | Pregunta abierta |
-| D-35 | Diferir a M2 las pruebas de jobs y comandos con organización (T20 a T22) | Propuesta | Sin decidir |
+| D-32 | `viewMemberships` exige también el rol de plataforma | Aprobada | Se implementa en M2.6; hoy basta ser miembro activo de la operadora. |
+| D-33 | FK compuestas a membresías en las tablas de dominio | Aprobada | Convención para tablas de dominio futuras: la FK compuesta garantiza que la membresía exista en esa organización, no que esté activa (la actividad la cubren D-07 y D-34). Sin migración en M2 si se comprueba que aún no hay tablas de dominio con FK a usuario. Cambio respecto al original: se aclara el alcance de la FK (existencia, no actividad), se condiciona la migración de M2 a la existencia de tablas de dominio con FK a usuario y se pasa de Propuesta a Aprobada como convención. |
+| D-34 | El responsable asignado debe tener `users.status` activo | Aprobada | Se valida en la asignación de responsable en M2; no hay migración asociada. |
+| D-35 | Diferir a M2 las pruebas de jobs y comandos con organización (T20 a T22) | Aprobada | Jobs y comandos fijan el contexto de forma explícita (patrón D-38 con `TenantContext::runAs`); se prueba en M2.7. |
 | D-36 | Marcar "dentro de una petición HTTP" con un flag del middleware global en vez de `runningInConsole()` | Implementada | PR #13 (e321739): flag HTTP para modo estricto. Aprobada 08-nov-2026 |
 | D-37 | Separar seeders de arranque y de demostración | Implementada | Implementada en P5.3b (PR #14, commit 2014a06): `UserSeeder` con contraseñas fijas solo en local/testing. Aprobada 08-nov-2026 |
 | D-38 | Comando de consola para crear el primer usuario de plataforma en producción | Implementada | Implementado en bloque D-38 (rama feat/d38-primer-usuario-plataforma): comando `inspecta:create-platform-user` con `--email`, `--name`, `--password-stdin`, transacción, auditoría redactada, unicidad del usuario de plataforma (bloqueo de fila), longitud mínima de contraseña 12, y pruebas SQLite/MariaDB. |
 | D-39 | Código `forbidden` para los 403 de autorización | Implementada | Implementado en bloque D-39 (rama feat/d39-codigo-forbidden): `Handler` renderiza 403 de políticas/Gate con code `forbidden` y mensaje fijo (`ApiErrorCode::FORBIDDEN_MESSAGE`) solo para peticiones API; los 403 de contexto conservan su código y mensaje; OpenAPI actualizada a 2.1.0 con `forbidden` en el enum de códigos. |
+
+## D-40 a D-44 (M2.1 — decisiones de autorización, aprobadas 11-nov-2026)
+
+| ID | Decisión | Estado | Evidencia o nota |
+|---|---|---|---|
+| D-40 | Modelo de permisos. Catálogo de permisos en código, con nombres `recurso.accion`. La base de datos guarda solo `role_permissions` (rol, organización, permiso) con FK compuesta al rol (D-09, D-15); no hay tabla `permissions`. Una prueba verifica que todo permiso guardado existe en el catálogo. `hasPermission()` es el único punto de evaluación (D-20), opera a nivel de la organización activa y deniega por defecto. No se sobrescribe `User::can()`. Los permisos de la membresía se cargan una vez por petición y no persisten entre peticiones. Un permiso nuevo del catálogo se añade a los roles existentes solo de forma explícita y solo añadiendo, nunca quitando. | Aprobada | Aprobada por el responsable el 11-nov-2026. Diseño y catálogo borrador en `docs/M2/01-modelo-de-autorizacion.md`. |
+| D-41 | Alcance de M2 sobre endpoints (opción híbrida). M2 no añade rutas de producción salvo un único endpoint de lectura como corte vertical (candidato `GET /plants`, a confirmar en M2.6) que ejerce autenticación, tenant, controlador, policy, permiso y `forbidden`; al implementarlo el contrato pasa a 2.2.0. El resto de rutas de dominio llega con los catálogos organizacionales. Todo lo demás se prueba con rutas temporales. | Aprobada | Aprobada por el responsable el 11-nov-2026. Bump de contrato planificado de 2.1.0 (D-39) a 2.2.0. |
+| D-42 | Plantillas de rol y alcance. Roles base: Administrador, Supervisor, Inspector. `hasPermission()` opera a nivel de organización; las policies aplican el alcance por asignación (`user_plants`, `user_areas`): el Inspector solo ve y ejecuta en sus plantas y áreas asignadas. Administrador y Supervisor tienen alcance de toda la organización (supuesto a confirmar). Matriz en `docs/M2/01-modelo-de-autorizacion.md`. | Aprobada | Aprobada por el responsable el 11-nov-2026. Alcance org-wide de Admin/Supervisor marcado como supuesto a confirmar. |
+| D-43 | Operadora sin acceso implícito. Un usuario de plataforma opera en un cliente solo con membresía activa y roles en él; la operadora no es superusuario. El alta de clientes y de las membresías de los consultores la hace el usuario de plataforma fuera del TenantContext. El permiso `memberships.manage` forma parte del catálogo desde M2.2. | Aprobada | Aprobada por el responsable el 11-nov-2026. Coherente con `PlatformOperatorPolicy` y `user_*` fuera de TenantContext (M1.5 P3.3.3/P3.3.5). |
+| D-44 | Revocación de membresías y tokens (documenta D-06 para M2). Revocar una membresía bloquea el dominio de esa organización en la siguiente petición (D-20) pero no invalida tokens: siguen válidos para `/auth/me`, `/auth/organizations` y las demás organizaciones del usuario. Riesgo documentado: los tokens no expiran; la decisión sobre `sanctum.expiration` queda pendiente porque depende de la operación sin conexión de la PWA, y se registra entre los riesgos de despliegue. M2.5 debe incluir una prueba de que un usuario desactivado recibe 401 en la siguiente petición (verificar si `EnsureApiAuthenticated` comprueba `users.status` en cada petición). | Aprobada | Aprobada por el responsable el 11-nov-2026. Extiende D-06 (sin revocación masiva de tokens); riesgo de despliegue registrado en `docs/M1.5/avance/ESTADO.md` sección 6. |
 
 **Fuera de la numeración:** P33-D07, diferir `TenantController` a M2, está implementada (rama feat/p33d07-tenant-controller): `TenantController` base con `Illuminate\Routing\Controllers\HasMiddleware` + middleware `EnsureTenantContext` que exige contexto organizacional activo (fail-closed); 21 controladores de dominio la extienden; `AuthController` y `OrganizationController` como excepciones; pruebas de arquitectura y de extremo a extremo. OpenAPI sin cambios (2.1.0).
 
