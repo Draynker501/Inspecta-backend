@@ -21,6 +21,11 @@ namespace App\Support\Api;
  */
 enum ApiErrorCode: string
 {
+    /**
+     * Mensaje fijo y unificado para los 403 de autorización (D-39).
+     */
+    public const FORBIDDEN_MESSAGE = 'No tienes permiso para realizar esta acción.';
+
     case Unauthenticated = 'unauthenticated';
 
     case InvalidCredentials = 'invalid_credentials';
@@ -34,4 +39,6 @@ enum ApiErrorCode: string
     case NotFound = 'not_found';
 
     case CrossTenantOperation = 'cross_tenant_operation';
+
+    case Forbidden = 'forbidden';
 }
