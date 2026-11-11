@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CorrectiveActionUpdate;
 use Illuminate\Http\Request;
 
-class CorrectiveActionUpdateController extends Controller
+class CorrectiveActionUpdateController extends TenantController
 {
     /**
      * Display a listing of the resource.

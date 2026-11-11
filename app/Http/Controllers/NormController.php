@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Norm;
 use Illuminate\Http\Request;
 
-class NormController extends Controller
+class NormController extends TenantController
 {
     /**
      * Display a listing of the resource.

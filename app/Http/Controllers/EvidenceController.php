@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Evidence;
 use Illuminate\Http\Request;
 
-class EvidenceController extends Controller
+class EvidenceController extends TenantController
 {
     /**
      * Display a listing of the resource.

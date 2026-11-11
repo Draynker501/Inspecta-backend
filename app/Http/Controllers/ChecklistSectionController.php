@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ChecklistSection;
 use Illuminate\Http\Request;
 
-class ChecklistSectionController extends Controller
+class ChecklistSectionController extends TenantController
 {
     /**
      * Display a listing of the resource.

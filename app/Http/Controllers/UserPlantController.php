@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\UserPlant;
 use Illuminate\Http\Request;
 
-class UserPlantController extends Controller
+class UserPlantController extends TenantController
 {
     /**
      * Display a listing of the resource.

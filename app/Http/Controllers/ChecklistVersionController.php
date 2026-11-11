@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ChecklistVersion;
 use Illuminate\Http\Request;
 
-class ChecklistVersionController extends Controller
+class ChecklistVersionController extends TenantController
 {
     /**
      * Display a listing of the resource.
