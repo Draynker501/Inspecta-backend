@@ -3,11 +3,13 @@
 namespace Tests\Feature\Api;
 
 use App\Exceptions\CrossTenantOperationException;
+use App\Models\Organization;
 use App\Models\Plant;
 use App\Models\User;
 use App\Support\Api\ApiErrorCode;
 use App\Support\Api\ApiErrorResponse;
 use App\Support\Tenancy\TenantErrorCode;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
@@ -41,6 +43,14 @@ class ApiErrorCodesTest extends TestCase
 
             Route::get('plants/{plant}', function (Plant $plant) {
                 return response()->json(['data' => ['id' => $plant->id]]);
+            });
+
+            Route::get('forbidden', function () {
+                abort(403, 'mensaje personalizado que no debe aparecer');
+            });
+
+            Route::get('authz', function () {
+                throw new AuthorizationException('otro mensaje secreto');
             });
         });
     }
@@ -331,5 +341,71 @@ class ApiErrorCodesTest extends TestCase
         sort($esperados);
 
         $this->assertSame($esperados, $catalogo);
+    }
+
+    // ---------- forbidden (D-39) ----------
+
+    public function test_forbidden_por_abort_403_devuelve_code_forbidden_y_mensaje_fijo(): void
+    {
+        $user = $this->user($this->organization('ORG-FORB'));
+        $org = Organization::where('code', 'ORG-FORB')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/forbidden');
+
+        $this->assertEnvelope($response, 403, 'forbidden', ApiErrorCode::FORBIDDEN_MESSAGE);
+        $this->assertStringNotContainsString('mensaje personalizado que no debe aparecer', (string) $response->getContent());
+    }
+
+    public function test_forbidden_por_authorization_exception_no_filtra_mensaje(): void
+    {
+        $user = $this->user($this->organization('ORG-FORB2'));
+        $org = Organization::where('code', 'ORG-FORB2')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/authz');
+
+        $this->assertEnvelope($response, 403, 'forbidden', ApiErrorCode::FORBIDDEN_MESSAGE);
+        $this->assertStringNotContainsString('otro mensaje secreto', (string) $response->getContent());
+    }
+
+    public function test_forbidden_mensaje_fijo_hardcodeado(): void
+    {
+        // El mensaje fijo no debe cambiar aunque cambie la constante.
+        $user = $this->user($this->organization('ORG-HC'));
+        $org = Organization::where('code', 'ORG-HC')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/authz');
+
+        $this->assertEnvelope($response, 403, 'forbidden', 'No tienes permiso para realizar esta acción.');
+    }
+
+    public function test_forbidden_no_pisa_code_de_403_de_contexto(): void
+    {
+        $orgA = $this->organization('ORG-CTX-A');
+        $orgB = $this->organization('ORG-CTX-B');
+        $user = $this->user($orgA);
+
+        // El usuario tiene membresía en orgA pero no en orgB: acceso denegado
+        // por contexto, conserva su código (no se convierte en forbidden).
+        $response = $this->actingAsApi($user)
+            ->withHeader('X-Organization-Id', $orgB->id)
+            ->getJson('/api/error-probe/ping');
+
+        $response->assertStatus(403);
+        $this->assertSame('organization_access_denied', $response->json('code'));
+        $this->assertNotSame('forbidden', $response->json('code'));
+    }
+
+    public function test_un_404_no_cambia_con_forbidden(): void
+    {
+        $user = $this->user($this->organization('ORG-404'));
+        $org = Organization::where('code', 'ORG-404')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/plants/'.(string) Str::uuid7());
+
+        $this->assertEnvelope($response, 404, 'not_found', 'Recurso no encontrado.');
     }
 }

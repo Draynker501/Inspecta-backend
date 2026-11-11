@@ -44,7 +44,7 @@ info:
       implementados en el servidor; mientras tanto devuelven `not_found`
       (404, código `not_found`). No deben considerarse disponibles para consumo.
 
-  version: 2.0.0
+  version: 2.1.0
 
 servers:
   - url: https://api.inspecta.com/api
@@ -6193,6 +6193,8 @@ components:
           indicada (inexistente, eliminada, inactiva o sin membresía activa).
         - `organization_not_tenant` (403): la organización indicada no es de
           tipo cliente.
+        - `forbidden` (403): autorización denegada por policy (Gate). Mensaje
+          fijo y unificado; no se reutiliza el mensaje de la excepción.
 
         Regla transversal: el mismo código produce siempre el mismo estado
         HTTP y el mismo texto de message en toda la API.
@@ -6208,6 +6210,7 @@ components:
         - organization_invalid
         - organization_access_denied
         - organization_not_tenant
+        - forbidden
 
     Error:
       type: object
