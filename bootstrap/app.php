@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureApiAuthenticated;
+use App\Http\Middleware\EnsureTenantContext;
 use App\Http\Middleware\MarkHttpRequest;
 use App\Http\Middleware\ResetTenantContext;
 use App\Http\Middleware\ResolveTenantContext;
@@ -35,6 +36,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'api.auth' => EnsureApiAuthenticated::class,
             'tenant' => ResolveTenantContext::class,
+            'tenant.require' => EnsureTenantContext::class,
         ]);
 
         // Autenticación + contexto organizacional + route model binding.
