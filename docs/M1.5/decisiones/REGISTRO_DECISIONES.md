@@ -56,7 +56,7 @@ Fuente de verdad para las decisiones D-01 a D-36 y la sección de discrepancias.
 | D-38 | Comando de consola para crear el primer usuario de plataforma en producción | Implementada | Implementado en bloque D-38 (rama feat/d38-primer-usuario-plataforma): comando `inspecta:create-platform-user` con `--email`, `--name`, `--password-stdin`, transacción, auditoría redactada, unicidad del usuario de plataforma (bloqueo de fila), longitud mínima de contraseña 12, y pruebas SQLite/MariaDB. |
 | D-39 | Código `forbidden` para los 403 de autorización | Implementada | Implementado en bloque D-39 (rama feat/d39-codigo-forbidden): `Handler` renderiza 403 de políticas/Gate con code `forbidden` y mensaje fijo (`ApiErrorCode::FORBIDDEN_MESSAGE`) solo para peticiones API; los 403 de contexto conservan su código y mensaje; OpenAPI actualizada a 2.1.0 con `forbidden` en el enum de códigos. |
 
-**Fuera de la numeración:** P33-D07, diferir `TenantController` a M2, está aprobada (según tus documentos `PLAN_TRABAJO_PENDIENTE.md` y `CHECKLIST_HU_06_07_10.md`).
+**Fuera de la numeración:** P33-D07, diferir `TenantController` a M2, está implementada (rama feat/p33d07-tenant-controller): `TenantController` base con `Illuminate\Routing\Controllers\HasMiddleware` + middleware `EnsureTenantContext` que exige contexto organizacional activo (fail-closed); 21 controladores de dominio la extienden; `AuthController` y `OrganizationController` como excepciones; pruebas de arquitectura y de extremo a extremo. OpenAPI sin cambios (2.1.0).
 
 ## Discrepancias que conviene resolver
 

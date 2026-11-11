@@ -5,7 +5,7 @@
 **Rama:** `docs/cierre-m1-5` (basada en `origin/master`)
 **HEAD:** `3edf5cb2506780f918de9af84a5dd8f6e7c96bcc` (merge de P5.5c, PR #19)
 **Sincronizada con origin/master:** sí
-**Pruebas (VERIFICADO):** SQLite 339 pruebas, 333 aprobadas, 6 omitidas, 1072 aserciones, 0 fallos; MariaDB 11.8 339 pruebas, 334 aprobadas, 5 omitidas, 1100 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-10).
+**Pruebas (VERIFICADO):** SQLite 343 pruebas, 337 aprobadas, 6 omitidas, 1099 aserciones, 0 fallos; MariaDB 11.8 343 pruebas, 338 aprobadas, 5 omitidas, 1127 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-11).
 **Migraciones:** 44.
 **Composer:** `composer validate --no-check-publish` válido. `composer audit`: 0 advisories. `require.php = ^8.4`.
 **Pint:** `vendor/bin/pint --test` en verde (0 diferencias) con `database/migrations` excluido permanentemente.
@@ -31,7 +31,7 @@
 | M1.5 P3.3.6 — FK a usuario por membresía | Implementada e integrada | D-07, dirty-only, AuditLog exento (D-11). |
 | M1.5 P3.4 — AuditLogger | Implementada e integrada | AuditLog append-only, AuditLogger con redacción, auditoría de asignaciones. |
 | M1.5 P3.5 — Modo estricto de scope | Implementada e integrada (PR #9) | `strict_mode` por defecto `true`, allowlist consola, `withoutTenant` bypass. |
-| M1.5 P3.3.4 — TenantController base | Diferido a M2 (P33-D07) | — |
+| M1.5 P3.3.4 — TenantController base | Implementada en M2 (P33-D07) | `TenantController` con `HasMiddleware` + middleware `EnsureTenantContext`; 21 controladores de dominio la extienden; `AuthController` y `OrganizationController` como excepciones. |
 | M1.5 P4 — Seeders, operadora, OpenAPI, CORS | Implementada e integrada (PR #8) | 2 clientes + operadora `INSPECTA-OP`, OpenAPI 1.4.0 aditiva, CORS con `X-Organization-Id`. |
 | M1.5 P3 (error-codes, D-31) | Integrada (PR #10) | `TenantErrorCode` + `code` en rechazos de `ResolveTenantContext`. |
 | M1.5 P5.1 — CI MariaDB | Integrada (PR #12) | Job MariaDB 11.8 en `.github/workflows/tests-mariadb.yml`. |
@@ -55,6 +55,7 @@
 - **Platform operator:** `PlatformOperatorPolicy` + `User::isPlatformOperator()`/`hasPlatformRole()` (membresía activa en operadora única).
 - **Comando de consola:** `inspecta:create-platform-user` crea el primer usuario de plataforma en producción (D-38), con membresía activa, rol y auditoría redactada. Uso recomendado en producción (evita dejar la contraseña en el historial de la shell): `read -rs PASS && printf '%s' "$PASS" | php artisan inspecta:create-platform-user --email=... --name=... --password-stdin; unset PASS`.
 - **Código `forbidden` para 403 de autorización (D-39):** los 403 de políticas/Gate se renderizan en formato del catálogo con code `forbidden` y mensaje fijo; los 403 de contexto conservan su código y mensaje. OpenAPI 2.1.0.
+- **Clase base `TenantController` (P33-D07):** `TenantController` con `HasMiddleware` + middleware `EnsureTenantContext`; 21 controladores de dominio la extienden; `AuthController` y `OrganizationController` como excepciones.
 - **Auditoría:** `AuditLog` append-only (excepción dedicada), `AuditLogger` con contexto obligatorio y redacción; auditoría de asignaciones de rol/planta/área.
 - **Modo estricto:** `OrganizationScope` lanza `MissingTenantContextException` en HTTP sin contexto cuando `strict_mode=true` (default); consola y `withoutTenant()` exentos; workers de cola no exentos; flag HTTP `TENANCY_STRICT_MODE`.
 - **Seeders:** 2 clientes (INSP-01, ORG-02) + operadora INSPECTA-OP; catálogo por organización; consultor de plataforma con membresía en operadora y clientes. Contraseñas fijas solo en local/testing.
@@ -67,7 +68,6 @@
 
 ## 3. Qué NO existe todavía
 
-- `TenantController` base (diferido a M2, P33-D07).
 - Factories de dominio (solo Organization, OrganizationMembership, User).
 - Servicio de revocación/re-concesión de membresías (M2).
 - Rutas de dominio (solo `/auth/*` implementadas; 45 paths planeados).
@@ -76,11 +76,11 @@
 
 ## 4. Decisiones relevantes
 
-Resumen derivado del [registro oficial de decisiones](../decisiones/REGISTRO_DECISIONES.md). Conteo por estado: Implementada 27, Propuesta 5, Aprobada 7, Parcial 1, Superada 1, Aprobada de hecho 0, Rechazada 1 (total 42).
+Resumen derivado del [registro oficial de decisiones](../decisiones/REGISTRO_DECISIONES.md). Conteo por estado: Implementada 28, Propuesta 5, Aprobada 6, Parcial 1, Superada 1, Aprobada de hecho 0, Rechazada 1 (total 42).
 
-- **Implementadas (27):** D-01, D-02, D-06, D-07, D-08, D-09, D-10, D-11, D-15, D-16, D-17, D-20, D-21, D-22, D-23, D-24, D-25, D-26, D-28, D-30, D-31, D-31b, D-31c, D-36, D-37, D-38, D-39.
+- **Implementadas (28):** D-01, D-02, D-06, D-07, D-08, D-09, D-10, D-11, D-15, D-16, D-17, D-20, D-21, D-22, D-23, D-24, D-25, D-26, D-28, D-30, D-31, D-31b, D-31c, D-36, D-37, D-38, D-39, P33-D07.
 - **Propuestas (5):** D-27, D-32, D-33, D-34, D-35.
-- **Aprobadas (7):** D-03, D-04, D-05, D-12, D-13, D-14, D-19.
+- **Aprobadas (6):** D-03, D-04, D-05, D-12, D-13, D-14.
 - **Parciales (1):** D-18.
 - **Superadas (1):** D-29.
 - **Rechazadas (1):** D-28b.
@@ -130,7 +130,7 @@ D-20 y D-21 del checklist del 2-nov (unicidad organizacional / identidad global)
 ## 8. Cómo retomar
 
 1. Rama `docs/cierre-m1-5`, HEAD basado en `3edf5cb` (origin/master, incluye P5.5c).
-2. Suite medida: 339 pruebas, 0 fallos en SQLite y MariaDB.
+2. Suite medida: 343 pruebas, 0 fallos en SQLite y MariaDB.
 3. Leer este `ESTADO.md` y el [informe de cierre](../12-informe-cierre-m1-5.md) antes de empezar.
 4. Próximo bloque: aprobación formal del cierre de M1.5 (acta en `docs/M1.5/13-acta-aprobacion-m2.md`) y, tras ella, M2.
 
