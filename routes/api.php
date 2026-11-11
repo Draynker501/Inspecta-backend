@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\OrganizationController;
 use App\Http\Controllers\ChecklistController;
 use App\Http\Controllers\ChecklistVersionController;
+use App\Http\Controllers\ChecklistSectionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -45,3 +46,10 @@ Route::middleware('api.tenant')->group(function () {
     Route::patch('checklists/{id}/versions/{version_id}/status', [ChecklistVersionController::class, 'updateStatus']);
 });
 
+Route::middleware('api.tenant')->group(function () {
+    Route::get('versions/{versionId}/sections',[ChecklistSectionController::class, 'index']);
+    Route::post('versions/{versionId}/sections',[ChecklistSectionController::class, 'store']);
+    
+    Route::get('sections/{id}',[ChecklistSectionController::class, 'show']);
+    Route::put('sections/{id}',[ChecklistSectionController::class, 'update']);
+});
