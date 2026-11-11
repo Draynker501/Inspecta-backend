@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Models\Question;
 
 class ChecklistVersionController extends Controller
 {
@@ -163,6 +164,9 @@ class ChecklistVersionController extends Controller
                     ]);
                 }
 
+                // Verificar que el checklist tenga contenido válido.
+                $this->validateBeforePublishing($version);
+
                 // Archivar la versión publicada anteriormente.
                 $checklist->checklistVersions()
                     ->where('status', 'published')
@@ -188,4 +192,55 @@ class ChecklistVersionController extends Controller
             'data' => $version,
         ]);
     }
+
+
+    private function validateBeforePublishing(ChecklistVersion $version): void
+    {
+        if (!$version->sections()->exists()) {
+            throw ValidationException::withMessages([
+                'sections' => 'La versión necesita al menos una sección antes de publicarse.',
+            ]);
+        }
+
+        $questions = Question::query()
+            ->whereIn(
+                'checklist_section_id',
+                $version->sections()->select('id')
+            )
+            ->where('status', true)
+            ->get();
+
+        if ($questions->isEmpty()) {
+            throw ValidationException::withMessages([
+                'questions' => 'La versión necesita al menos una pregunta activa.',
+            ]);
+        }
+
+        foreach ($questions as $question) {
+            if ($question->answer_type !== 'multiple_choice') {
+                continue;
+            }
+
+            $options = $question->options ?? [];
+
+            if (count($options) < 2) {
+                throw ValidationException::withMessages([
+                    'questions' => 'La pregunta ' . $question->id . ' necesita al menos dos opciones.',
+                ]);
+            }
+
+            $values = array_column($options, 'value');
+
+            if (
+                count($values) !== count($options) ||
+                count(array_unique($values)) !== count($values) ||
+                in_array('', $values, true)
+            ) {
+                throw ValidationException::withMessages([
+                    'questions' => 'La pregunta ' . $question->id . ' tiene opciones inválidas.',
+                ]);
+            }
+        }
+    }
+
 }
