@@ -39,6 +39,81 @@ class ChecklistController extends Controller
         ]);
     }
 
+
+    /**
+     * GET /api/checklists/{checklistId}/active-version
+     * Obtiene la versión publicada y su estructura completa.
+     */
+    public function activeVersion(string $checklistId): JsonResponse
+    {
+        $checklist = Checklist::findOrFail($checklistId);
+
+        $activeVersion = $checklist->checklistVersions()
+            ->where('status', 'published')
+            ->with([
+                'sections' => function ($query) {
+                    $query->orderBy('display_order')
+                        ->orderBy('id');
+                },
+                'sections.questions' => function ($query) {
+                    $query->where('status', true)
+                        ->orderBy('display_order')
+                        ->orderBy('id');
+                },
+                'sections.questions.normRequirements' => function ($query) {
+                    $query->orderBy('norm_requirements.code')
+                        ->orderBy('norm_requirements.id');
+                },
+            ])
+            ->firstOrFail();
+
+        $sections = $activeVersion->sections->map(
+            function ($section) {
+                $sectionData = $section->toArray();
+
+                $sectionData['questions'] = $section->questions
+                    ->map(function ($question) {
+                        $questionData = $question->toArray();
+
+                        $questionData['norm_requirements'] =
+                            $question->normRequirements
+                                ->map(function ($requirement) {
+                                    $requirementData = $requirement->toArray();
+
+                                    unset($requirementData['pivot']);
+
+                                    return [
+                                        'link_id' => $requirement->pivot->id,
+                                        ...$requirementData,
+                                    ];
+                                })
+                                ->values()
+                                ->all();
+
+                        return $questionData;
+                    })
+                    ->values()
+                    ->all();
+
+                return $sectionData;
+            }
+        );
+
+        $checklistData = $checklist->toArray();
+
+        $checklistData['active_version'] = [
+            'id' => $activeVersion->id,
+            'version' => $activeVersion->version,
+            'status' => $activeVersion->status,
+            'published_at' => $activeVersion->published_at,
+            'sections' => $sections->values()->all(),
+        ];
+
+        return response()->json([
+            'data' => $checklistData,
+        ]);
+    }
+
     /**
      * Show the form for creating a new resource.
      */

@@ -39,6 +39,7 @@ Route::middleware('api.tenant')->group(function () {
     Route::get('checklists/{id}', [ChecklistController::class, 'show']);
     Route::put('checklists/{id}', [ChecklistController::class, 'update']);
     Route::patch('checklists/{id}/status', [ChecklistController::class, 'updateStatus']);
+    Route::get('checklists/{checklistId}/active-version', [ChecklistController::class, 'activeVersion']);
 });
 
 Route::middleware('api.tenant')->group(function () {
