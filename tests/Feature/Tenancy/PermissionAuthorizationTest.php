@@ -5,15 +5,16 @@ namespace Tests\Feature\Tenancy;
 use App\Authorization\Permission;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
-use App\Models\Role;
 use App\Models\RolePermission;
 use App\Models\User;
 use App\Models\UserRole;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
 use Tests\Support\TenantFixtures;
 use Tests\TestCase;
-use InvalidArgumentException;
 
 class PermissionAuthorizationTest extends TestCase
 {
@@ -70,7 +71,7 @@ class PermissionAuthorizationTest extends TestCase
         // membresía en B
         OrganizationMembership::firstOrCreate(
             ['user_id' => $user->id, 'organization_id' => $orgB->id],
-            ['id' => (string) \Illuminate\Support\Str::uuid7(), 'status' => OrganizationMembership::STATUS_ACTIVE],
+            ['id' => (string) Str::uuid7(), 'status' => OrganizationMembership::STATUS_ACTIVE],
         );
 
         app(TenantContext::class)->set($orgA->id);
@@ -163,7 +164,7 @@ class PermissionAuthorizationTest extends TestCase
         $org = $this->clientOrganization('ORG-A');
         $role = $this->role($org, 'Administrador');
 
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(InvalidArgumentException::class);
         RolePermission::create([
             'role_id' => $role->id,
             'organization_id' => $org->id,
@@ -182,7 +183,7 @@ class PermissionAuthorizationTest extends TestCase
             'permission' => Permission::PlantsView->value,
         ]);
 
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(InvalidArgumentException::class);
         $rp->permission = 'no.existe';
         $rp->save();
     }
@@ -198,7 +199,7 @@ class PermissionAuthorizationTest extends TestCase
         $user = $this->user($orgA);
         OrganizationMembership::firstOrCreate(
             ['user_id' => $user->id, 'organization_id' => $orgB->id],
-            ['id' => (string) \Illuminate\Support\Str::uuid7(), 'status' => OrganizationMembership::STATUS_ACTIVE],
+            ['id' => (string) Str::uuid7(), 'status' => OrganizationMembership::STATUS_ACTIVE],
         );
 
         app(TenantContext::class)->set($orgA->id);
@@ -335,7 +336,7 @@ class PermissionAuthorizationTest extends TestCase
             'permission' => Permission::PlantsView->value,
         ]);
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
         RolePermission::create([
             'role_id' => $role->id,
             'organization_id' => $org->id,

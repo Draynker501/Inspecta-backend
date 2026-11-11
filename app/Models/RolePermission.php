@@ -6,6 +6,7 @@ use App\Authorization\Permission;
 use App\Models\Concerns\BelongsToOrganization;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
@@ -79,12 +80,12 @@ class RolePermission extends Model
         ];
     }
 
-    public function organization(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class, 'organization_id');
     }
 
-    public function role(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function role(): BelongsTo
     {
         return $this->belongsTo(Role::class, 'role_id');
     }

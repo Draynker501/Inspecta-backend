@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToOrganization;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
@@ -35,12 +36,12 @@ class UserRole extends Model
         });
 
         static::created(function (UserRole $model): void {
-            app(\App\Support\Tenancy\TenantContext::class)
+            app(TenantContext::class)
                 ->flushPermissionCache($model->user_id, $model->organization_id);
         });
 
         static::deleted(function (UserRole $model): void {
-            app(\App\Support\Tenancy\TenantContext::class)
+            app(TenantContext::class)
                 ->flushPermissionCache($model->user_id, $model->organization_id);
         });
     }

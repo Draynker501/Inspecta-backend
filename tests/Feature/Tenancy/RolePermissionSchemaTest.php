@@ -16,7 +16,7 @@ class RolePermissionSchemaTest extends TestCase
             $this->markTestSkipped('Verificación equivalente en MariaDB: RolePermissionSchemaMariaDbTest');
         }
 
-        $columns = DB::select("PRAGMA table_info(role_permissions)");
+        $columns = DB::select('PRAGMA table_info(role_permissions)');
         $columnNames = array_column($columns, 'name');
 
         foreach (['id', 'role_id', 'organization_id', 'permission', 'created_at', 'updated_at'] as $col) {

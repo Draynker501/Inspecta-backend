@@ -82,7 +82,7 @@ final class TenantContext
      */
     public function getPermissionCache(string $userId, string $organizationId): ?array
     {
-        $key = $userId . ':' . $organizationId;
+        $key = $userId.':'.$organizationId;
 
         return array_key_exists($key, $this->permissionCache)
             ? $this->permissionCache[$key]
@@ -92,11 +92,11 @@ final class TenantContext
     /**
      * Guarda la caché de permisos de una membresía.
      *
-     * @param list<string> $permissions
+     * @param  list<string>  $permissions
      */
     public function setPermissionCache(string $userId, string $organizationId, array $permissions): void
     {
-        $this->permissionCache[$userId . ':' . $organizationId] = $permissions;
+        $this->permissionCache[$userId.':'.$organizationId] = $permissions;
     }
 
     /**
