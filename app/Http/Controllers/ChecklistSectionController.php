@@ -130,7 +130,6 @@ class ChecklistSectionController extends Controller
         ]);
     }
 
-
     private function ensureDraft(ChecklistVersion $version): void 
     {
         if ($version->status !== 'draft') {

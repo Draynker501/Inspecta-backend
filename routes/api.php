@@ -6,6 +6,7 @@ use App\Http\Controllers\ChecklistController;
 use App\Http\Controllers\ChecklistVersionController;
 use App\Http\Controllers\ChecklistSectionController;
 use App\Http\Controllers\QuestionController;
+use App\Http\Controllers\NormController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -48,18 +49,27 @@ Route::middleware('api.tenant')->group(function () {
 });
 
 Route::middleware('api.tenant')->group(function () {
-    Route::get('versions/{versionId}/sections',[ChecklistSectionController::class, 'index']);
-    Route::post('versions/{versionId}/sections',[ChecklistSectionController::class, 'store']);
+    Route::get('versions/{versionId}/sections', [ChecklistSectionController::class, 'index']);
+    Route::post('versions/{versionId}/sections', [ChecklistSectionController::class, 'store']);
 
-    Route::get('sections/{id}',[ChecklistSectionController::class, 'show']);
-    Route::put('sections/{id}',[ChecklistSectionController::class, 'update']);
+    Route::get('sections/{id}', [ChecklistSectionController::class, 'show']);
+    Route::put('sections/{id}', [ChecklistSectionController::class, 'update']);
 });
 
 Route::middleware('api.tenant')->group(function () {
-    Route::get('sections/{sectionId}/questions',[QuestionController::class, 'index']);
-    Route::post('sections/{sectionId}/questions',[QuestionController::class, 'store']);
+    Route::get('sections/{sectionId}/questions', [QuestionController::class, 'index']);
+    Route::post('sections/{sectionId}/questions', [QuestionController::class, 'store']);
 
-    Route::get('questions/{id}',[QuestionController::class, 'show']);
-    Route::put('questions/{id}',[QuestionController::class, 'update']);
-    Route::patch('questions/{id}/status',[QuestionController::class, 'updateStatus']);
+    Route::get('questions/{id}', [QuestionController::class, 'show']);
+    Route::put('questions/{id}', [QuestionController::class, 'update']);
+    Route::patch('questions/{id}/status', [QuestionController::class, 'updateStatus']);
+});
+
+Route::middleware('api.tenant')->group(function () {
+    Route::get('norms', [NormController::class, 'index']);
+    Route::post('norms', [NormController::class, 'store']);
+
+    Route::get('norms/{id}', [NormController::class, 'show']);
+    Route::put('norms/{id}', [NormController::class, 'update']);
+    Route::patch('norms/{id}/status', [NormController::class, 'updateStatus']);
 });

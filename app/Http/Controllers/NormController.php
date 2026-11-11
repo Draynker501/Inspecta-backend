@@ -3,63 +3,163 @@
 namespace App\Http\Controllers;
 
 use App\Models\Norm;
+use App\Support\Tenancy\TenantContext;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class NormController extends Controller
 {
     /**
-     * Display a listing of the resource.
+     * GET /api/norms
+     * Lista las normas de la organización.
      */
-    public function index()
+    public function index(Request $request): JsonResponse
     {
-        //
+        $validated = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $norms = Norm::query()
+            ->orderBy('code')
+            ->orderBy('version')
+            ->paginate($validated['per_page'] ?? 15);
+
+        return response()->json([
+            'data' => $norms->items(),
+            'meta' => [
+                'current_page' => $norms->currentPage(),
+                'last_page' => $norms->lastPage(),
+                'per_page' => $norms->perPage(),
+                'total' => $norms->total(),
+            ],
+        ]);
     }
 
     /**
-     * Show the form for creating a new resource.
+     * POST /api/norms
+     * Registra una nueva norma.
      */
-    public function create()
+    public function store(Request $request,TenantContext $tenantContext): JsonResponse 
     {
-        //
+        $validated = $request->validate([
+            'code' => ['required','string','max:100',],
+            'name' => ['required','string','max:150',],
+            'description' => ['sometimes','nullable','string',],
+            'issuing_body' => ['sometimes','nullable','string','max:150',],
+            'version' => ['sometimes','nullable','string','max:50',],
+            'effective_date' => ['sometimes','nullable','date_format:Y-m-d',],
+        ]);
+
+        $this->validateUniqueNorm(
+            $validated['code'],
+            $validated['version'] ?? null
+        );
+
+        $norm = Norm::create([
+            'id' => (string) Str::uuid(),
+            'organization_id' => $tenantContext->requireId(),
+            'code' => $validated['code'],
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+            'issuing_body' => $validated['issuing_body'] ?? null,
+            'version' => $validated['version'] ?? null,
+            'effective_date' => $validated['effective_date'] ?? null,
+            'status' => true,
+        ]);
+
+        return response()->json([
+            'data' => $norm,
+        ], 201);
     }
 
     /**
-     * Store a newly created resource in storage.
+     * GET /api/norms/{id}
+     * Consulta una norma específica.
      */
-    public function store(Request $request)
+    public function show(string $id): JsonResponse
     {
-        //
+        $norm = Norm::findOrFail($id);
+
+        return response()->json([
+            'data' => $norm,
+        ]);
     }
 
     /**
-     * Display the specified resource.
+     * PUT /api/norms/{id}
+     * Actualiza una norma existente.
      */
-    public function show(Norm $norm)
+    public function update( Request $request,string $id): JsonResponse 
     {
-        //
+        $norm = Norm::findOrFail($id);
+
+        $validated = $request->validate([
+            'code' => ['required','string','max:100',],
+            'name' => ['required','string','max:150',],
+            'description' => ['sometimes','nullable','string',],
+            'issuing_body' => ['sometimes','nullable','string','max:150',],
+            'version' => ['sometimes','nullable','string','max:50',],
+            'effective_date' => ['sometimes','nullable','date_format:Y-m-d',],
+        ]);
+
+        $this->validateUniqueNorm(
+            $validated['code'] ?? $norm->code,
+            array_key_exists('version', $validated)
+                ? $validated['version']
+                : $norm->version,
+            $norm->id
+        );
+
+        $norm->update($validated);
+
+        return response()->json([
+            'data' => $norm->refresh(),
+        ]);
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * PATCH /api/norms/{id}/status
+     * Alterna el estado de una norma.
      */
-    public function edit(Norm $norm)
+    public function updateStatus(string $id): JsonResponse
     {
-        //
+        $norm = Norm::findOrFail($id);
+
+        $norm->update([
+            'status' => ! $norm->status,
+        ]);
+
+        return response()->json([
+            'data' => $norm->refresh(),
+        ]);
     }
 
     /**
-     * Update the specified resource in storage.
+     * Evita registrar el mismo código y versión
+     * dentro de la organización activa.
      */
-    public function update(Request $request, Norm $norm)
+    private function validateUniqueNorm(string $code,?string $version,?string $ignoreId = null): void 
     {
-        //
-    }
+        $query = Norm::query()
+            ->where('code', $code);
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Norm $norm)
-    {
-        //
+        if ($version === null) {
+            $query->whereNull('version');
+        } else {
+            $query->where('version', $version);
+        }
+
+        if ($ignoreId !== null) {
+            $query->where('id', '!=', $ignoreId);
+        }
+
+        if ($query->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'code' => 'Ya existe una norma con el mismo código y versión.',
+            ]);
+        }
     }
 }
