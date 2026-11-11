@@ -54,6 +54,7 @@ Fuente de verdad para las decisiones D-01 a D-36 y la sección de discrepancias.
 | D-36 | Marcar "dentro de una petición HTTP" con un flag del middleware global en vez de `runningInConsole()` | Implementada | PR #13 (e321739): flag HTTP para modo estricto. Aprobada 08-nov-2026 |
 | D-37 | Separar seeders de arranque y de demostración | Implementada | Implementada en P5.3b (PR #14, commit 2014a06): `UserSeeder` con contraseñas fijas solo en local/testing. Aprobada 08-nov-2026 |
 | D-38 | Comando de consola para crear el primer usuario de plataforma en producción | Implementada | Implementado en bloque D-38 (rama feat/d38-primer-usuario-plataforma): comando `inspecta:create-platform-user` con `--email`, `--name`, `--password-stdin`, transacción, auditoría redactada, unicidad del usuario de plataforma (bloqueo de fila), longitud mínima de contraseña 12, y pruebas SQLite/MariaDB. |
+| D-39 | Código `forbidden` para los 403 de autorización | Implementada | Implementado en bloque D-39 (rama feat/d39-codigo-forbidden): `Handler` renderiza 403 de políticas/Gate con code `forbidden` y mensaje fijo (`ApiErrorCode::FORBIDDEN_MESSAGE`) solo para peticiones API; los 403 de contexto conservan su código y mensaje; OpenAPI actualizada a 2.1.0 con `forbidden` en el enum de códigos. |
 
 **Fuera de la numeración:** P33-D07, diferir `TenantController` a M2, está aprobada (según tus documentos `PLAN_TRABAJO_PENDIENTE.md` y `CHECKLIST_HU_06_07_10.md`).
 
