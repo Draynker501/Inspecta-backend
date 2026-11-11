@@ -1,11 +1,9 @@
 # Estado del avance — M1.5 de INSPECTA (actualizado)
 
-Última actualización: 2026-11-10
+Última actualización: 2026-11-11
 
-**Rama:** `docs/cierre-m1-5` (basada en `origin/master`)
-**HEAD:** `3edf5cb2506780f918de9af84a5dd8f6e7c96bcc` (merge de P5.5c, PR #19)
-**Sincronizada con origin/master:** sí
-**Pruebas (VERIFICADO):** SQLite 343 pruebas, 337 aprobadas, 6 omitidas, 1099 aserciones, 0 fallos; MariaDB 11.8 343 pruebas, 338 aprobadas, 5 omitidas, 1127 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-11).
+**Rama:** `chore/d27-config-platform-php` (basada en `origin/master`)
+**Pruebas (VERIFICADO):** SQLite 344 pruebas, 338 aprobadas, 6 omitidas, 1105 aserciones, 0 fallos; MariaDB 11.8 344 pruebas, 339 aprobadas, 5 omitidas, 1133 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-11).
 **Migraciones:** 44.
 **Composer:** `composer validate --no-check-publish` válido. `composer audit`: 0 advisories. `require.php = ^8.4`.
 **Pint:** `vendor/bin/pint --test` en verde (0 diferencias) con `database/migrations` excluido permanentemente.
@@ -76,11 +74,11 @@
 
 ## 4. Decisiones relevantes
 
-Resumen derivado del [registro oficial de decisiones](../decisiones/REGISTRO_DECISIONES.md). Conteo por estado (filas D-xx): Implementada 26, Propuesta 5, Aprobada 7, Parcial 1, Superada 1, Aprobada de hecho 0, Rechazada 1 (total 41). Además, P33-D07 (fuera de la numeración D-xx) está Implementada, lo que lleva el total general a 42 decisiones.
+Resumen derivado del [registro oficial de decisiones](../decisiones/REGISTRO_DECISIONES.md). Conteo por estado medido con comando (filas D-xx): Implementada 28, Propuesta 4, Aprobada 7, Parcial 1, Superada 1, Rechazada 1 (total 42). Además, P33-D07 (fuera de la numeración D-xx) está Implementada, lo que lleva el total general a 43 decisiones.
 
-- **Implementadas (26, filas D-xx):** D-01, D-02, D-06, D-07, D-08, D-09, D-10, D-11, D-15, D-16, D-17, D-20, D-21, D-22, D-23, D-24, D-25, D-26, D-28, D-30, D-31, D-31b, D-31c, D-36, D-37, D-38, D-39.
+- **Implementadas (27, filas D-xx):** D-01, D-02, D-06, D-07, D-08, D-09, D-10, D-11, D-15, D-16, D-17, D-20, D-21, D-22, D-23, D-24, D-25, D-26, D-27, D-28, D-30, D-31, D-31b, D-31c, D-36, D-37, D-38, D-39.
 - **Implementada fuera de la numeración:** P33-D07 (diferir `TenantController` a M2, ahora implementada en este bloque).
-- **Propuestas (5):** D-27, D-32, D-33, D-34, D-35.
+- **Propuestas (4):** D-32, D-33, D-34, D-35.
 - **Aprobadas (7, filas D-xx):** D-03, D-04, D-05, D-12, D-13, D-14, D-19.
 - **Parciales (1):** D-18.
 - **Superadas (1):** D-29.
