@@ -33,6 +33,16 @@ class UserRole extends Model
                 $model->id = (string) Str::uuid7();
             }
         });
+
+        static::created(function (UserRole $model): void {
+            app(\App\Support\Tenancy\TenantContext::class)
+                ->flushPermissionCache($model->user_id, $model->organization_id);
+        });
+
+        static::deleted(function (UserRole $model): void {
+            app(\App\Support\Tenancy\TenantContext::class)
+                ->flushPermissionCache($model->user_id, $model->organization_id);
+        });
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Authorization\Permission;
 use App\Exceptions\CrossTenantOperationException;
 use App\Exceptions\MissingTenantContextException;
 use App\Support\Audit\AuditLogger;
@@ -170,6 +171,66 @@ class User extends Authenticatable
             ->where('roles.name', $role)
             ->where('roles.organization_id', $organizationId)
             ->exists();
+    }
+
+    /**
+     * Indica si el usuario tiene el permiso indicado en la organización activa.
+     *
+     * Único punto de evaluación de permisos (D-20, D-40). Opera a nivel de
+     * la organización activa (TenantContext), deniega por defecto y no
+     * sobrescribe User::can(). Los permisos se cargan una vez por membresía
+     * y se cachean en TenantContext (clave usuario + organización),
+     * invalidados por eventos de RolePermission y UserRole y por clear().
+     */
+    public function hasPermission(Permission $permission): bool
+    {
+        $organizationId = app(TenantContext::class)->id();
+
+        if ($organizationId === null) {
+            return false;
+        }
+
+        $membership = OrganizationMembership::findActive($this->id, $organizationId);
+
+        if ($membership === null) {
+            return false;
+        }
+
+        if (! in_array($permission->value, Permission::values(), true)) {
+            return false;
+        }
+
+        $context = app(TenantContext::class);
+        $cached = $context->getPermissionCache($this->id, $organizationId);
+
+        if ($cached === null) {
+            $cached = $this->loadPermissions($organizationId);
+            $context->setPermissionCache($this->id, $organizationId, $cached);
+        }
+
+        return in_array($permission->value, $cached, true);
+    }
+
+    /**
+     * Carga los permisos del usuario en la organización indicada a partir de
+     * los roles asignados (user_roles + role_permissions).
+     *
+     * @return list<string>
+     */
+    private function loadPermissions(string $organizationId): array
+    {
+        return RolePermission::query()
+            ->where('organization_id', $organizationId)
+            ->whereIn('role_id', function ($query) use ($organizationId) {
+                $query->select('role_id')
+                    ->from('user_roles')
+                    ->where('user_id', $this->id)
+                    ->where('organization_id', $organizationId);
+            })
+            ->pluck('permission')
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**
