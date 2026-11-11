@@ -3,7 +3,7 @@
 Última actualización: 2026-11-11
 
 **Rama:** `feat/m2-2-nucleo-permisos`
-**Pruebas (VERIFICADO):** SQLite 369 pruebas, 360 aprobadas, 9 omitidas, 1153 aserciones, 0 fallos; MariaDB 11.8 369 pruebas, 359 aprobadas, 8 omitidas, 1180 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-11).
+**Pruebas (VERIFICADO):** SQLite 369 pruebas, 360 aprobadas, 9 omitidas, 1155 aserciones, 0 fallos; MariaDB 11.8 369 pruebas, 361 aprobadas, 8 omitidas, 1182 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-11).
 **Migraciones:** 45 (añadida `2026_11_11_000001_create_role_permissions_table`).
 **Composer:** `composer validate --no-check-publish` válido. `composer audit`: 0 advisories. `require.php = ^8.4`.
 **Pint:** `vendor/bin/pint --test` en verde (0 diferencias) con `database/migrations` excluido permanentemente.
