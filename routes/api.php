@@ -8,6 +8,7 @@ use App\Http\Controllers\ChecklistSectionController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\NormController;
 use App\Http\Controllers\NormRequirementController;
+use App\Http\Controllers\QuestionNormRequirementController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -81,4 +82,10 @@ Route::middleware('api.tenant')->group(function () {
 
     Route::get('requirements/{id}', [NormRequirementController::class, 'show']);
     Route::put('requirements/{id}', [NormRequirementController::class, 'update']);
+});
+
+Route::middleware('api.tenant')->group(function () {
+    Route::get('questions/{questionId}/norm-requirements', [QuestionNormRequirementController::class, 'index']);
+    Route::post('questions/{questionId}/norm-requirements', [QuestionNormRequirementController::class, 'store']);
+    Route::delete('questions/{questionId}/norm-requirements/{linkId}', [QuestionNormRequirementController::class, 'destroy']);
 });

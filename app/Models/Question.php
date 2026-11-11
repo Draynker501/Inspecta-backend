@@ -65,8 +65,9 @@ class Question extends Model
             'question_norm_requirement',
             'question_id',
             'norm_requirement_id'
-        );
+        )->withPivot('id');
     }
+
 
     public function inspectionAnswers(): HasMany
     {

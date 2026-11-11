@@ -11,6 +11,8 @@ class QuestionNormRequirement extends Model
 {
     use BelongsToOrganization;
 
+    protected $table = 'question_norm_requirement';
+
     public $incrementing = false;
     protected $keyType = 'string';
 
