@@ -50,24 +50,14 @@ class QuestionController extends Controller
      */
     public function store(Request $request, string $sectionId, TenantContext $tenantContext): JsonResponse
     {
-        $validated = $request->validate([
-            'question_text' => ['required', 'string', 'max:65535'],
-            'description' => ['sometimes', 'nullable', 'string'],
-            'answer_type' => [
-                'required',
-                Rule::in([
-                    'boolean',
-                    'text',
-                    'number',
-                    'multiple_choice',
-                    'signature',
-                    'date',
-                ]),
-            ],
-            'display_order' => ['sometimes', 'integer', 'min:0'],
-            'required' => ['sometimes', 'boolean'],
-            'allows_evidence' => ['sometimes', 'boolean'],
-        ]);
+        $validated = $request->validate(
+            $this->questionRules(true)
+        );
+
+        $this->validateOptions(
+            $validated['answer_type'],
+            $validated['options'] ?? null
+        );
 
         $question = DB::transaction(function () use ($sectionId, $validated, $tenantContext) {
             $section = ChecklistSection::findOrFail($sectionId);
@@ -85,6 +75,7 @@ class QuestionController extends Controller
                 'question_text' => $validated['question_text'],
                 'description' => $validated['description'] ?? null,
                 'answer_type' => $validated['answer_type'],
+                'options' => $validated['options'] ?? null,
                 'display_order' => $validated['display_order'] ?? 0,
                 'required' => $validated['required'] ?? true,
                 'allows_evidence' => $validated['allows_evidence'] ?? false,
@@ -114,26 +105,12 @@ class QuestionController extends Controller
      * PUT /api/questions/{id}
      * Actualiza una pregunta de una versión en borrador.
      */
-    public function update(Request $request, string $id): JsonResponse
+
+    public function update(Request $request,string $id): JsonResponse 
     {
-        $validated = $request->validate([
-            'question_text' => ['sometimes', 'required', 'string', 'max:65535',],
-            'description' => ['sometimes', 'nullable', 'string'],
-            'answer_type' => [
-                'sometimes',
-                Rule::in([
-                    'boolean',
-                    'text',
-                    'number',
-                    'multiple_choice',
-                    'signature',
-                    'date',
-                ]),
-            ],
-            'display_order' => ['sometimes', 'integer', 'min:0'],
-            'required' => ['sometimes', 'boolean'],
-            'allows_evidence' => ['sometimes', 'boolean'],
-        ]);
+        $validated = $request->validate(
+            $this->questionRules()
+        );
 
         $question = DB::transaction(function () use ($id, $validated) {
             $question = Question::findOrFail($id);
@@ -146,6 +123,20 @@ class QuestionController extends Controller
                 ->findOrFail($versionId);
 
             $this->ensureDraft($version);
+
+            $answerType = $validated['answer_type']
+                ?? $question->answer_type;
+
+            $options = array_key_exists('options', $validated)? $validated['options']: $question->options;
+
+            // Si el usuario cambia a un tipo distinto de multiple_choice, se eliminan las opciones anteriores.
+            if ($answerType !== 'multiple_choice') {
+                $options = null;
+            }
+
+            $this->validateOptions($answerType, $options);
+
+            $validated['options'] = $options;
 
             $question->update($validated);
 
@@ -203,4 +194,52 @@ class QuestionController extends Controller
             ]);
         }
     }
+
+
+    private function questionRules(bool $creating = false): array
+    {
+        $required = $creating ? 'required' : 'sometimes';
+
+        return [
+            'question_text' => [$required, 'required', 'string', 'max:65535',],
+            'description' => ['sometimes', 'nullable', 'string'],
+            'answer_type' => [
+                $required,
+                Rule::in([
+                    'boolean',
+                    'text',
+                    'number',
+                    'multiple_choice',
+                    'signature',
+                    'date',
+                ]),
+            ],
+            'options' => ['sometimes', 'nullable', 'array'],
+            'options.*.value' => ['required', 'string', 'max:100', 'distinct',],
+            'options.*.label' => ['required', 'string', 'max:150',],
+            'display_order' => ['sometimes', 'integer', 'min:0'],
+            'required' => ['sometimes', 'boolean'],
+            'allows_evidence' => ['sometimes', 'boolean'],
+        ];
+    }
+
+    private function validateOptions(string $answerType, ?array $options): void
+    {
+        if ($answerType === 'multiple_choice') {
+            if ($options === null || count($options) < 2) {
+                throw ValidationException::withMessages([
+                    'options' => 'Las preguntas de opción múltiple necesitan al menos dos opciones.',
+                ]);
+            }
+
+            return;
+        }
+
+        if (!empty($options)) {
+            throw ValidationException::withMessages([
+                'options' => 'Este tipo de pregunta no admite opciones.',
+            ]);
+        }
+    }
+
 }

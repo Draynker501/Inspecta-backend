@@ -22,6 +22,7 @@ class Question extends Model
         'question_text',
         'description',
         'answer_type',
+        'options',
         'display_order',
         'required',
         'allows_evidence',
@@ -29,6 +30,7 @@ class Question extends Model
     ];
 
     protected $casts = [
+        'options' => 'array',
         'display_order' => 'integer',
         'required' => 'boolean',
         'allows_evidence' => 'boolean',
