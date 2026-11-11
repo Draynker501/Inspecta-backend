@@ -4,7 +4,6 @@ namespace App\Exceptions;
 
 use App\Support\Api\ApiErrorCode;
 use App\Support\Api\ApiErrorResponse;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Exceptions\Handler as BaseHandler;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
@@ -41,14 +40,6 @@ class Handler extends BaseHandler
         $this->renderable(function (AuthenticationException $e, Request $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
                 return ApiErrorResponse::make(ApiErrorCode::Unauthenticated);
-            }
-        });
-
-        // 403 de autorización (policies / Gate): mensaje fijo y unificado,
-        // nunca el mensaje de la excepción (D-39).
-        $this->renderable(function (AuthorizationException $e, Request $request) {
-            if ($request->is('api/*') || $request->expectsJson()) {
-                return ApiErrorResponse::make(ApiErrorCode::Forbidden);
             }
         });
 

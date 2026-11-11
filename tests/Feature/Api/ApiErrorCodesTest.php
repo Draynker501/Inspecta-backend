@@ -10,10 +10,14 @@ use App\Support\Api\ApiErrorCode;
 use App\Support\Api\ApiErrorResponse;
 use App\Support\Tenancy\TenantErrorCode;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use ReflectionClass;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Tests\Support\TenantFixtures;
 use Tests\TestCase;
@@ -60,6 +64,10 @@ class ApiErrorCodesTest extends TestCase
 
             Route::get('deny-as-not-found', function () {
                 throw new NotFoundHttpException('recurso no existe desde policy');
+            });
+
+            Route::get('unauthenticated', function () {
+                throw new AuthenticationException('sin autenticar');
             });
         });
     }
@@ -449,6 +457,28 @@ class ApiErrorCodesTest extends TestCase
 
     // ---------- forbidden: alcance API ----------
 
+    public function test_forbidden_no_aplica_a_peticion_no_api(): void
+    {
+        // Petición NO API: sin Accept JSON y ruta fuera de api/*.
+        // El renderable de HttpExceptionInterface con restricción API no debe
+        // intervenir: la respuesta no debe ser el sobre 'forbidden'.
+        $this->app['config']->set('app.debug', false);
+
+        $handler = $this->app->make(ExceptionHandler::class);
+        $request = Request::create('/web/forbidden', 'GET');
+
+        try {
+            throw new HttpException(403, 'mensaje web que no debe aparecer');
+        } catch (\Throwable $e) {
+            $response = $handler->render($request, $e);
+        }
+
+        $contentType = (string) $response->headers->get('Content-Type');
+        $this->assertStringNotContainsString('application/json', $contentType);
+        $content = (string) $response->getContent();
+        $this->assertStringNotContainsString('"code":"forbidden"', $content);
+        $this->assertStringNotContainsString('forbidden', $content);
+    }
     // ---------- forbidden: policy denyAsNotFound -> 404 ----------
 
     public function test_forbidden_policy_deny_as_not_found_devuelve_404_no_forbidden(): void
@@ -460,5 +490,27 @@ class ApiErrorCodesTest extends TestCase
             ->getJson('/api/error-probe/deny-as-not-found');
 
         $this->assertEnvelope($response, 404, 'not_found', 'Recurso no encontrado.');
+    }
+
+    // ---------- un 401 no se convierte en forbidden ----------
+
+    public function test_un_401_no_se_convierte_en_forbidden(): void
+    {
+        $response = $this->getJson('/api/auth/me');
+
+        $this->assertEnvelope($response, 401, 'unauthenticated', 'No autenticado. Token de acceso ausente o inválido.');
+        $this->assertNotSame('forbidden', $response->json('code'));
+    }
+
+    public function test_authentication_exception_devuelve_unauthented_no_forbidden(): void
+    {
+        $user = $this->user($this->organization('ORG-401'));
+        $org = Organization::where('code', 'ORG-401')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/unauthenticated');
+
+        $this->assertEnvelope($response, 401, 'unauthenticated', 'No autenticado. Token de acceso ausente o inválido.');
+        $this->assertNotSame('forbidden', $response->json('code'));
     }
 }
