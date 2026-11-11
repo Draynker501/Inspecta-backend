@@ -37,6 +37,7 @@ final class ApiErrorResponse
         TenantErrorCode::ORGANIZATION_INVALID => [400, 'El identificador de organización no es un UUID válido.'],
         TenantErrorCode::ORGANIZATION_ACCESS_DENIED => [403, 'No tienes acceso a la organización indicada.'],
         TenantErrorCode::ORGANIZATION_NOT_TENANT => [403, 'No tienes acceso a la organización indicada.'],
+        ApiErrorCode::Forbidden->value => [403, ApiErrorCode::FORBIDDEN_MESSAGE],
     ];
 
     /**

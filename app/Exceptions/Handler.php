@@ -75,6 +75,10 @@ class Handler extends BaseHandler
 
         $this->renderable(function (HttpExceptionInterface $e, Request $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
+                if ($e->getStatusCode() === 403) {
+                    return ApiErrorResponse::make(ApiErrorCode::Forbidden);
+                }
+
                 return response()->json([
                     'message' => $e->getMessage(),
                 ], $e->getStatusCode());

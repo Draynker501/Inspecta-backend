@@ -3,15 +3,22 @@
 namespace Tests\Feature\Api;
 
 use App\Exceptions\CrossTenantOperationException;
+use App\Models\Organization;
 use App\Models\Plant;
 use App\Models\User;
 use App\Support\Api\ApiErrorCode;
 use App\Support\Api\ApiErrorResponse;
 use App\Support\Tenancy\TenantErrorCode;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use ReflectionClass;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Tests\Support\TenantFixtures;
 use Tests\TestCase;
 
@@ -41,6 +48,26 @@ class ApiErrorCodesTest extends TestCase
 
             Route::get('plants/{plant}', function (Plant $plant) {
                 return response()->json(['data' => ['id' => $plant->id]]);
+            });
+
+            Route::get('forbidden', function () {
+                abort(403, 'mensaje personalizado que no debe aparecer');
+            });
+
+            Route::get('authz', function () {
+                throw new AuthorizationException('otro mensaje secreto');
+            });
+
+            Route::get('authz-policy', function () {
+                throw new AuthorizationException('policy.view on App\Models\Plant: no tiene permiso');
+            });
+
+            Route::get('deny-as-not-found', function () {
+                throw new NotFoundHttpException('recurso no existe desde policy');
+            });
+
+            Route::get('unauthenticated', function () {
+                throw new AuthenticationException('sin autenticar');
             });
         });
     }
@@ -331,5 +358,159 @@ class ApiErrorCodesTest extends TestCase
         sort($esperados);
 
         $this->assertSame($esperados, $catalogo);
+    }
+
+    // ---------- forbidden (D-39) ----------
+
+    public function test_forbidden_por_abort_403_devuelve_code_forbidden_y_mensaje_fijo(): void
+    {
+        $user = $this->user($this->organization('ORG-FORB'));
+        $org = Organization::where('code', 'ORG-FORB')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/forbidden');
+
+        $this->assertEnvelope($response, 403, 'forbidden', ApiErrorCode::FORBIDDEN_MESSAGE);
+        $this->assertStringNotContainsString('mensaje personalizado que no debe aparecer', (string) $response->getContent());
+    }
+
+    public function test_forbidden_por_authorization_exception_no_filtra_mensaje(): void
+    {
+        $user = $this->user($this->organization('ORG-FORB2'));
+        $org = Organization::where('code', 'ORG-FORB2')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/authz');
+
+        $this->assertEnvelope($response, 403, 'forbidden', ApiErrorCode::FORBIDDEN_MESSAGE);
+        $this->assertStringNotContainsString('otro mensaje secreto', (string) $response->getContent());
+    }
+
+    public function test_forbidden_mensaje_fijo_hardcodeado(): void
+    {
+        // El mensaje fijo no debe cambiar aunque cambie la constante.
+        $user = $this->user($this->organization('ORG-HC'));
+        $org = Organization::where('code', 'ORG-HC')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/authz');
+
+        $this->assertEnvelope($response, 403, 'forbidden', 'No tienes permiso para realizar esta acción.');
+    }
+
+    public function test_forbidden_no_pisa_code_de_403_de_contexto(): void
+    {
+        $orgA = $this->organization('ORG-CTX-A');
+        $orgB = $this->organization('ORG-CTX-B');
+        $user = $this->user($orgA);
+
+        // El usuario tiene membresía en orgA pero no en orgB: acceso denegado
+        // por contexto, conserva su código (no se convierte en forbidden).
+        $response = $this->actingAsApi($user)
+            ->withHeader('X-Organization-Id', $orgB->id)
+            ->getJson('/api/error-probe/ping');
+
+        $response->assertStatus(403);
+        $this->assertSame('organization_access_denied', $response->json('code'));
+        $this->assertNotSame('forbidden', $response->json('code'));
+    }
+
+    public function test_un_404_no_cambia_con_forbidden(): void
+    {
+        $user = $this->user($this->organization('ORG-404'));
+        $org = Organization::where('code', 'ORG-404')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/plants/'.(string) Str::uuid7());
+
+        $this->assertEnvelope($response, 404, 'not_found', 'Recurso no encontrado.');
+    }
+
+    // ---------- forbidden: no fuga ----------
+
+    public function test_forbidden_no_filtra_mensaje_personalizado_abort(): void
+    {
+        $user = $this->user($this->organization('ORG-FORB-A'));
+        $org = Organization::where('code', 'ORG-FORB-A')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/forbidden');
+
+        $this->assertEnvelope($response, 403, 'forbidden', ApiErrorCode::FORBIDDEN_MESSAGE);
+        $this->assertStringNotContainsString('mensaje personalizado que no debe aparecer', (string) $response->getContent());
+    }
+
+    public function test_forbidden_no_filtra_nombre_policy_ni_recurso(): void
+    {
+        $user = $this->user($this->organization('ORG-FORB-B'));
+        $org = Organization::where('code', 'ORG-FORB-B')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/authz-policy');
+
+        $this->assertEnvelope($response, 403, 'forbidden', ApiErrorCode::FORBIDDEN_MESSAGE);
+        $content = (string) $response->getContent();
+        $this->assertStringNotContainsString('policy.view', $content);
+        $this->assertStringNotContainsString('App\Models\Plant', $content);
+        $this->assertStringNotContainsString('no tiene permiso', $content);
+    }
+
+    // ---------- forbidden: alcance API ----------
+
+    public function test_forbidden_no_aplica_a_peticion_no_api(): void
+    {
+        // Petición NO API: sin Accept JSON y ruta fuera de api/*.
+        // El renderable de HttpExceptionInterface con restricción API no debe
+        // intervenir: la respuesta no debe ser el sobre 'forbidden'.
+        $this->app['config']->set('app.debug', false);
+
+        $handler = $this->app->make(ExceptionHandler::class);
+        $request = Request::create('/web/forbidden', 'GET');
+
+        try {
+            throw new HttpException(403, 'mensaje web que no debe aparecer');
+        } catch (\Throwable $e) {
+            $response = $handler->render($request, $e);
+        }
+
+        $contentType = (string) $response->headers->get('Content-Type');
+        $this->assertStringNotContainsString('application/json', $contentType);
+        $content = (string) $response->getContent();
+        $this->assertStringNotContainsString('"code":"forbidden"', $content);
+        $this->assertStringNotContainsString('forbidden', $content);
+    }
+    // ---------- forbidden: policy denyAsNotFound -> 404 ----------
+
+    public function test_forbidden_policy_deny_as_not_found_devuelve_404_no_forbidden(): void
+    {
+        $user = $this->user($this->organization('ORG-FORB-D'));
+        $org = Organization::where('code', 'ORG-FORB-D')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/deny-as-not-found');
+
+        $this->assertEnvelope($response, 404, 'not_found', 'Recurso no encontrado.');
+    }
+
+    // ---------- un 401 no se convierte en forbidden ----------
+
+    public function test_un_401_no_se_convierte_en_forbidden(): void
+    {
+        $response = $this->getJson('/api/auth/me');
+
+        $this->assertEnvelope($response, 401, 'unauthenticated', 'No autenticado. Token de acceso ausente o inválido.');
+        $this->assertNotSame('forbidden', $response->json('code'));
+    }
+
+    public function test_authentication_exception_devuelve_unauthented_no_forbidden(): void
+    {
+        $user = $this->user($this->organization('ORG-401'));
+        $org = Organization::where('code', 'ORG-401')->first();
+
+        $response = $this->actingAsApiInOrganization($user, $org)
+            ->getJson('/api/error-probe/unauthenticated');
+
+        $this->assertEnvelope($response, 401, 'unauthenticated', 'No autenticado. Token de acceso ausente o inválido.');
+        $this->assertNotSame('forbidden', $response->json('code'));
     }
 }
