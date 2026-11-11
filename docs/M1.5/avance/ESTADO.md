@@ -2,9 +2,9 @@
 
 Última actualización: 2026-11-11
 
-**Rama:** `chore/d27-config-platform-php` (basada en `origin/master`)
-**Pruebas (VERIFICADO):** SQLite 344 pruebas, 338 aprobadas, 6 omitidas, 1105 aserciones, 0 fallos; MariaDB 11.8 344 pruebas, 339 aprobadas, 5 omitidas, 1133 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-11).
-**Migraciones:** 44.
+**Rama:** `feat/m2-2-nucleo-permisos`
+**Pruebas (VERIFICADO):** SQLite 369 pruebas, 360 aprobadas, 9 omitidas, 1153 aserciones, 0 fallos; MariaDB 11.8 369 pruebas, 359 aprobadas, 8 omitidas, 1180 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-11).
+**Migraciones:** 45 (añadida `2026_11_11_000001_create_role_permissions_table`).
 **Composer:** `composer validate --no-check-publish` válido. `composer audit`: 0 advisories. `require.php = ^8.4`.
 **Pint:** `vendor/bin/pint --test` en verde (0 diferencias) con `database/migrations` excluido permanentemente.
 **OpenAPI:** 2.0.0 (49 paths: 4 implementados, 45 marcados `x-status: planned`).
@@ -77,12 +77,12 @@
 
 ## 4. Decisiones relevantes
 
-Resumen derivado del [registro oficial de decisiones](../decisiones/REGISTRO_DECISIONES.md). Conteo por estado medido con comando (filas D-xx): Implementada 28, Propuesta 0, Aprobada 16, Parcial 1, Superada 1, Rechazada 1 (total 47). Además, P33-D07 (fuera de la numeración D-xx) está Implementada, lo que lleva el total general a 48 decisiones. D-27 pasa a Implementada (merge de master, bloque D-27); D-32 a D-35 y D-40 a D-44 se conservan como Aprobadas (rama M2.1). Los conteos se re-miden y validan en el paso de verificación.
+Resumen derivado del [registro oficial de decisiones](../decisiones/REGISTRO_DECISIONES.md). Conteo por estado medido con comando (filas D-xx): Implementada 29, Propuesta 0, Aprobada 15, Parcial 1, Superada 1, Rechazada 1 (total 47). Además, P33-D07 (fuera de la numeración D-xx) está Implementada, lo que lleva el total general a 48 decisiones. D-40 pasa a Implementada (M2.2: enum `Permission`, modelo `RolePermission`, migración, `hasPermission()`, caché en `TenantContext`, helper `TenantPolicy::hasPermission()`). D-27 Implementada (merge de master). D-32 a D-35 y D-41 a D-44 se conservan como Aprobadas.
 
-- **Implementadas (28, filas D-xx):** D-01, D-02, D-06, D-07, D-08, D-09, D-10, D-11, D-15, D-16, D-17, D-20, D-21, D-22, D-23, D-24, D-25, D-26, D-27, D-28, D-30, D-31, D-31b, D-31c, D-36, D-37, D-38, D-39.
+- **Implementadas (29, filas D-xx):** D-01, D-02, D-06, D-07, D-08, D-09, D-10, D-11, D-15, D-16, D-17, D-20, D-21, D-22, D-23, D-24, D-25, D-26, D-27, D-28, D-30, D-31, D-31b, D-31c, D-36, D-37, D-38, D-39, D-40.
 - **Implementada fuera de la numeración:** P33-D07 (diferir `TenantController` a M2, ahora implementada en este bloque).
 - **Propuestas (0):** ninguna.
-- **Aprobadas (16, filas D-xx):** D-03, D-04, D-05, D-12, D-13, D-14, D-19, D-32, D-33, D-34, D-35, D-40, D-41, D-42, D-43, D-44.
+- **Aprobadas (15, filas D-xx):** D-03, D-04, D-05, D-12, D-13, D-14, D-19, D-32, D-33, D-34, D-35, D-41, D-42, D-43, D-44.
 - **Parciales (1):** D-18.
 - **Superadas (1):** D-29.
 - **Rechazadas (1):** D-28b.
