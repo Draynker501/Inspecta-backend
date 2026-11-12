@@ -1,6 +1,6 @@
 # M1.5 — Arquitectura multiempresa de INSPECTA
 
-**Estado:** planificación cerrada, pendiente de aprobación. **Nada implementado.**
+**Estado del documento:** planificación histórica M1.5, cerrada mediante aprobación del 2026-11-10. Las decisiones y el diseño se implementaron por fases; M2.1–M2.7 y su cierre vigente se documentan en [`docs/M2/09-acta-cierre-m2.md`](../M2/09-acta-cierre-m2.md). Este README describe el artefacto de planificación original, no el estado actual del código.
 **Fecha:** 2026-10-27
 **Repositorio auditado:** `Inspecta-backend` (rama `feature/inspecta-auth-seeders`, cambios locales sin commit)
 **Stack confirmado en `composer.json`:** PHP `^8.3`, Laravel `^13.17`, Sanctum `^4.3`, MariaDB/MySQL en producción, SQLite `:memory:` en pruebas.

@@ -1,5 +1,7 @@
 # Informe de cierre documental definitivo — M2.4 (GET /api/plants)
 
+> **Estado histórico al 2026-11-11.** La implementación M2.4 se integró mediante PR #29 (`04ad0c01724904fa2a63c47057494532d593f892`) y el cierre documental mediante PR #30 (`95ff7dbc811a7f5814acb667b1c4764a2e329b83`), ambos el 2026-11-12. Las notas que dicen que no se pudo verificar la integración describen esa revisión anterior. Ver `09-acta-cierre-m2.md`.
+
 **Fecha de cierre documental:** 2026-11-11
 **Rama:** `feat/m2-4-get-plants`
 **HEAD base:** `75c374a450f645286b17ded211e45b1ac6e50017`
@@ -158,7 +160,7 @@ No validado en Octane/workers. Salvedad conservada sin afirmar vulnerabilidad.
 
 LISTA PARA PUBLICACIÓN CON SALVEDADES DOCUMENTADAS.
 
-M2.4 no se considera integrada hasta confirmar su merge.
+Al momento de este informe documental (2026-11-11), M2.4 no se consideraba integrada hasta confirmar el merge. Posteriormente se fusionaron PR #29 y #30 el 2026-11-12; esta frase es histórica.
 
 ---
 

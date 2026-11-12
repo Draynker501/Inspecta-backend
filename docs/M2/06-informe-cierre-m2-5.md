@@ -1,5 +1,7 @@
 # Informe de cierre M2.5 — Revocación de membresías
 
+> **Estado histórico de validación local.** M2.5 se integró mediante PR #32, commit `becf03e971403cdfe17b7743ef4a6e9f10a5b70a` (2026-11-12). La limitación de MariaDB indicada abajo corresponde a esa ejecución local; el PR integrado cuenta con checks PHP 8.4/8.5 y MariaDB 11.8 satisfactorios en GitHub Actions. Ver `09-acta-cierre-m2.md`.
+
 ## A. Veredicto técnico
 
 M2.5 implementada y validada localmente. Revocación organizacional bloquea el dominio en la siguiente petición sin invalidar tokens globales. Usuario globalmente desactivado recibe 401 `unauthenticated` con token previo; login conserva 403 `user_inactive`.

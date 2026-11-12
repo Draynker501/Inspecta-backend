@@ -1,5 +1,7 @@
 # Informe de cierre documental definitivo — M2.3 (Policies y alcance por asignaciones)
 
+> **Estado histórico al 2026-11-11.** M2.3 se integró posteriormente mediante PR #28, commit `66299cfa3778ecb9828053ecefbb969c2075bc16` (2026-11-12). Las referencias de publicación e integración en este informe son una fotografía anterior. Ver `09-acta-cierre-m2.md`.
+
 **Fecha de cierre documental:** 2026-11-11
 **Rama:** `feat/m2-3-policies-recursos`
 **HEAD:** `be37d736237faf3424c7bc01532f6cd17ccb03a8`
@@ -146,7 +148,7 @@ No se contabilizan errores de sintaxis ni infraestructura.
 
 LISTA PARA PUBLICACIÓN CON SALVEDADES DOCUMENTADAS.
 
-M2.3 no se considera integrada hasta confirmar el merge.
+Al momento de este informe documental (2026-11-11), M2.3 no se consideraba integrada hasta confirmar el merge. Posteriormente se fusionó PR #28 el 2026-11-12; esta frase es histórica.
 
 ## M. No ejecutado / no verificado
 
