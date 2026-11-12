@@ -11,9 +11,9 @@ class OpenApiContractTest extends TestCase
         return (string) file_get_contents(base_path('openapi.yaml'));
     }
 
-    public function test_la_version_del_contrato_es_2_1_0(): void
+    public function test_la_version_del_contrato_es_2_2_0(): void
     {
-        $this->assertStringContainsString('version: 2.1.0', $this->spec());
+        $this->assertStringContainsString('version: 2.2.0', $this->spec());
     }
 
     public function test_documenta_la_cabecera_x_organization_id(): void

@@ -2,64 +2,51 @@
 
 namespace App\Http\Controllers;
 
+use App\Authorization\Permission;
 use App\Models\Plant;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class PlantController extends TenantController
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function index(Request $request)
     {
-        //
-    }
+        Gate::authorize('viewAny', Plant::class);
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
+        $validated = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
+        $user = $request->user();
+        $organizationId = app(TenantContext::class)->requireId();
+        $perPage = $validated['per_page'] ?? 15;
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(Plant $plant)
-    {
-        //
-    }
+        $query = Plant::query()->where('organization_id', $organizationId);
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Plant $plant)
-    {
-        //
-    }
+        if (! $user->hasPermission(Permission::LocationsViewAll)) {
+            $query->whereIn('id', function ($subquery) use ($user, $organizationId): void {
+                $subquery->select('plant_id')
+                    ->from('user_plants')
+                    ->where('user_id', $user->id)
+                    ->where('organization_id', $organizationId);
+            });
+        }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Plant $plant)
-    {
-        //
-    }
+        $plants = $query
+            ->orderBy('name')
+            ->orderBy('id')
+            ->paginate($perPage, ['*'], 'page', $validated['page'] ?? 1);
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Plant $plant)
-    {
-        //
+        return response()->json([
+            'data' => $plants->items(),
+            'meta' => [
+                'current_page' => $plants->currentPage(),
+                'per_page' => $plants->perPage(),
+                'total' => $plants->total(),
+                'last_page' => $plants->lastPage(),
+            ],
+        ]);
     }
 }

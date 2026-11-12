@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\OrganizationController;
+use App\Http\Controllers\PlantController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -24,3 +25,5 @@ Route::prefix('auth')->group(function () {
     // Listado de organizaciones del usuario autenticado: no requiere tenant.
     Route::get('organizations', [OrganizationController::class, 'index'])->middleware('api.auth');
 });
+
+Route::get('plants', [PlantController::class, 'index'])->middleware('api.tenant');
