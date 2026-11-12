@@ -26,9 +26,14 @@ class NormsMigrationReversibilityMariaDbTest extends TestCase
 
         $this->assertTrue($this->hasIndex('norms_org_code_version_unique'));
 
+        $posterior = DB::table('migrations')
+            ->where('migration', '>', '2026_11_06_000001_make_norms_unique_by_organization')
+            ->count();
+        $step = $posterior + 1;
+
         $thrown = false;
         try {
-            Artisan::call('migrate:rollback', ['--step' => 1]);
+            Artisan::call('migrate:rollback', ['--step' => $step]);
         } catch (\RuntimeException $e) {
             $thrown = true;
             $this->assertStringContainsString('No se puede revertir la migración', $e->getMessage());
@@ -54,8 +59,13 @@ class NormsMigrationReversibilityMariaDbTest extends TestCase
         DB::table('norms')->where('organization_id', '!=', $keep)->delete();
         DB::table('checklists')->where('organization_id', '!=', $keep)->delete();
 
+        $posterior = DB::table('migrations')
+            ->where('migration', '>', '2026_11_06_000001_make_norms_unique_by_organization')
+            ->count();
+        $step = $posterior + 1;
+
         try {
-            $exitCode = Artisan::call('migrate:rollback', ['--step' => 1]);
+            $exitCode = Artisan::call('migrate:rollback', ['--step' => $step]);
             $this->assertSame(0, $exitCode);
 
             $this->assertTrue($this->hasIndex('norms_code_version_unique'));

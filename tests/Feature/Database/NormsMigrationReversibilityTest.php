@@ -22,9 +22,17 @@ class NormsMigrationReversibilityTest extends TestCase
         // Confirmar que existe el unique por organización antes del intento.
         $this->assertTrue($this->hasIndex('norms_org_code_version_unique'));
 
+        // La migración de norms ya no es necesariamente la última (M2.2 añadió
+        // role_permissions después). Se calcula --step dinámicamente para que
+        // siga válido al añadir más migraciones.
+        $posterior = DB::table('migrations')
+            ->where('migration', '>', '2026_11_06_000001_make_norms_unique_by_organization')
+            ->count();
+        $step = $posterior + 1;
+
         $thrown = false;
         try {
-            Artisan::call('migrate:rollback', ['--step' => 1]);
+            Artisan::call('migrate:rollback', ['--step' => $step]);
         } catch (\RuntimeException $e) {
             $thrown = true;
             $this->assertStringContainsString('No se puede revertir la migración', $e->getMessage());
@@ -50,7 +58,12 @@ class NormsMigrationReversibilityTest extends TestCase
         DB::table('checklists')->where('organization_id', '!=', $keep)->delete();
         // Eliminar plantas/areas/etc. de otras orgs no es necesario para la migración de norms.
 
-        $exitCode = Artisan::call('migrate:rollback', ['--step' => 1]);
+        $posterior = DB::table('migrations')
+            ->where('migration', '>', '2026_11_06_000001_make_norms_unique_by_organization')
+            ->count();
+        $step = $posterior + 1;
+
+        $exitCode = Artisan::call('migrate:rollback', ['--step' => $step]);
         $this->assertSame(0, $exitCode);
 
         $this->assertTrue($this->hasIndex('norms_code_version_unique'));

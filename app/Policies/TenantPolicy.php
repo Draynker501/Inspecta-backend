@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Authorization\Permission;
 use App\Models\OrganizationMembership;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -75,5 +76,15 @@ abstract class TenantPolicy
     protected function isTenantAdmin(User $user): bool
     {
         return $this->hasTenantContext($user) && $user->isAdmin();
+    }
+
+    /**
+     * Indica si el usuario tiene el permiso indicado en la organización
+     * activa, delegando en User::hasPermission() (único punto de evaluación,
+     * D-20, D-40). Sin contexto organizacional devuelve false.
+     */
+    protected function hasPermission(User $user, Permission $permission): bool
+    {
+        return $this->hasTenantContext($user) && $user->hasPermission($permission);
     }
 }

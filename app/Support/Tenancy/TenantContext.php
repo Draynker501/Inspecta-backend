@@ -21,6 +21,15 @@ final class TenantContext
 
     private bool $httpRequest = false;
 
+    /**
+     * Caché de permisos por petición, keyed por "user_id:organization_id".
+     * Se limpia en clear() (ResetTenantContext al inicio/final de cada
+     * petición) y se invalida por eventos de RolePermission y UserRole.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $permissionCache = [];
+
     public function id(): ?string
     {
         return $this->organizationId;
@@ -62,6 +71,62 @@ final class TenantContext
     public function clear(): void
     {
         $this->organizationId = null;
+        $this->permissionCache = [];
+    }
+
+    /**
+     * Devuelve la caché de permisos de una membresía, o null si no está
+     * cargada todavía.
+     *
+     * @return list<string>|null
+     */
+    public function getPermissionCache(string $userId, string $organizationId): ?array
+    {
+        $key = $userId.':'.$organizationId;
+
+        return array_key_exists($key, $this->permissionCache)
+            ? $this->permissionCache[$key]
+            : null;
+    }
+
+    /**
+     * Guarda la caché de permisos de una membresía.
+     *
+     * @param  list<string>  $permissions
+     */
+    public function setPermissionCache(string $userId, string $organizationId, array $permissions): void
+    {
+        $this->permissionCache[$userId.':'.$organizationId] = $permissions;
+    }
+
+    /**
+     * Invalida la caché de permisos.
+     *
+     * Sin argumentos limpia toda la caché (uso en clear() y en eventos
+     * globales). Con $organizationId invalida todos los usuarios de esa
+     * organización; con $userId y $organizationId invalida una membresía.
+     */
+    public function flushPermissionCache(?string $userId = null, ?string $organizationId = null): void
+    {
+        if ($userId === null && $organizationId === null) {
+            $this->permissionCache = [];
+
+            return;
+        }
+
+        foreach (array_keys($this->permissionCache) as $key) {
+            [$cachedUser, $cachedOrg] = explode(':', $key, 2) + ['', ''];
+
+            if ($userId !== null && $cachedUser !== $userId) {
+                continue;
+            }
+
+            if ($organizationId !== null && $cachedOrg !== $organizationId) {
+                continue;
+            }
+
+            unset($this->permissionCache[$key]);
+        }
     }
 
     public function markHttpRequest(): void

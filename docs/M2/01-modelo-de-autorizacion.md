@@ -1,7 +1,7 @@
 # M2.1 — Modelo de autorización de INSPECTA
 
-**Estado:** documentación de decisiones aprobadas (M2.1, SOLO DOCUMENTACIÓN, sin código).
-**Fuente:** decisiones D-40 a D-44 registradas en `docs/M1.5/decisiones/REGISTRO_DECISIONES.md` (aprobadas por el responsable el 11-nov-2026). Cambios de estado: D-32, D-33, D-34, D-35 pasan a Aprobada; D-27 sigue Propuesta (bloque aparte).
+**Estado:** D-40 Implementada en M2.2 (núcleo de autorización: enum `Permission`, modelo `RolePermission`, migración `role_permissions`, `User::hasPermission()`, caché en `TenantContext`, helper `TenantPolicy::hasPermission()`). D-41 a D-44 siguen Aprobadas (pendientes de implementación en M2.3+).
+**Fuente:** decisiones D-40 a D-44 registradas en `docs/M1.5/decisiones/REGISTRO_DECISIONES.md` (aprobadas por el responsable el 11-nov-2026). Cambios de estado: D-32, D-33, D-34, D-35 pasan a Aprobada; D-27 Implementada (merge de master, config.platform.php fijado a 8.4.1).
 **Norma de este documento:** si un permiso, rol, endpoint o comportamiento no está en este documento ni en el registro de decisiones, se considera **no autorizado en M2**.
 
 ---
@@ -121,6 +121,7 @@ Orden lógico: M2.2 → M2.3 → M2.4 → (M2.5 y M2.6 en paralelo tras M2.4) �
 | Auditoría sin escritor automático | Abierto | `AuditLogger` requiere contexto explícito; no hay escritor automático de auditoría (append-only, excepción dedicada). |
 | `devices` y `sync_operations` sin `organization_id` | Abierto | Sin `organization_id` no hay aislamiento a nivel de fila; riesgo de fuga en `/sync/bootstrap` y dispositivos (ver `docs/ACCESOS_Y_PERMISOS.md` §6.13). |
 | 401 vs 403 de usuario desactivado | Abierto | D-44 espera 401 en la siguiente petición; `EnsureApiAuthenticated` devuelve 403 hoy para `user.status = false`. Se verifica en M2.5. |
+| Inserts masivos de `role_permissions` saltan los eventos del modelo (M2.3) | Abierto | Los eventos `saved`/`deleted` de `RolePermission` (que invalidan la caché de permisos) solo se disparan al usar Eloquent. Los inserts masivos (`DB::table()->insert()` o `insertOrIgnore`) no los disparan, dejando la caché stale. Requisito para el servicio de aprovisionamiento: crear filas por el modelo (`RolePermission::create`) o validar contra el catálogo y llamar `TenantContext::flushPermissionCache()` explícitamente. |
 
 ---
 
