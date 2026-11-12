@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Support\Tenancy\MembershipService;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Support\TenantFixtures;
@@ -315,6 +316,21 @@ class MembershipRevocationTest extends TestCase
     public function test_auditoria_una_sola_vez_por_transicion(): void
     {
         $this->test_revocacion_repetida_es_idempotente();
+    }
+
+    public function test_revocacion_audita_actor_explicito_sin_cambiar_autenticacion_ambiental(): void
+    {
+        $org = $this->clientOrganization('AUDIT');
+        $actor = $this->admin($org);
+        $this->grantMembershipsManage($actor, $org);
+        $target = $this->user($org);
+        $ambient = $this->user($org);
+        Auth::setUser($ambient);
+
+        app(MembershipService::class)->revoke($actor, $target, $org);
+
+        $this->assertSame($ambient->id, Auth::user()->id);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'membership.revoked', 'user_id' => $actor->id]);
     }
 
     public function test_revocacion_no_elimina_tokens(): void

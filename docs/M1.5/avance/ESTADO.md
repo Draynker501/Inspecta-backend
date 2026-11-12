@@ -1,5 +1,7 @@
 # Estado del avance — M1.5 de INSPECTA (actualizado)
 
+> Actualización M2.7: validación local con salvedades; esta auditoría documental no repitió las suites completas. Resultados previos: SQLite 469 pruebas, 460 aprobadas, 9 omitidas y 1443 aserciones; MariaDB 11.8 aislada 469 pruebas, 461 aprobadas, 8 omitidas y 1472 aserciones. La regresión SQLite reportó 55 pruebas y 256 aserciones. La ejecución del job es directa, no mediante worker real. M2.6 está integrada (PR #33, commit `7f0465702aba452dc6d0363ef00be567099f0cf4`); sus fotografías históricas de estado se identifican como tales. Véase `docs/M2/08-informe-cierre-m2-7.md`.
+
 Última actualización: 2026-11-11
 
 **Rama:** `feat/m2-4-get-plants`
@@ -41,7 +43,7 @@
 | M1.5 P5.5b — Saneamiento de ejemplos y rutas planeadas | Integrada (PR #18) | Datos de ejemplo saneados, `x-status: planned`, 2 pruebas nuevas. |
 | M1.5 P5.5c — Pint y convención de migraciones | Integrada (PR #19) | `pint.json`, 34 archivos formateados, `style.yml` bloqueante. |
 | M1.5 P5 — Regresión y cierre | Completada (documental, pendiente de aprobación formal) | Allowlist verificada, modo estricto en CI, documentación de excepciones, registro de decisiones actualizado, informe de cierre y acta. |
-| M2 — Controladores y endpoints de dominio | En progreso (M2.6 validado localmente, sin integrar) | M2.5 integrado. M2.6: superficie HTTP consolidada, OpenAPI 2.3.0 y D-32 con rol de plataforma activo; evidencia en el informe M2.6. |
+| M2 — Controladores y endpoints de dominio | En progreso (M2.6 integrada; M2.7 validación local con salvedades) | M2.6 integrada mediante PR #33, commit `7f0465702aba452dc6d0363ef00be567099f0cf4`; D-32 vigente e integrada. M2.7 no acredita worker real ni integración por esta evidencia. Dictamen M2.7: APROBADA CON SALVEDADES. |
 
 ---
 

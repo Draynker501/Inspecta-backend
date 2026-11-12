@@ -21,6 +21,36 @@ final class TenantContext
 
     private bool $httpRequest = false;
 
+    private int $executionDepth = 0;
+
+    public function isTenantExecution(): bool
+    {
+        return $this->executionDepth > 0;
+    }
+
+    /** @var list<?string> */
+    private array $auditActors = [];
+
+    public function hasAuditActor(): bool
+    {
+        return $this->auditActors !== [];
+    }
+
+    public function auditActorId(): ?string
+    {
+        return end($this->auditActors) ?: null;
+    }
+
+    public function withAuditActor(?string $actorId, Closure $callback): mixed
+    {
+        $this->auditActors[] = $actorId;
+        try {
+            return $callback();
+        } finally {
+            array_pop($this->auditActors);
+        }
+    }
+
     /**
      * Caché de permisos por petición, keyed por "user_id:organization_id".
      * Se limpia en clear() (ResetTenantContext al inicio/final de cada
@@ -142,6 +172,29 @@ final class TenantContext
     public function isHttpRequest(): bool
     {
         return $this->httpRequest;
+    }
+
+    /** Aísla cada ejecución interna y restaura solamente fronteras anidadas. */
+    public function isolated(Closure $callback): mixed
+    {
+        if ($this->httpRequest || ($this->executionDepth === 0 && $this->bypassingTenant)) {
+            throw new \LogicException('No se permite iniciar una ejecución tenant desde HTTP o un bypass externo.');
+        }
+
+        $nested = $this->executionDepth > 0;
+        $previous = [$this->organizationId, $this->bypassingTenant];
+        $this->executionDepth++;
+        $this->organizationId = null;
+        $this->bypassingTenant = false;
+        $this->permissionCache = [];
+
+        try {
+            return $callback();
+        } finally {
+            $this->executionDepth--;
+            [$this->organizationId, $this->bypassingTenant] = $nested ? $previous : [null, false];
+            $this->permissionCache = [];
+        }
     }
 
     /**

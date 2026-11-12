@@ -2,12 +2,16 @@
 
 namespace Tests\Feature\Audit;
 
+use App\Authorization\Permission;
 use App\Exceptions\AuditLogImmutableException;
 use App\Models\AuditLog;
 use App\Models\OrganizationMembership;
+use App\Models\Plant;
 use App\Support\Audit\AuditLogger;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Tenancy\TenantExecution;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\Support\TenantFixtures;
 use Tests\TestCase;
 
@@ -15,6 +19,51 @@ class AuditLoggerTest extends TestCase
 {
     use RefreshDatabase;
     use TenantFixtures;
+
+    public function test_fuera_de_frontera_conserva_comportamiento_general_de_auditoria(): void
+    {
+        $a = $this->organization('LEGACY-A');
+        $b = $this->organization('LEGACY-B');
+        app(TenantContext::class)->set($b->id);
+        $plant = Plant::create(['id' => (string) Str::uuid7(), 'name' => 'Ajena', 'code' => 'LEGACY', 'status' => true]);
+        app(TenantContext::class)->set($a->id);
+
+        $log = app(AuditLogger::class)->record('test.legacy', $plant);
+        $this->assertSame($a->id, $log->organization_id);
+    }
+
+    public function test_rechaza_auditable_de_otra_organizacion_sin_escribir(): void
+    {
+        $a = $this->organization('AUDIT-A');
+        $b = $this->organization('AUDIT-B');
+        app(TenantContext::class)->set($b->id);
+        $plant = Plant::create(['id' => (string) Str::uuid7(), 'name' => 'Ajena', 'code' => 'AJENA', 'status' => true]);
+        $actor = $this->admin($a);
+
+        try {
+            app(TenantExecution::class)->run($a->id, $actor->id, Permission::PlantsView,
+                fn () => app(AuditLogger::class)->record('test.cross', $plant));
+            $this->fail('Debe rechazar organización ajena');
+        } catch (\InvalidArgumentException) {
+            $this->assertDatabaseMissing('audit_logs', ['action' => 'test.cross']);
+        }
+    }
+
+    public function test_auditable_tenant_sin_organization_id_cargado_falla_cerrado(): void
+    {
+        $org = $this->organization('AUDIT-PARTIAL');
+        app(TenantContext::class)->set($org->id);
+        $plant = Plant::create(['id' => (string) Str::uuid7(), 'name' => 'Parcial', 'code' => 'PARTIAL', 'status' => true]);
+        $partial = Plant::query()->select('id')->findOrFail($plant->id);
+        $actor = $this->admin($org);
+        try {
+            app(TenantExecution::class)->run($org->id, $actor->id, Permission::PlantsView,
+                fn () => app(AuditLogger::class)->record('test.partial', $partial));
+            $this->fail('Debe fallar sin organización cargada');
+        } catch (\InvalidArgumentException) {
+            $this->assertDatabaseMissing('audit_logs', ['action' => 'test.partial']);
+        }
+    }
 
     protected function tearDown(): void
     {
