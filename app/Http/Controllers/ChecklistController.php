@@ -46,7 +46,9 @@ class ChecklistController extends Controller
      */
     public function activeVersion(string $checklistId): JsonResponse
     {
-        $checklist = Checklist::findOrFail($checklistId);
+        $checklist = Checklist::query()
+            ->where('status', true)
+            ->findOrFail($checklistId);
 
         $activeVersion = $checklist->checklistVersions()
             ->where('status', 'published')

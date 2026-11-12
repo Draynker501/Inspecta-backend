@@ -136,7 +136,7 @@ class ChecklistVersionController extends Controller
         ]);
 
         $version = DB::transaction(function () use ($id, $versionId, $validated) {
-            // Bloqueamos el checklist para serializarlas publicaciones de sus versiones.
+            // checklist bloqueado para serializar las publicaciones de sus versiones.
             $checklist = Checklist::query()
                 ->lockForUpdate()
                 ->findOrFail($id);
@@ -147,6 +147,7 @@ class ChecklistVersionController extends Controller
 
             $newStatus = $validated['status'];
 
+            // Una versión archivada no puede reactivarse.
             if ($version->status === 'archived') {
                 throw ValidationException::withMessages([
                     'status' => 'Una versión archivada no puede cambiar de estado.',
@@ -161,6 +162,13 @@ class ChecklistVersionController extends Controller
                 if ($version->status !== 'draft') {
                     throw ValidationException::withMessages([
                         'status' => 'Solo se pueden publicar versiones en borrador.',
+                    ]);
+                }
+
+                // impedir publicar checklists desactivados.
+                if (!$checklist->status) {
+                    throw ValidationException::withMessages([
+                        'status' => 'No se puede publicar una versión de un checklist desactivado.',
                     ]);
                 }
 
@@ -193,12 +201,25 @@ class ChecklistVersionController extends Controller
         ]);
     }
 
-
     private function validateBeforePublishing(ChecklistVersion $version): void
     {
         if (!$version->sections()->exists()) {
             throw ValidationException::withMessages([
                 'sections' => 'La versión necesita al menos una sección antes de publicarse.',
+            ]);
+        }
+
+        $emptySections = $version->sections()
+            ->whereDoesntHave('questions', function ($query) {
+                $query->where('status', true);
+            })
+            ->pluck('name');
+
+        if ($emptySections->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'sections' => 'No se puede publicar el checklist. '
+                    . 'Las siguientes secciones no tienen preguntas activas: '
+                    . $emptySections->implode(', '),
             ]);
         }
 
