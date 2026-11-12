@@ -1,15 +1,15 @@
 # Estado del avance — M1.5 de INSPECTA (actualizado)
 
-> Actualización M2.7: validación local con salvedades; esta auditoría documental no repitió las suites completas. Resultados previos: SQLite 469 pruebas, 460 aprobadas, 9 omitidas y 1443 aserciones; MariaDB 11.8 aislada 469 pruebas, 461 aprobadas, 8 omitidas y 1472 aserciones. La regresión SQLite reportó 55 pruebas y 256 aserciones. La ejecución del job es directa, no mediante worker real. M2.6 está integrada (PR #33, commit `7f0465702aba452dc6d0363ef00be567099f0cf4`); sus fotografías históricas de estado se identifican como tales. Véase `docs/M2/08-informe-cierre-m2-7.md`.
+> **Estado vigente al cierre documental M2 (2026-11-12):** M2.1–M2.7 integradas en `master`. M2.6: PR #33, `7f0465702aba452dc6d0363ef00be567099f0cf4`. M2.7: PR #34, `902ef0ba96f7121a8b0d4132488335ad14ae805f`, aprobada con salvedades para infraestructura de contexto y pruebas T20–T22; no habilita jobs de negocio ni demuestra worker real. Evidencias M2.7 previas, no repetidas en este cierre: SQLite 469 pruebas (460 aprobadas, 9 omitidas), 1443 aserciones; MariaDB 11.8 (469, 461 aprobadas, 8 omitidas), 1472 aserciones; regresión SQLite posterior, 55 pruebas y 256 aserciones. Checks de CI del PR #34 satisfactorios. Ver `docs/M2/09-acta-cierre-m2.md`.
 
-Última actualización: 2026-11-11
+Última actualización documental: 2026-11-12. Los metadatos y mediciones de la fotografía histórica inmediatamente abajo están fechados 2026-11-11 y no representan el estado Git ni la suite de M2 al cierre formal.
 
-**Rama:** `feat/m2-4-get-plants`
-**Pruebas (VERIFICADO):** SQLite 409 pruebas, 400 aprobadas, 9 omitidas, 1257 aserciones, 0 fallos; MariaDB 11.8 409 pruebas, 401 aprobadas, 8 omitidas, 1286 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-11).
+**Rama de la fotografía 2026-11-11:** `feat/m2-4-get-plants` (referencia histórica, no rama actual).
+**Pruebas de esa fotografía (VERIFICADO entonces):** SQLite 409 pruebas, 400 aprobadas, 9 omitidas, 1257 aserciones, 0 fallos; MariaDB 11.8 409 pruebas, 401 aprobadas, 8 omitidas, 1286 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-11). Las evidencias M2 posteriores están en el acta de cierre y no se suman a estas cifras.
 **Migraciones:** 45 (añadida `2026_11_11_000001_create_role_permissions_table`).
 **Composer:** `composer validate --no-check-publish` válido. `composer audit`: 0 advisories. `require.php = ^8.4`.
 **Pint:** `vendor/bin/pint --test` en verde (0 diferencias) con `database/migrations` excluido permanentemente.
-**OpenAPI:** 2.1.0 (49 paths: 4 implementados, 45 marcados `x-status: planned`).
+**OpenAPI de la fotografía 2026-11-11:** 2.1.0 (49 paths: 4 implementados, 45 `x-status: planned`); actualizado después a 2.3.0 en M2.5/M2.6. Los paths planeados siguen sin ser rutas implementadas.
 
 ---
 
@@ -43,7 +43,7 @@
 | M1.5 P5.5b — Saneamiento de ejemplos y rutas planeadas | Integrada (PR #18) | Datos de ejemplo saneados, `x-status: planned`, 2 pruebas nuevas. |
 | M1.5 P5.5c — Pint y convención de migraciones | Integrada (PR #19) | `pint.json`, 34 archivos formateados, `style.yml` bloqueante. |
 | M1.5 P5 — Regresión y cierre | Completada (documental, pendiente de aprobación formal) | Allowlist verificada, modo estricto en CI, documentación de excepciones, registro de decisiones actualizado, informe de cierre y acta. |
-| M2 — Controladores y endpoints de dominio | En progreso (M2.6 integrada; M2.7 validación local con salvedades) | M2.6 integrada mediante PR #33, commit `7f0465702aba452dc6d0363ef00be567099f0cf4`; D-32 vigente e integrada. M2.7 no acredita worker real ni integración por esta evidencia. Dictamen M2.7: APROBADA CON SALVEDADES. |
+| M2 — Autorización, superficie HTTP y contexto organizacional | Completada e integrada (M2.1–M2.7); cierre documental con salvedades | PR #26–#34 según subfase; M2.6 en PR #33 y M2.7 en PR #34. M2.7: infraestructura y T20–T22; no equivale a habilitar productores de jobs de negocio. Ver acta `docs/M2/09-acta-cierre-m2.md`. |
 
 ---
 
@@ -59,56 +59,50 @@
 - **Auditoría:** `AuditLog` append-only (excepción dedicada), `AuditLogger` con contexto obligatorio y redacción; auditoría de asignaciones de rol/planta/área.
 - **Modo estricto:** `OrganizationScope` lanza `MissingTenantContextException` en HTTP sin contexto cuando `strict_mode=true` (default); consola y `withoutTenant()` exentos; workers de cola no exentos; flag HTTP `TENANCY_STRICT_MODE`.
 - **Seeders:** 2 clientes (INSP-01, ORG-02) + operadora INSPECTA-OP; catálogo por organización; consultor de plataforma con membresía en operadora y clientes. Contraseñas fijas solo en local/testing.
-- **OpenAPI:** 2.1.0; cabecera `X-Organization-Id`, `/auth/organizations`, campo `type`, catálogo de errores (11 códigos + `forbidden`), 45 paths marcados `x-status: planned`.
+- **OpenAPI vigente:** 2.3.0; cabecera `X-Organization-Id`, `/auth/organizations`, campo `type` y catálogo de errores. Las operaciones con `x-status: planned` son planes, no rutas implementadas; la correspondencia M2.6 se documenta en su informe.
 - **CORS:** `config/cors.php` permite `X-Organization-Id`, `supports_credentials=false`, `max_age=600`.
 - **Migraciones:** 45 (incluye `role_permissions` y unique de norms por organización).
 - **Pint:** `vendor/bin/pint --test` en verde; `database/migrations` excluido permanentemente.
 - **CI:** workflows `tests` (SQLite), `tests-mariadb` (MariaDB 11.8), `security` (audit bloqueante), `style` (Pint bloqueante).
-- **Rutas implementadas:** `/`, `api/auth/login`, `api/auth/logout`, `api/auth/me`, `api/auth/organizations`, `up` (6 rutas).
-- **Ruta de producción de M2:** ninguna aún. D-41 permite un único endpoint de lectura como corte vertical (candidato `GET /plants`, a confirmar en M2.6); el resto se prueba con rutas temporales y llega con los catálogos organizacionales.
+- **Rutas implementadas según M2.6:** `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/organizations` y `GET /api/plants`; además `/` y `up` de la aplicación. M2.6 confirmó la superficie de cinco operaciones API.
+- **Corte vertical de dominio:** `GET /api/plants` implementado en M2.4 y conservado por M2.6. No se implementó CRUD de plantas, inspecciones ni endpoints adicionales de dominio en M2.
 
 ## 3. Qué NO existe todavía
 
-- Factories de dominio (solo Organization, OrganizationMembership, User).
-- Servicio de revocación/re-concesión de membresías (M2.5, D-44).
-- Rutas de dominio (solo `/auth/*` implementadas; 45 paths planeados; M2 añade a lo sumo un endpoint de lectura de corte vertical).
-- Servicio de aprovisionamiento de roles y normas por cliente.
-- Errores fuera del catálogo (403 de policies, 405, 500) sin `code`.
+- Factories EHS completas y CRUD de dominio.
+- Servicio HTTP para revocar/reconceder membresías; M2.5 implementa revocación de dominio en servicio, no endpoints HTTP, y reactivación sigue diferida.
+- Las 45 operaciones marcadas planeadas en OpenAPI no se consideran implementadas por figurar en el contrato.
 - Servicio de aprovisionamiento de roles y normas por cliente.
 - Errores fuera del catálogo (403 de policies, 405, 500) sin `code`.
 
 ## 4. Decisiones relevantes
 
-Resumen derivado del [registro oficial de decisiones](../decisiones/REGISTRO_DECISIONES.md). Conteo por estado medido con comando (filas D-xx): Implementada 29, Propuesta 0, Aprobada 15, Parcial 1, Superada 1, Rechazada 1 (total 47). Además, P33-D07 (fuera de la numeración D-xx) está Implementada, lo que lleva el total general a 48 decisiones. D-40 pasa a Implementada (M2.2: enum `Permission`, modelo `RolePermission`, migración, `hasPermission()`, caché en `TenantContext`, helper `TenantPolicy::hasPermission()`). D-27 Implementada (merge de master). D-32 a D-35 y D-41 a D-44 se conservan como Aprobadas.
+Resumen histórico de decisiones de M1.5; para el estado vigente de M2 prevalecen el registro oficial y el acta de cierre M2. El conteo siguiente es una fotografía previa del registro, no el estado vigente. Al cierre M2, D-32 y D-35 están implementadas e integradas en M2.6/M2.7 (PR #33/#34).
 
 - **Implementadas (29, filas D-xx):** D-01, D-02, D-06, D-07, D-08, D-09, D-10, D-11, D-15, D-16, D-17, D-20, D-21, D-22, D-23, D-24, D-25, D-26, D-27, D-28, D-30, D-31, D-31b, D-31c, D-36, D-37, D-38, D-39, D-40.
 - **Implementada fuera de la numeración:** P33-D07 (diferir `TenantController` a M2, ahora implementada en este bloque).
 - **Propuestas (0):** ninguna.
-- **Aprobadas (15, filas D-xx):** D-03, D-04, D-05, D-12, D-13, D-14, D-19, D-32, D-33, D-34, D-35, D-41, D-42, D-43, D-44.
+- **Aprobadas en la fotografía histórica de M1.5 (15 filas D-xx):** D-03, D-04, D-05, D-12, D-13, D-14, D-19, D-32, D-33, D-34, D-35, D-41, D-42, D-43, D-44. D-32 y D-35 cambiaron después a implementadas e integradas; consultar el registro vigente.
 - **Parciales (1):** D-18.
 - **Superadas (1):** D-29.
 - **Rechazadas (1):** D-28b.
 
-### Próximos bloques de M2
+### Bloques M2 (histórico; completados e integrados)
 
-M2.2 a M2.7 según `docs/M2/01-modelo-de-autorizacion.md` (sección 6): `role_permissions` y `hasPermission()` (M2.2), policies con alcance por asignación (M2.3), endpoint de corte vertical `GET /plants` y contrato 2.2.0 (M2.4-M2.6), revocación y prueba de desactivado → 401 (M2.5), contexto explícito en jobs y comandos con pruebas T20-T22 (M2.7).
-- **Parciales (1):** D-18.
-- **Superadas (1):** D-29.
-- **Rechazadas (1):** D-28b.
-- **D-31:** integrada (PR #10 fusionado) en `origin/master` (códigos en rechazos de `ResolveTenantContext`).
+M2.1–M2.7, descritos en `docs/M2/01-modelo-de-autorizacion.md`, están implementados/documentados e integrados. El estado y alcance vigente se consolida en `docs/M2/09-acta-cierre-m2.md`.
 
 ### 4.1 Concordancia de numeración
 
 D-20 y D-21 del checklist del 2-nov (unicidad organizacional / identidad global) difieren de D-20 y D-21 del registro vigente; `PLAN_TRABAJO_PENDIENTE.md` marca "D-21 pendiente". El registro vigente (`docs/M1.5/decisiones/REGISTRO_DECISIONES.md`) prevalece. No se editan esos otros archivos.
 
-## 5. Validaciones actuales
+## 5. Validaciones de la fotografía 2026-11-11 (históricas)
 
-- Suite: SQLite 409 pruebas, 400 aprobadas, 9 omitidas, 1257 aserciones, 0 fallos; MariaDB 11.8 409 pruebas, 401 aprobadas, 8 omitidas, 1286 aserciones, 0 fallos.
+- Suite en esa revisión: SQLite 409 pruebas, 400 aprobadas, 9 omitidas, 1257 aserciones, 0 fallos; MariaDB 11.8 409 pruebas, 401 aprobadas, 8 omitidas, 1286 aserciones, 0 fallos. No sustituye resultados posteriores de M2.
 - `composer validate --no-check-publish`: válido.
 - `composer audit`: 0 advisories.
 - `vendor/bin/pint --test`: en verde (0 diferencias).
 - `git diff --check`: limpio.
-- OpenAPI: 2.1.0 (sin cambios en M2.2).
+- OpenAPI: 2.1.0 en la fotografía de M2.2 (sin cambios en ese hito).
 
 ## Trazabilidad verificada
 
@@ -125,13 +119,13 @@ D-20 y D-21 del checklist del 2-nov (unicidad organizacional / identidad global)
 | Factories de dominio ausentes | DIFERIDO a M2 |
 | Servicio de revocación de membresías ausente | DIFERIDO a M2 (M2.5, D-44) |
 | OpenAPI 2.0.0 → 2.1.0 | RESUELTA (P5.4b PR #16; D-39 eleva a 2.1.0) |
-| 45 paths del contrato planeados | ABIERTA (M2 añade a lo sumo un endpoint de lectura de corte vertical, D-41) |
+| 45 paths del contrato planeados | DIFERIDOS; M2 implementó un corte vertical (`GET /api/plants`), no habilitó el resto de las operaciones planeadas |
 | M2 bloqueada hasta cierre formal de P5 | RESUELTA (acta firmada 10-11-2026; M2 autorizada) |
 | Tokens sin expiración (`sanctum.expiration`) | ABIERTA (riesgo de despliegue; depende de la PWA sin conexión, D-44) |
 | `Organization` sin scope de aislamiento | ABIERTA (aislamiento vía TenantContext y membresías, no a nivel de tabla) |
 | Auditoría sin escritor automático | ABIERTA (`AuditLogger` requiere contexto explícito) |
 | `devices` y `sync_operations` sin `organization_id` | ABIERTA (sin `organization_id` no hay aislamiento de fila; riesgo en sync/dispositivos) |
-| 401 vs 403 de usuario desactivado | ABIERTA (D-44 espera 401; código devuelve 403 hoy; verificar en M2.5) |
+| 401 vs 403 de usuario desactivado | RESUELTA en M2.5 (D-44): token de usuario desactivado → 401; login inactivo conserva 403 `user_inactive`; véase informe M2.5 |
 
 ## 7. Restricciones permanentes
 

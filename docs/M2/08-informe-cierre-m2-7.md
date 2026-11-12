@@ -1,5 +1,7 @@
 # Informe de cierre M2.7 — ejecución tenant
 
+> **Fotografía de validación previa a la integración.** M2.7 se integró posteriormente mediante PR #34, commit `902ef0ba96f7121a8b0d4132488335ad14ae805f` (2026-11-12). Las limitaciones técnicas descritas siguen vigentes; la referencia histórica a que no estaba integrada fue sustituida por este estado. Ver `09-acta-cierre-m2.md` para el dictamen consolidado.
+
 Dictamen: **APROBADA CON SALVEDADES** para la frontera y el alcance documentados. Evidencia de validación local; esta auditoría final no repitió las suites completas. No se ha probado un worker real ni existe productor de producción confiable aprobado. Este dictamen no equivale a validación de worker, aprobación de productor ni integración de M2.7.
 
 M2.6 está integrada mediante PR #33, commit `7f0465702aba452dc6d0363ef00be567099f0cf4`; D-32 está vigente, implementada e integrada. Las referencias de rama/base en el informe histórico M2.6 son fotografías del momento de validación y no contradicen esa integración posterior.
@@ -25,4 +27,4 @@ T20 y T21 se ejercitan mediante invocación directa de un job de prueba; T22 med
 
 ## Riesgos y pendientes
 
-La procedencia confiable y la autenticación efectiva son responsabilidad del productor; el UUID no prueba identidad. Falta validar worker real, cola y serialización; la capacidad sin actor requiere decisión de sistema. Los resultados de suites son previos y no fueron repetidos en la auditoría final. La integración de M2.7 no queda afirmada por esta evidencia. No se cambió OpenAPI ni se instalaron dependencias.
+La procedencia confiable y la autenticación efectiva son responsabilidad del productor; el UUID no prueba identidad. Falta validar worker real, cola y serialización; la capacidad sin actor requiere decisión de sistema. Los resultados de suites son previos y no fueron repetidos en la auditoría final. **Al momento de este informe**, la integración de M2.7 no estaba afirmada; posteriormente se integró por PR #34, como se indica en la nota histórica al inicio. No se cambió OpenAPI ni se instalaron dependencias.

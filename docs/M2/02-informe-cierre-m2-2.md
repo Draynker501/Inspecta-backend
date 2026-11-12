@@ -1,5 +1,7 @@
 # Informe de revisión de cierre local — M2.2 (núcleo de autorización)
 
+> **Estado histórico al 2026-11-11.** Este informe se cerró antes de la integración de M2.2. PR #27 fue fusionado el 2026-11-12 (`be37d736237faf3424c7bc01532f6cd17ccb03a8`). Los veredictos y pasos de publicación que siguen describen esa revisión local, no el estado vigente. Ver `09-acta-cierre-m2.md`.
+
 **Fecha de revisión:** 2026-11-11
 **Rama:** `feat/m2-2-nucleo-permisos`
 **HEAD:** `6846f7db94ee6f357cdd68c62c071a7991fb099e`

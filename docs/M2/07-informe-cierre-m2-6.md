@@ -1,5 +1,7 @@
 # Informe preliminar de implementación M2.6 — Consolidación HTTP
 
+> **Fotografía histórica previa a la integración.** M2.6 se integró posteriormente por PR #33, commit `7f0465702aba452dc6d0363ef00be567099f0cf4` (2026-11-12). Las notas de rama, cambios sin commit y publicación pendiente reflejan el momento de validación local, no el estado actual.
+
 Estado: preliminar, pendiente de auditoría y publicación.
 
 ## Objetivo

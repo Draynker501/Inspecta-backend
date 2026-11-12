@@ -1,8 +1,8 @@
 # M2.1 — Modelo de autorización de INSPECTA
 
-**Estado:** D-40 Implementada (M2.2). D-42 Implementada en M2.3 (policies de Plant, Area y ProductionLine con alcance por asignación y permiso `locations.view_all`). D-41 Implementada en M2.4 (`GET /api/plants`). D-43 sigue Aprobada (pendiente en M2.6+). D-44 Implementada en M2.5: revocación de membresía bloquea el dominio en la siguiente petición; tokens no se invalidan; usuario globalmente desactivado recibe 401 `unauthenticated` con token previo; login conserva 403 `user_inactive`. Reactivación y gestión HTTP de membresías diferidas.
-**Fuente:** decisiones D-40 a D-44 registradas en `docs/M1.5/decisiones/REGISTRO_DECISIONES.md` (aprobadas por el responsable el 11-nov-2026). Cambios de estado: D-32, D-33, D-34, D-35 pasan a Aprobada; D-27 Implementada (merge de master, config.platform.php fijado a 8.4.1).
-**Actualización local M2.6:** D-32 exige en `viewMemberships` membresía y rol de plataforma activos en la operadora; M2.6 fue validada localmente y no está integrada en `master`.
+**Estado vigente al cierre M2 (2026-11-12):** M2.1–M2.7 integradas en `master`. M2.6 (PR #33, commit `7f0465702aba452dc6d0363ef00be567099f0cf4`) implementa D-32. M2.7 (PR #34, commit `902ef0ba96f7121a8b0d4132488335ad14ae805f`) completa el alcance de contexto y pruebas T20–T22 con salvedades. El acta consolidada es `docs/M2/09-acta-cierre-m2.md`.
+**Nota histórica:** los estados de D-32–D-35 como aprobadas y las notas de M2.6 local/no integrada que aparecían en fotografías previas describían el estado anterior a los merges #33 y #34; prevalecen el registro de decisiones y el acta actualizados.
+**Fuente:** decisiones D-40 a D-44 registradas en `docs/M1.5/decisiones/REGISTRO_DECISIONES.md`. D-43 permanece aprobada; no implica funciones de alta de clientes dentro del alcance M2.
 **Norma de este documento:** si un permiso, rol, endpoint o comportamiento no está en este documento ni en el registro de decisiones, se considera **no autorizado en M2**.
 
 ---
@@ -103,14 +103,14 @@ Notas:
 
 | Bloque | Contenido | Depende de | Prueba validadora |
 |---|---|---|---|
-| **M2.2** | Tabla `role_permissions` (rol, organización, permiso) con FK compuesta al rol; catálogo de permisos en código; `hasPermission()` único punto de evaluación; denegación por defecto. | M2.1, D-40, D-09, D-15 | Prueba de cobertura: todo permiso guardado en `role_permissions` existe en el catálogo de código. |
-| **M2.3** | Policies de plantas, áreas y líneas con alcance por asignación (`user_plants`, `user_areas`): Inspector solo sus asignados; Admin/Supervisor org-wide (sujeto a confirmar). | M2.2 | Inspector recibe 404 en planta/área no asignada; Admin y Supervisor ven todas las de la organización. |
-| **M2.4** | Endpoint de corte vertical de lectura (candidato `GET /plants`, a confirmar en M2.6): autenticación, tenant, controlador, policy, permiso y respuesta 403 `forbidden`. Contrato pasa a 2.2.0. | M2.2, M2.3, D-39 | 200 con token válido y permiso; 403 `forbidden` sin permiso; 404 para recurso de otra organización. |
-| **M2.5** | Revocación de membresía bloquea el dominio en la siguiente petición; tokens no invalidados; prueba de usuario desactivado → 401 en la siguiente petición; verificación de `users.status` en `EnsureApiAuthenticated` por petición. | M2.2, D-44, D-20 | Usuario desactivado/miembro revocado obtiene 401 (o el código que defina M2.5) en la petición siguiente a la revocación. |
-| **M2.6** | Confirmación del corte vertical `GET /plants` como única ruta de producción de M2; resto de rutas de dominio con rutas temporales; rutas de catálogos organizacionales se deferran a los catálogos organizacionales. | M2.4, D-41 | Contrato en 2.2.0; ruta de corte vertical lista; sin otras rutas de producción en M2. |
-| **M2.7** | Jobs y comandos fijan el contexto de forma explícita (`TenantContext::runAs`, patrón D-38); pruebas de jobs y comandos con organización (T20 a T22). | D-35, D-38, M2.2 | Pruebas T20-T22 en verde: contexto organizacional explícito en jobs y comandos. |
+| **M2.2** | Núcleo de permisos: `role_permissions`, catálogo en código, `hasPermission()` y denegación por defecto. | M2.1, D-40, D-09, D-15 | Cobertura del catálogo; integrado PR #27. |
+| **M2.3** | Policies de plantas, áreas y líneas con alcance por asignación. | M2.2 | Pruebas de denegación/alcance; integrado PR #28. |
+| **M2.4** | Corte vertical HTTP `GET /api/plants`: autenticación, tenant, policy, permiso, filtrado y paginación. | M2.2, M2.3, D-39 | Integrado PR #29; documentación de cierre PR #30. |
+| **M2.5** | Revocación de membresía, conservación de tokens globales y usuario desactivado → 401 con token previo. | M2.2, D-44, D-20 | Servicio y regresiones integrados PR #32. |
+| **M2.6** | Cinco operaciones API permitidas, solo `GET /api/plants` como ruta de dominio; D-32 y correspondencia OpenAPI/Laravel. | M2.4, D-41 | OpenAPI 2.3.0; integrado PR #33 (`7f046570`). |
+| **M2.7** | Contexto explícito y limpieza para artefactos de job/comando de prueba; T20–T22; endurecimiento D-38. No habilita jobs de negocio. | D-35, D-38, M2.2 | Integrado PR #34 (`902ef0ba`), dictamen con salvedades; no se probó worker real. |
 
-Orden lógico: M2.2 → M2.3 → M2.4 → (M2.5 y M2.6 en paralelo tras M2.4) → M2.7.
+Orden lógico histórico: M2.2 → M2.3 → M2.4 → (M2.5 y M2.6 en paralelo tras M2.4) → M2.7. Todas las subfases están integradas; los informes respectivos conservan las cifras y estados en el momento de sus validaciones.
 
 ---
 
@@ -122,7 +122,7 @@ Orden lógico: M2.2 → M2.3 → M2.4 → (M2.5 y M2.6 en paralelo tras M2.4) �
 | `Organization` sin scope de aislamiento | Abierto | El aislamiento se ejerce desde el contexto de tenant y las membresías; la tabla `organizations` por sí sola no impone scope de fila. |
 | Auditoría sin escritor automático | Abierto | `AuditLogger` requiere contexto explícito; no hay escritor automático de auditoría (append-only, excepción dedicada). |
 | `devices` y `sync_operations` sin `organization_id` | Abierto | Sin `organization_id` no hay aislamiento a nivel de fila; riesgo de fuga en `/sync/bootstrap` y dispositivos (ver `docs/ACCESOS_Y_PERMISOS.md` §6.13). |
-| 401 vs 403 de usuario desactivado | Abierto | D-44 espera 401 en la siguiente petición; `EnsureApiAuthenticated` devuelve 403 hoy para `user.status = false`. Se verifica en M2.5. |
+| 401 vs 403 de usuario desactivado | Resuelto en M2.5 | Token previo de usuario desactivado → 401 `unauthenticated`; login inactivo → 403 `user_inactive`. |
 | Inserts masivos de `role_permissions` saltan los eventos del modelo (M2.3) | Abierto | Los eventos `saved`/`deleted` de `RolePermission` (que invalidan la caché de permisos) solo se disparan al usar Eloquent. Los inserts masivos (`DB::table()->insert()` o `insertOrIgnore`) no los disparan, dejando la caché stale. Requisito para el servicio de aprovisionamiento: crear filas por el modelo (`RolePermission::create`) o validar contra el catálogo y llamar `TenantContext::flushPermissionCache()` explícitamente. |
 
 ---
@@ -134,7 +134,7 @@ Este bloque **no escribe código**: no toca controladores, rutas de producción,
 
 ## 9. M2.3 — Policies y alcance por asignación
 
-**Estado:** Implementado y validado localmente (pendiente de publicación e integración).
+**Estado:** Implementado e integrado (PR #28); evidencia y salvedades en el informe histórico M2.3.
 
 ### Permiso dedicado
 
@@ -164,7 +164,7 @@ Este bloque **no escribe código**: no toca controladores, rutas de producción,
 
 ## 10. M2.4 — Primer corte vertical HTTP
 
-**Estado:** Implementado y validado localmente (pendiente de publicación e integración).
+**Estado:** Implementado e integrado (PR #29; cierre documental PR #30); conserva las limitaciones del informe M2.4.
 
 - Endpoint: `GET /api/plants`.
 - Middleware: `api.tenant`.
