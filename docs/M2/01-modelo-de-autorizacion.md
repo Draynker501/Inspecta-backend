@@ -1,7 +1,7 @@
 # M2.1 — Modelo de autorización de INSPECTA
 
 **Estado:** D-40 Implementada en M2.2 (núcleo de autorización: enum `Permission`, modelo `RolePermission`, migración `role_permissions`, `User::hasPermission()`, caché en `TenantContext`, helper `TenantPolicy::hasPermission()`). D-41 a D-44 siguen Aprobadas (pendientes de implementación en M2.3+).
-**Fuente:** decisiones D-40 a D-44 registradas en `docs/M1.5/decisiones/REGISTRO_DECISIONES.md` (aprobadas por el responsable el 11-nov-2026). Cambios de estado: D-32, D-33, D-34, D-35 pasan a Aprobada; D-27 sigue Propuesta (bloque aparte).
+**Fuente:** decisiones D-40 a D-44 registradas en `docs/M1.5/decisiones/REGISTRO_DECISIONES.md` (aprobadas por el responsable el 11-nov-2026). Cambios de estado: D-32, D-33, D-34, D-35 pasan a Aprobada; D-27 Implementada (merge de master, config.platform.php fijado a 8.4.1).
 **Norma de este documento:** si un permiso, rol, endpoint o comportamiento no está en este documento ni en el registro de decisiones, se considera **no autorizado en M2**.
 
 ---

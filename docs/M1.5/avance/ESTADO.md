@@ -3,11 +3,11 @@
 Última actualización: 2026-11-11
 
 **Rama:** `feat/m2-2-nucleo-permisos`
-**Pruebas (VERIFICADO):** SQLite 373 pruebas, 364 aprobadas, 9 omitidas, 1166 aserciones, 0 fallos; MariaDB 11.8 374 pruebas, 366 aprobadas, 8 omitidas, 1199 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-11).
+**Pruebas (VERIFICADO):** SQLite 377 pruebas, 368 aprobadas, 9 omitidas, 1177 aserciones, 0 fallos; MariaDB 11.8 377 pruebas, 369 aprobadas, 8 omitidas, 1206 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-11).
 **Migraciones:** 45 (añadida `2026_11_11_000001_create_role_permissions_table`).
 **Composer:** `composer validate --no-check-publish` válido. `composer audit`: 0 advisories. `require.php = ^8.4`.
 **Pint:** `vendor/bin/pint --test` en verde (0 diferencias) con `database/migrations` excluido permanentemente.
-**OpenAPI:** 2.0.0 (49 paths: 4 implementados, 45 marcados `x-status: planned`).
+**OpenAPI:** 2.1.0 (49 paths: 4 implementados, 45 marcados `x-status: planned`).
 
 ---
 
@@ -41,7 +41,7 @@
 | M1.5 P5.5b — Saneamiento de ejemplos y rutas planeadas | Integrada (PR #18) | Datos de ejemplo saneados, `x-status: planned`, 2 pruebas nuevas. |
 | M1.5 P5.5c — Pint y convención de migraciones | Integrada (PR #19) | `pint.json`, 34 archivos formateados, `style.yml` bloqueante. |
 | M1.5 P5 — Regresión y cierre | Completada (documental, pendiente de aprobación formal) | Allowlist verificada, modo estricto en CI, documentación de excepciones, registro de decisiones actualizado, informe de cierre y acta. |
-| M2 — Controladores y endpoints de dominio | Pendiente de autorización | Depende de la aprobación formal del cierre de M1.5. |
+| M2 — Controladores y endpoints de dominio | En progreso (M2.2 validada localmente) | M2.2 validada localmente, pendiente de publicación, PR e integración. M2.3+ pendientes. |
 
 ---
 
@@ -57,9 +57,9 @@
 - **Auditoría:** `AuditLog` append-only (excepción dedicada), `AuditLogger` con contexto obligatorio y redacción; auditoría de asignaciones de rol/planta/área.
 - **Modo estricto:** `OrganizationScope` lanza `MissingTenantContextException` en HTTP sin contexto cuando `strict_mode=true` (default); consola y `withoutTenant()` exentos; workers de cola no exentos; flag HTTP `TENANCY_STRICT_MODE`.
 - **Seeders:** 2 clientes (INSP-01, ORG-02) + operadora INSPECTA-OP; catálogo por organización; consultor de plataforma con membresía en operadora y clientes. Contraseñas fijas solo en local/testing.
-- **OpenAPI:** 2.0.0; cabecera `X-Organization-Id`, `/auth/organizations`, campo `type`, catálogo de errores (11 códigos), 45 paths marcados `x-status: planned`.
+- **OpenAPI:** 2.1.0; cabecera `X-Organization-Id`, `/auth/organizations`, campo `type`, catálogo de errores (11 códigos + `forbidden`), 45 paths marcados `x-status: planned`.
 - **CORS:** `config/cors.php` permite `X-Organization-Id`, `supports_credentials=false`, `max_age=600`.
-- **Migraciones:** 44 (incluye unique de norms por organización).
+- **Migraciones:** 45 (incluye `role_permissions` y unique de norms por organización).
 - **Pint:** `vendor/bin/pint --test` en verde; `database/migrations` excluido permanentemente.
 - **CI:** workflows `tests` (SQLite), `tests-mariadb` (MariaDB 11.8), `security` (audit bloqueante), `style` (Pint bloqueante).
 - **Rutas implementadas:** `/`, `api/auth/login`, `api/auth/logout`, `api/auth/me`, `api/auth/organizations`, `up` (6 rutas).
@@ -101,13 +101,12 @@ D-20 y D-21 del checklist del 2-nov (unicidad organizacional / identidad global)
 
 ## 5. Validaciones actuales
 
-- Suite: 328 pruebas, 0 fallos (SQLite y MariaDB).
+- Suite: SQLite 377 pruebas, 368 aprobadas, 9 omitidas, 1177 aserciones, 0 fallos; MariaDB 11.8 377 pruebas, 369 aprobadas, 8 omitidas, 1206 aserciones, 0 fallos.
 - `composer validate --no-check-publish`: válido.
 - `composer audit`: 0 advisories.
 - `vendor/bin/pint --test`: en verde (0 diferencias).
 - `git diff --check`: limpio.
-- OpenAPI: 2.0.0, válido con `openapi-spec-validator 0.8.4`.
-- Cierre de P5: 9 cumplidos, 2 cumplidos con salvedad (CORS, decisiones finales), 1 abierto (riesgos residuales). Ver `docs/M1.5/12-informe-cierre-m1-5.md`.
+- OpenAPI: 2.1.0 (sin cambios en M2.2).
 
 ## Trazabilidad verificada
 
@@ -123,7 +122,7 @@ D-20 y D-21 del checklist del 2-nov (unicidad organizacional / identidad global)
 | `TenantController` base ausente | DIFERIDO a M2 (implementada como P33-D07) |
 | Factories de dominio ausentes | DIFERIDO a M2 |
 | Servicio de revocación de membresías ausente | DIFERIDO a M2 (M2.5, D-44) |
-| OpenAPI 2.0.0 | RESUELTA (P5.4b, PR #16) |
+| OpenAPI 2.0.0 → 2.1.0 | RESUELTA (P5.4b PR #16; D-39 eleva a 2.1.0) |
 | 45 paths del contrato planeados | ABIERTA (M2 añade a lo sumo un endpoint de lectura de corte vertical, D-41) |
 | M2 bloqueada hasta cierre formal de P5 | RESUELTA (acta firmada 10-11-2026; M2 autorizada) |
 | Tokens sin expiración (`sanctum.expiration`) | ABIERTA (riesgo de despliegue; depende de la PWA sin conexión, D-44) |

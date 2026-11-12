@@ -8,6 +8,7 @@ use App\Models\OrganizationMembership;
 use App\Models\RolePermission;
 use App\Models\User;
 use App\Models\UserRole;
+use App\Support\Tenancy\OrganizationScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -372,6 +373,101 @@ class PermissionAuthorizationTest extends TestCase
         $ur->role_id = $roleSinPermiso->id;
         $ur->save();
 
+        $this->assertFalse($user->hasPermission(Permission::PlantsView));
+    }
+
+    public function test_cache_refleja_cambio_de_organizacion_en_user_role_misma_instancia(): void
+    {
+        $orgA = $this->clientOrganization('ORG-A');
+        $orgB = $this->clientOrganization('ORG-B');
+
+        $roleA = $this->role($orgA, 'Administrador');
+        $roleB = $this->role($orgB, 'Supervisor');
+
+        $user = $this->user($orgA);
+        OrganizationMembership::firstOrCreate(
+            ['user_id' => $user->id, 'organization_id' => $orgB->id],
+            ['id' => (string) Str::uuid7(), 'status' => OrganizationMembership::STATUS_ACTIVE],
+        );
+
+        app(TenantContext::class)->set($orgA->id);
+        $user->assignRole($roleA);
+
+        app(TenantContext::class)->set($orgA->id);
+        RolePermission::create([
+            'role_id' => $roleA->id,
+            'organization_id' => $orgA->id,
+            'permission' => Permission::PlantsView->value,
+        ]);
+
+        app(TenantContext::class)->set($orgA->id);
+        $this->assertTrue($user->hasPermission(Permission::PlantsView));
+
+        // Mover la asignación de rol de orgA a orgB (cambia role_id y organization_id).
+        // El cambio entre organizaciones solo es posible sin contexto de tenant
+        // (operación administrativa auditada, nunca en petición HTTP).
+        $ur = UserRole::withoutGlobalScope(OrganizationScope::class)
+            ->where('user_id', $user->id)
+            ->where('role_id', $roleA->id)
+            ->where('organization_id', $orgA->id)
+            ->first();
+
+        app(TenantContext::class)->clear();
+        $ur->role_id = $roleB->id;
+        $ur->organization_id = $orgB->id;
+        $ur->save();
+
+        app(TenantContext::class)->set($orgA->id);
+        $this->assertFalse($user->hasPermission(Permission::PlantsView));
+    }
+
+    public function test_cache_invalida_org_anterior_al_mover_user_role(): void
+    {
+        $orgA = $this->clientOrganization('ORG-A');
+        $orgB = $this->clientOrganization('ORG-B');
+
+        $roleA = $this->role($orgA, 'Administrador');
+        $roleB = $this->role($orgB, 'Supervisor');
+
+        $user = $this->user($orgA);
+        OrganizationMembership::firstOrCreate(
+            ['user_id' => $user->id, 'organization_id' => $orgB->id],
+            ['id' => (string) Str::uuid7(), 'status' => OrganizationMembership::STATUS_ACTIVE],
+        );
+
+        app(TenantContext::class)->set($orgA->id);
+        $user->assignRole($roleA);
+
+        app(TenantContext::class)->set($orgA->id);
+        RolePermission::create([
+            'role_id' => $roleA->id,
+            'organization_id' => $orgA->id,
+            'permission' => Permission::PlantsView->value,
+        ]);
+
+        // Cargar la caché de orgA (concedido).
+        app(TenantContext::class)->set($orgA->id);
+        $this->assertTrue($user->hasPermission(Permission::PlantsView));
+
+        // Simular caché stale retenida en un proceso de larga vida: se vuelve
+        // a sembrar manualmente tras limpiar el contexto (la limpieza de petición
+        // borraría la caché, pero un worker persistente la conservaría).
+        app(TenantContext::class)->clear();
+        app(TenantContext::class)->setPermissionCache($user->id, $orgA->id, [Permission::PlantsView->value]);
+
+        // Mover la asignación sin contexto (operación administrativa).
+        $ur = UserRole::withoutGlobalScope(OrganizationScope::class)
+            ->where('user_id', $user->id)
+            ->where('role_id', $roleA->id)
+            ->where('organization_id', $orgA->id)
+            ->first();
+
+        $ur->role_id = $roleB->id;
+        $ur->organization_id = $orgB->id;
+        $ur->save();
+
+        // La caché de orgA debe haberse invalidado (rama organization_id).
+        app(TenantContext::class)->set($orgA->id);
         $this->assertFalse($user->hasPermission(Permission::PlantsView));
     }
 
