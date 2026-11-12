@@ -95,34 +95,41 @@ class ChecklistVersionController extends TenantController
      */
     public function update(Request $request, string $id, string $versionId): JsonResponse
     {
-        $checklist = Checklist::findOrFail($id);
-
-        $version = $checklist->checklistVersions()
-            ->findOrFail($versionId);
-
-        if ($version->status !== 'draft') {
-            throw ValidationException::withMessages([
-                'status' => 'Solo se pueden editar versiones en borrador.',
-            ]);
-        }
-
         $validated = $request->validate([
             'version' => [
                 'required',
                 'string',
                 'max:20',
                 Rule::unique('checklist_versions', 'version')
-                    ->where('checklist_id', $checklist->id)
-                    ->ignore($version->id),
+                    ->where('checklist_id', $id)
+                    ->ignore($versionId),
             ],
         ]);
 
-        $version->update([
-            'version' => $validated['version'],
-        ]);
+        $version = DB::transaction(function () use ($id, $versionId, $validated) {
+            $checklist = Checklist::findOrFail($id);
+
+            // Bloquear la versión para evitar modificaciones simultáneas con su publicación.
+            $version = $checklist->checklistVersions()
+                ->lockForUpdate()
+                ->findOrFail($versionId);
+
+            // Solo se permiten cambios en versiones en borrador.
+            if ($version->status !== 'draft') {
+                throw ValidationException::withMessages([
+                    'status' => 'Solo se pueden editar versiones en borrador.',
+                ]);
+            }
+
+            $version->update([
+                'version' => $validated['version'],
+            ]);
+
+            return $version->refresh();
+        });
 
         return response()->json([
-            'data' => $version->refresh(),
+            'data' => $version,
         ]);
     }
 

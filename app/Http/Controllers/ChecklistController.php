@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 class ChecklistController extends TenantController
 {
@@ -192,18 +193,25 @@ class ChecklistController extends TenantController
 
     public function updateStatus(Request $request, string $id): JsonResponse
     {
-        $checklist = Checklist::findOrFail($id);
-
         $validated = $request->validate([
             'status' => ['required', 'boolean'],
         ]);
 
-        $checklist->update([
-            'status' => $validated['status'],
-        ]);
+        $checklist = DB::transaction(function () use ($id, $validated) {
+            // Bloquear el checklist para coordinar cambios de estado con la publicación de versiones.
+            $checklist = Checklist::query()
+                ->lockForUpdate()
+                ->findOrFail($id);
+
+            $checklist->update([
+                'status' => $validated['status'],
+            ]);
+
+            return $checklist->refresh();
+        });
 
         return response()->json([
-            'data' => $checklist->refresh(),
+            'data' => $checklist,
         ]);
     }
 }

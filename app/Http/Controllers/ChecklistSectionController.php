@@ -52,7 +52,7 @@ class ChecklistSectionController extends TenantController
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'description' => ['sometimes', 'nullable', 'string', 'max:65535'],
-            'display_order' => ['sometimes', 'integer', 'min:0'],
+            'display_order' => ['sometimes', 'integer', 'min:1'],
         ]);
 
         $section = DB::transaction(function () use ($versionId, $validated, $tenantContext) {
@@ -64,13 +64,26 @@ class ChecklistSectionController extends TenantController
             // Verificar que todavía permita modificaciones.
             $this->ensureDraft($version);
 
+            $displayOrder = $validated['display_order']
+                ?? max(1, ((int) $version->sections()->max('display_order')) + 1);
+
+            $orderExists = $version->sections()
+                ->where('display_order', $displayOrder)
+                ->exists();
+
+            if ($orderExists) {
+                throw ValidationException::withMessages([
+                    'display_order' => 'Ya existe una sección con ese orden en la versión.',
+                ]);
+            }
+
             $section = ChecklistSection::create([
                 'id' => (string) Str::uuid(),
                 'checklist_version_id' => $version->id,
                 'organization_id' => $tenantContext->requireId(),
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
-                'display_order' => $validated['display_order'] ?? 0,
+                'display_order' => $displayOrder,
             ]);
 
             return $section;
@@ -104,7 +117,7 @@ class ChecklistSectionController extends TenantController
         $validated = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:150'],
             'description' => ['sometimes', 'nullable', 'string', 'max:65535'],
-            'display_order' => ['sometimes', 'integer', 'min:0'],
+            'display_order' => ['sometimes', 'integer', 'min:1'],
         ]);
 
         $section = DB::transaction(function () use ($id, $validated) {
@@ -119,6 +132,19 @@ class ChecklistSectionController extends TenantController
             // Solo se permiten cambios en versiones draft.
             $this->ensureDraft($version);
 
+            if (array_key_exists('display_order', $validated)) {
+                $orderExists = $version->sections()
+                    ->where('display_order', $validated['display_order'])
+                    ->where('id', '!=', $section->id)
+                    ->exists();
+
+                if ($orderExists) {
+                    throw ValidationException::withMessages([
+                        'display_order' => 'Ya existe otra sección con ese orden en la versión.',
+                    ]);
+                }
+            }
+
             // Actualizar la sección.
             $section->update($validated);
 
@@ -130,7 +156,7 @@ class ChecklistSectionController extends TenantController
         ]);
     }
 
-    private function ensureDraft(ChecklistVersion $version): void 
+    private function ensureDraft(ChecklistVersion $version): void
     {
         if ($version->status !== 'draft') {
             throw ValidationException::withMessages([
