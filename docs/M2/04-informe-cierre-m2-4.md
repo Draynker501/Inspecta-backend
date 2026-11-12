@@ -159,3 +159,24 @@ No validado en Octane/workers. Salvedad conservada sin afirmar vulnerabilidad.
 LISTA PARA PUBLICACIÓN CON SALVEDADES DOCUMENTADAS.
 
 M2.4 no se considera integrada hasta confirmar su merge.
+
+---
+
+## Demostración HTTP
+
+Se realizó una demostración funcional con peticiones HTTP reales sobre un entorno local aislado.
+
+Evidencias observadas:
+- Sin token: 401 `unauthenticated`.
+- Sin `X-Organization-Id`: 400 `organization_required`.
+- Administrador INSP-01: 200, 2 plantas, `meta.total=2`.
+- Inspector INSP-01: 200, 1 planta, `meta.total=1`.
+- Membresía revocada: 403 `organization_access_denied`.
+- Cambio INSP-01 → ORG-02: 2 plantas de la organización seleccionada.
+- Paginación `per_page=1`: 1 recurso, `last_page=2`, `total=2`.
+
+No se observaron filtraciones cross-tenant ni exposición de plantas no autorizadas.
+
+## Estado de integración
+
+La integración de M2.4 en `master` no pudo verificarse localmente: `master` y `origin/master` permanecen en `be37d73`, mientras M2.4 está en `3a25b40` sobre la rama `feat/m2-4-get-plants`. No se afirma PR ni merge hasta confirmación del responsable.

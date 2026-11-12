@@ -41,7 +41,7 @@
 | M1.5 P5.5b — Saneamiento de ejemplos y rutas planeadas | Integrada (PR #18) | Datos de ejemplo saneados, `x-status: planned`, 2 pruebas nuevas. |
 | M1.5 P5.5c — Pint y convención de migraciones | Integrada (PR #19) | `pint.json`, 34 archivos formateados, `style.yml` bloqueante. |
 | M1.5 P5 — Regresión y cierre | Completada (documental, pendiente de aprobación formal) | Allowlist verificada, modo estricto en CI, documentación de excepciones, registro de decisiones actualizado, informe de cierre y acta. |
-| M2 — Controladores y endpoints de dominio | En progreso (M2.4 implementado y validado localmente) | M2.2 y M2.3 integradas. M2.4 implementa `GET /api/plants` con autorización, filtrado y paginación. Pendiente de publicación, PR e integración. |
+| M2 — Controladores y endpoints de dominio | En progreso (M2.4 implementado, auditado y demostrado localmente) | M2.4 implementa `GET /api/plants`. Demostración HTTP realizada. Integración en `master` no verificada localmente. |
 
 ---
 
