@@ -290,14 +290,14 @@ class PlatformOperatorPolicyTest extends TestCase
         $this->assertSame($before, app(TenantContext::class)->id());
     }
 
-    public function test_membresia_activa_sin_rol_view_permitido_manage_denegado(): void
+    public function test_membresia_activa_sin_rol_view_y_manage_denegados(): void
     {
         $operatorOrg = $this->operatorOrganization();
         $user = $this->makeOperatorUser($operatorOrg, false);
 
         app(TenantContext::class)->clear();
 
-        $this->assertTrue(Gate::forUser($user)->allows('viewMemberships'));
+        $this->assertFalse(Gate::forUser($user)->allows('viewMemberships'));
         $this->assertFalse(Gate::forUser($user)->allows('manageMemberships'));
     }
 

@@ -15,7 +15,8 @@ class PlatformOperatorPolicy
 {
     public function viewMemberships(User $user): bool
     {
-        return $user->isPlatformOperator();
+        return $user->isPlatformOperator()
+            && $user->hasPlatformRole();
     }
 
     public function manageMemberships(User $user): bool
