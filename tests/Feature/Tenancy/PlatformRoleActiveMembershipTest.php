@@ -6,7 +6,9 @@ use App\Models\OrganizationMembership;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Tests\Support\TenantFixtures;
 use Tests\TestCase;
 
@@ -77,7 +79,65 @@ class PlatformRoleActiveMembershipTest extends TestCase
         $user = $this->user($operatorOrg);
 
         $this->assertFalse($user->hasPlatformRole());
-        $this->assertTrue(Gate::forUser($user)->allows('viewMemberships'));
+        $this->assertFalse(Gate::forUser($user)->allows('viewMemberships'));
         $this->assertFalse(Gate::forUser($user)->allows('manageMemberships'));
+    }
+
+    public function test_rol_inactivo_no_autoriza(): void
+    {
+        $user = $this->operatorUserWithRole(true);
+        DB::table('roles')->where('name', config('tenancy.roles.platform_admin'))->update(['status' => false]);
+
+        $this->assertFalse($user->hasPlatformRole());
+        $this->assertFalse(Gate::forUser($user)->allows('viewMemberships'));
+        $this->assertFalse(Gate::forUser($user)->allows('manageMemberships'));
+    }
+
+    public function test_usuario_inactivo_tiene_rol_pero_no_autoriza(): void
+    {
+        $user = $this->operatorUserWithRole(true);
+        $user->status = false;
+        $user->save();
+
+        $this->assertTrue($user->hasPlatformRole());
+        $this->assertFalse(Gate::forUser($user)->allows('viewMemberships'));
+        $this->assertFalse(Gate::forUser($user)->allows('manageMemberships'));
+    }
+
+    public function test_rol_en_otra_organizacion_no_autoriza_y_restaura_contexto(): void
+    {
+        $operator = $this->operatorOrganization();
+        $client = $this->clientOrganization();
+        $user = $this->user($operator);
+        OrganizationMembership::create([
+            'id' => (string) Str::uuid7(),
+            'user_id' => $user->id,
+            'organization_id' => $client->id,
+            'status' => OrganizationMembership::STATUS_ACTIVE,
+        ]);
+        app(TenantContext::class)->set($client->id);
+        $role = $this->role($client, (string) config('tenancy.roles.platform_admin'));
+        $user->assignRole($role);
+
+        $this->assertFalse($user->hasPlatformRole());
+        $this->assertSame($client->id, app(TenantContext::class)->id());
+        $this->assertFalse(Gate::forUser($user)->allows('viewMemberships'));
+        $this->assertFalse(Gate::forUser($user)->allows('manageMemberships'));
+        $this->assertSame($client->id, app(TenantContext::class)->id());
+    }
+
+    public function test_reactivacion_del_rol_restaura_autorizacion(): void
+    {
+        $user = $this->operatorUserWithRole(true);
+        $role = DB::table('roles')->where('name', config('tenancy.roles.platform_admin'));
+        $role->update(['status' => false]);
+        $this->assertFalse($user->hasPlatformRole());
+        $this->assertFalse(Gate::forUser($user)->allows('viewMemberships'));
+        $this->assertFalse(Gate::forUser($user)->allows('manageMemberships'));
+
+        $role->update(['status' => true]);
+        $this->assertTrue($user->hasPlatformRole());
+        $this->assertTrue(Gate::forUser($user)->allows('viewMemberships'));
+        $this->assertTrue(Gate::forUser($user)->allows('manageMemberships'));
     }
 }

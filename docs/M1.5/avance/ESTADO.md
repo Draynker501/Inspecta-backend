@@ -41,7 +41,7 @@
 | M1.5 P5.5b — Saneamiento de ejemplos y rutas planeadas | Integrada (PR #18) | Datos de ejemplo saneados, `x-status: planned`, 2 pruebas nuevas. |
 | M1.5 P5.5c — Pint y convención de migraciones | Integrada (PR #19) | `pint.json`, 34 archivos formateados, `style.yml` bloqueante. |
 | M1.5 P5 — Regresión y cierre | Completada (documental, pendiente de aprobación formal) | Allowlist verificada, modo estricto en CI, documentación de excepciones, registro de decisiones actualizado, informe de cierre y acta. |
-| M2 — Controladores y endpoints de dominio | En progreso (M2.5 implementado y validado localmente) | M2.4 integrado. M2.5: revocación de membresías con servicio de dominio, auditoría y 401 para usuario desactivado. Reactivación diferida. |
+| M2 — Controladores y endpoints de dominio | En progreso (M2.6 validado localmente, sin integrar) | M2.5 integrado. M2.6: superficie HTTP consolidada, OpenAPI 2.3.0 y D-32 con rol de plataforma activo; evidencia en el informe M2.6. |
 
 ---
 

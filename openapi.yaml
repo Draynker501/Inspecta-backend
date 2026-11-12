@@ -3841,7 +3841,7 @@ paths:
       - $ref: '#/components/parameters/organizationIdHeader'
     put:
       summary: Evaluar Inspección (Supervisor)
-      description: Permite al supervisor confirmar o rechazar una inspección completada en campo, añadiendo observaciones. El `supervisor_id` se toma del token JWT.
+      description: Permite al supervisor confirmar o rechazar una inspección completada en campo, añadiendo observaciones. El `supervisor_id` se toma del usuario autenticado.
       tags:
         - Inspections
       parameters:
@@ -4010,7 +4010,7 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
     post:
       summary: Reportar Incidencia
-      description: Crea una nueva incidencia. Puede estar vinculada a una inspección previa o ser un reporte aislado. El `reported_by` se toma del token JWT.
+      description: Crea una nueva incidencia. Puede estar vinculada a una inspección previa o ser un reporte aislado. El `reported_by` se toma del usuario autenticado.
       tags:
         - Incidents
       requestBody:
@@ -4275,7 +4275,7 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
     post:
       summary: Subir Evidencia Multimedia
-      description: Endpoint especializado para la recepción de archivos (fotos, documentos). Utiliza form-data en lugar de JSON. El `uploaded_by` se toma del token JWT.
+      description: Endpoint especializado para la recepción de archivos (fotos, documentos). Utiliza form-data en lugar de JSON. El `uploaded_by` se toma del usuario autenticado.
       tags:
         - Evidences
       requestBody:
@@ -4717,7 +4717,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
     post:
       summary: Registrar Actualización / Avance
-      description: Permite al responsable agregar un comentario sobre la tarea y avanzar su estado (ej. de pendiente a completada). El `user_id` se toma del token JWT.
+      description: Permite al responsable agregar un comentario sobre la tarea y avanzar su estado (ej. de pendiente a completada). El `user_id` se toma del usuario autenticado.
       tags:
         - Corrective Actions
       parameters:
@@ -6440,7 +6440,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
           example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
         address:
           type: string
@@ -6525,7 +6525,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
           example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
         type:
           type: string
@@ -6600,7 +6600,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
           example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
         description:
           type: string
@@ -6688,7 +6688,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
           example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
         roles:
           type: array
@@ -6802,7 +6802,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
           example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
 
     ChecklistVersion:
@@ -6983,7 +6983,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
           example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
 
     ChecklistFullTree:
@@ -7088,7 +7088,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
           example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
         description:
           type: string
@@ -7170,7 +7170,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
           example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
 
     QuestionNormRequirement:
@@ -7309,7 +7309,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
           example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
         checklist_version_id:
           type: string
@@ -7556,7 +7556,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
           example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
         inspection_id:
           type: string
@@ -7639,7 +7639,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
           example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
         file:
           type: string
@@ -7838,7 +7838,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
           example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
         incident_id:
           type: string
@@ -7914,7 +7914,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: ID de la organización. Si no se envía, se toma del token JWT del usuario autenticado.
+          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
           example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
         status:
           type: string

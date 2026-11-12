@@ -128,7 +128,8 @@ class User extends Authenticatable
                 ->where('organization_id', $operatorOrganizationId)
                 ->whereHas('role', function ($query) use ($operatorOrganizationId, $platformRoleName) {
                     $query->where('organization_id', $operatorOrganizationId)
-                        ->where('name', $platformRoleName);
+                        ->where('name', $platformRoleName)
+                        ->where('status', true);
                 })
                 ->exists();
         });
