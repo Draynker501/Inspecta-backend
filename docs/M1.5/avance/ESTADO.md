@@ -2,8 +2,8 @@
 
 Última actualización: 2026-11-11
 
-**Rama:** `feat/m2-3-policies-recursos`
-**Pruebas (VERIFICADO):** SQLite 391 pruebas, 382 aprobadas, 9 omitidas, 1215 aserciones, 0 fallos; MariaDB 11.8 391 pruebas, 383 aprobadas, 8 omitidas, 1244 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-11).
+**Rama:** `feat/m2-4-get-plants`
+**Pruebas (VERIFICADO):** SQLite 409 pruebas, 400 aprobadas, 9 omitidas, 1257 aserciones, 0 fallos; MariaDB 11.8 409 pruebas, 401 aprobadas, 8 omitidas, 1286 aserciones, 0 fallos (`vendor/bin/phpunit`, APP_ENV=testing, 2026-11-11).
 **Migraciones:** 45 (añadida `2026_11_11_000001_create_role_permissions_table`).
 **Composer:** `composer validate --no-check-publish` válido. `composer audit`: 0 advisories. `require.php = ^8.4`.
 **Pint:** `vendor/bin/pint --test` en verde (0 diferencias) con `database/migrations` excluido permanentemente.
@@ -41,7 +41,7 @@
 | M1.5 P5.5b — Saneamiento de ejemplos y rutas planeadas | Integrada (PR #18) | Datos de ejemplo saneados, `x-status: planned`, 2 pruebas nuevas. |
 | M1.5 P5.5c — Pint y convención de migraciones | Integrada (PR #19) | `pint.json`, 34 archivos formateados, `style.yml` bloqueante. |
 | M1.5 P5 — Regresión y cierre | Completada (documental, pendiente de aprobación formal) | Allowlist verificada, modo estricto en CI, documentación de excepciones, registro de decisiones actualizado, informe de cierre y acta. |
-| M2 — Controladores y endpoints de dominio | En progreso (M2.3 implementado y validado localmente) | M2.2 integrada. M2.3 implementa policies de Plant, Area y ProductionLine con `locations.view_all`. Pendiente de publicación, PR e integración. |
+| M2 — Controladores y endpoints de dominio | En progreso (M2.4 implementado y validado localmente) | M2.2 y M2.3 integradas. M2.4 implementa `GET /api/plants` con autorización, filtrado y paginación. Pendiente de publicación, PR e integración. |
 
 ---
 
@@ -101,7 +101,7 @@ D-20 y D-21 del checklist del 2-nov (unicidad organizacional / identidad global)
 
 ## 5. Validaciones actuales
 
-- Suite: SQLite 391 pruebas, 382 aprobadas, 9 omitidas, 1215 aserciones, 0 fallos; MariaDB 11.8 391 pruebas, 383 aprobadas, 8 omitidas, 1244 aserciones, 0 fallos.
+- Suite: SQLite 409 pruebas, 400 aprobadas, 9 omitidas, 1257 aserciones, 0 fallos; MariaDB 11.8 409 pruebas, 401 aprobadas, 8 omitidas, 1286 aserciones, 0 fallos.
 - `composer validate --no-check-publish`: válido.
 - `composer audit`: 0 advisories.
 - `vendor/bin/pint --test`: en verde (0 diferencias).

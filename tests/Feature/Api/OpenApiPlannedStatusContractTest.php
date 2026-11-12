@@ -14,11 +14,11 @@ class OpenApiPlannedStatusContractTest extends TestCase
     }
 
     /**
-     * Rutas del contrato (normalizadas: {param} -> {}) que están registradas.
+     * Rutas implementadas por método y path normalizado.
      *
      * @return array<string, bool>
      */
-    private function implementedContractPaths(): array
+    private function implementedOperations(): array
     {
         $set = [];
 
@@ -32,61 +32,90 @@ class OpenApiPlannedStatusContractTest extends TestCase
             $contract = '/'.substr($uri, 4);
             $contract = preg_replace('/\{[^}]+\}/', '{}', $contract);
 
-            $set[$contract] = true;
+            foreach ($route->methods() as $method) {
+                if (in_array($method, ['HEAD', 'OPTIONS'], true)) {
+                    continue;
+                }
+
+                $set[strtolower($method).' '.$contract] = true;
+            }
         }
 
         return $set;
     }
 
+    private function isPlanned(array $operation, ?string $pathStatus): bool
+    {
+        if (isset($operation['x-status'])) {
+            return $operation['x-status'] === 'planned';
+        }
+
+        return $pathStatus === 'planned';
+    }
+
     public function test_los_paths_implementados_no_tienen_x_status_planned(): void
     {
         $spec = $this->spec();
-        $implemented = $this->implementedContractPaths();
+        $implemented = $this->implementedOperations();
 
         $violations = [];
 
         foreach ($spec['paths'] ?? [] as $path => $item) {
             $normalized = preg_replace('/\{[^}]+\}/', '{}', $path);
+            $pathStatus = $item['x-status'] ?? null;
 
-            if (! isset($implemented[$normalized])) {
-                continue;
-            }
+            foreach ($item as $method => $operation) {
+                if (! in_array($method, ['get', 'post', 'put', 'patch', 'delete'], true)) {
+                    continue;
+                }
 
-            if (isset($item['x-status']) && $item['x-status'] === 'planned') {
-                $violations[] = $path;
+                if (! isset($implemented[$method.' '.$normalized])) {
+                    continue;
+                }
+
+                if ($this->isPlanned($operation, $pathStatus)) {
+                    $violations[] = strtoupper($method).' '.$path;
+                }
             }
         }
 
         $this->assertSame(
             [],
             $violations,
-            'Paths implementados marcados como planned: '.implode(', ', $violations)
+            'Operaciones implementadas marcadas como planned: '.implode(', ', $violations)
         );
     }
 
     public function test_los_paths_no_implementados_tienen_x_status_planned(): void
     {
         $spec = $this->spec();
-        $implemented = $this->implementedContractPaths();
+        $implemented = $this->implementedOperations();
 
         $violations = [];
 
         foreach ($spec['paths'] ?? [] as $path => $item) {
             $normalized = preg_replace('/\{[^}]+\}/', '{}', $path);
+            $pathStatus = $item['x-status'] ?? null;
 
-            if (isset($implemented[$normalized])) {
-                continue;
-            }
+            foreach ($item as $method => $operation) {
+                if (! in_array($method, ['get', 'post', 'put', 'patch', 'delete'], true)) {
+                    continue;
+                }
 
-            if (! isset($item['x-status']) || $item['x-status'] !== 'planned') {
-                $violations[] = $path;
+                if (isset($implemented[$method.' '.$normalized])) {
+                    continue;
+                }
+
+                if (! $this->isPlanned($operation, $pathStatus)) {
+                    $violations[] = strtoupper($method).' '.$path;
+                }
             }
         }
 
         $this->assertSame(
             [],
             $violations,
-            'Paths no implementados sin x-status: planned: '.implode(', ', $violations)
+            'Operaciones no implementadas sin x-status: planned: '.implode(', ', $violations)
         );
     }
 }

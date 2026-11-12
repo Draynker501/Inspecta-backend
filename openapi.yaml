@@ -44,7 +44,7 @@ info:
       implementados en el servidor; mientras tanto devuelven `not_found`
       (404, código `not_found`). No deben considerarse disponibles para consumo.
 
-  version: 2.1.0
+  version: 2.2.0
 
 servers:
   - url: https://api.inspecta.com/api
@@ -211,7 +211,6 @@ paths:
   # ===================================================================
 
   /plants:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -272,6 +271,7 @@ paths:
                 forbiddenPolicy:
                   $ref: '#/components/examples/ForbiddenPolicy'
     post:
+      x-status: planned
       summary: Crear Planta
       tags:
         - Organization
