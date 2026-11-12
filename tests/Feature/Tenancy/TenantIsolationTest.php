@@ -2,9 +2,11 @@
 
 namespace Tests\Feature\Tenancy;
 
+use App\Authorization\Permission;
 use App\Models\Area;
 use App\Models\Plant;
 use App\Models\ProductionLine;
+use App\Models\RolePermission;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
@@ -324,7 +326,15 @@ class TenantIsolationTest extends TestCase
         $orgA = $this->organization('ORG-A');
         $inspector = $this->user($orgA);
         app(TenantContext::class)->set($orgA->id);
-        $inspector->assignRole($this->role($orgA, (string) config('tenancy.roles.inspector')));
+        $inspectorRole = $this->role($orgA, (string) config('tenancy.roles.inspector'));
+        $inspector->assignRole($inspectorRole);
+        RolePermission::firstOrCreate([
+            'role_id' => $inspectorRole->id,
+            'organization_id' => $orgA->id,
+            'permission' => Permission::PlantsView->value,
+        ], [
+            'id' => (string) Str::uuid7(),
+        ]);
 
         $assigned = $this->plant($orgA, 'A-01');
         $unassigned = $this->plant($orgA, 'A-02');
@@ -344,7 +354,15 @@ class TenantIsolationTest extends TestCase
         $orgA = $this->organization('ORG-A');
         $inspector = $this->user($orgA);
         app(TenantContext::class)->set($orgA->id);
-        $inspector->assignRole($this->role($orgA, (string) config('tenancy.roles.inspector')));
+        $inspectorRole = $this->role($orgA, (string) config('tenancy.roles.inspector'));
+        $inspector->assignRole($inspectorRole);
+        RolePermission::firstOrCreate([
+            'role_id' => $inspectorRole->id,
+            'organization_id' => $orgA->id,
+            'permission' => Permission::PlantsView->value,
+        ], [
+            'id' => (string) Str::uuid7(),
+        ]);
 
         $this->actingAsApiInOrganization($inspector, $orgA)
             ->postJson('/api/tenant-test/plants', [
