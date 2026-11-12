@@ -295,14 +295,21 @@ class CreatePlatformUserCommandTest extends TestCase
     {
         $this->makeOperator();
 
-        $this->artisan('inspecta:create-platform-user', [
-            '--email' => 'stdinempty@test.com',
-            '--name' => 'StdinEmpty',
-            '--password-stdin' => true,
-        ])
-            ->expectsOutputToContain('vacía')
-            ->assertExitCode(1);
+        $subclass = new class extends CreatePlatformUserCommand
+        {
+            protected function readPasswordFromStdin(): ?string
+            {
+                return '';
+            }
+        };
 
+        $subclass->setLaravel($this->app);
+        $input = new StringInput('--email=stdinempty@test.com --name=StdinEmpty --password-stdin');
+        $output = new BufferedOutput;
+        $exitCode = $subclass->run($input, $output);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('vacía', $output->fetch());
         $this->assertFalse(User::where('email', 'stdinempty@test.com')->exists());
     }
 
