@@ -1,6 +1,6 @@
 # M2.1 — Modelo de autorización de INSPECTA
 
-**Estado:** D-40 Implementada (M2.2). D-42 Implementada en M2.3 (policies de Plant, Area y ProductionLine con alcance por asignación y permiso `locations.view_all`). D-41 Implementada en M2.4 (`GET /api/plants`). D-43 y D-44 siguen Aprobadas (pendientes en M2.5+).
+**Estado:** D-40 Implementada (M2.2). D-42 Implementada en M2.3 (policies de Plant, Area y ProductionLine con alcance por asignación y permiso `locations.view_all`). D-41 Implementada en M2.4 (`GET /api/plants`). D-43 sigue Aprobada (pendiente en M2.6+). D-44 Implementada en M2.5: revocación de membresía bloquea el dominio en la siguiente petición; tokens no se invalidan; usuario globalmente desactivado recibe 401 `unauthenticated` con token previo; login conserva 403 `user_inactive`. Reactivación y gestión HTTP de membresías diferidas.
 **Fuente:** decisiones D-40 a D-44 registradas en `docs/M1.5/decisiones/REGISTRO_DECISIONES.md` (aprobadas por el responsable el 11-nov-2026). Cambios de estado: D-32, D-33, D-34, D-35 pasan a Aprobada; D-27 Implementada (merge de master, config.platform.php fijado a 8.4.1).
 **Norma de este documento:** si un permiso, rol, endpoint o comportamiento no está en este documento ni en el registro de decisiones, se considera **no autorizado en M2**.
 

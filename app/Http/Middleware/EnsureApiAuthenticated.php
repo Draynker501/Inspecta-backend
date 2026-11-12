@@ -32,8 +32,12 @@ class EnsureApiAuthenticated
             return ApiErrorResponse::make(ApiErrorCode::Unauthenticated);
         }
 
+        // Un token emitido a un usuario que ha sido desactivado globalmente
+        // deja de autenticar: se responde 401 (unauthenticated) en la
+        // siguiente petición, sin revelar el estado del usuario (D-44, Alt A).
+        // El login conserva 403 user_inactive para informar del bloqueo.
         if (! $accessToken->tokenable->status) {
-            return ApiErrorResponse::make(ApiErrorCode::UserInactive);
+            return ApiErrorResponse::make(ApiErrorCode::Unauthenticated);
         }
 
         Auth::setUser($accessToken->tokenable);
