@@ -2,10 +2,13 @@
 
 namespace Tests\Feature\Tenancy;
 
+use App\Authorization\Permission;
 use App\Models\Plant;
+use App\Models\RolePermission;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Tests\Support\TenantFixtures;
 use Tests\TestCase;
 
@@ -98,7 +101,15 @@ class TenantPolicyTest extends TestCase
         $orgA = $this->organization('ORG-A');
         $inspector = $this->user($orgA);
         app(TenantContext::class)->set($orgA->id);
-        $inspector->assignRole($this->role($orgA, (string) config('tenancy.roles.inspector')));
+        $inspectorRole = $this->role($orgA, (string) config('tenancy.roles.inspector'));
+        $inspector->assignRole($inspectorRole);
+        RolePermission::firstOrCreate([
+            'role_id' => $inspectorRole->id,
+            'organization_id' => $orgA->id,
+            'permission' => Permission::PlantsView->value,
+        ], [
+            'id' => (string) Str::uuid7(),
+        ]);
 
         $assigned = $this->plant($orgA, 'A-01');
         $unassigned = $this->plant($orgA, 'A-02');
@@ -118,7 +129,15 @@ class TenantPolicyTest extends TestCase
         $orgA = $this->organization('ORG-A');
         $inspector = $this->user($orgA);
         app(TenantContext::class)->set($orgA->id);
-        $inspector->assignRole($this->role($orgA, (string) config('tenancy.roles.inspector')));
+        $inspectorRole = $this->role($orgA, (string) config('tenancy.roles.inspector'));
+        $inspector->assignRole($inspectorRole);
+        RolePermission::firstOrCreate([
+            'role_id' => $inspectorRole->id,
+            'organization_id' => $orgA->id,
+            'permission' => Permission::PlantsView->value,
+        ], [
+            'id' => (string) Str::uuid7(),
+        ]);
 
         $plant = $this->plant($orgA, 'A-01');
         $assignedArea = $this->area($plant, 'A-AREA-01');
@@ -136,7 +155,15 @@ class TenantPolicyTest extends TestCase
         $orgA = $this->organization('ORG-A');
         $inspector = $this->user($orgA);
         app(TenantContext::class)->set($orgA->id);
-        $inspector->assignRole($this->role($orgA, (string) config('tenancy.roles.inspector')));
+        $inspectorRole = $this->role($orgA, (string) config('tenancy.roles.inspector'));
+        $inspector->assignRole($inspectorRole);
+        RolePermission::firstOrCreate([
+            'role_id' => $inspectorRole->id,
+            'organization_id' => $orgA->id,
+            'permission' => Permission::PlantsView->value,
+        ], [
+            'id' => (string) Str::uuid7(),
+        ]);
 
         $area = $this->area($this->plant($orgA, 'A-01'), 'A-AREA-01');
         $inspector->assignArea($area);
@@ -149,7 +176,15 @@ class TenantPolicyTest extends TestCase
         $orgA = $this->organization('ORG-A');
         $inspector = $this->user($orgA);
         app(TenantContext::class)->set($orgA->id);
-        $inspector->assignRole($this->role($orgA, (string) config('tenancy.roles.inspector')));
+        $inspectorRole = $this->role($orgA, (string) config('tenancy.roles.inspector'));
+        $inspector->assignRole($inspectorRole);
+        RolePermission::firstOrCreate([
+            'role_id' => $inspectorRole->id,
+            'organization_id' => $orgA->id,
+            'permission' => Permission::PlantsView->value,
+        ], [
+            'id' => (string) Str::uuid7(),
+        ]);
 
         $assignedPlant = $this->plant($orgA, 'A-01');
         $areaOfAssignedPlant = $this->area($assignedPlant, 'A-AREA-01');

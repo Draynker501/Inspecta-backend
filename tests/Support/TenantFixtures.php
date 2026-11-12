@@ -2,12 +2,14 @@
 
 namespace Tests\Support;
 
+use App\Authorization\Permission;
 use App\Models\Area;
 use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\Plant;
 use App\Models\ProductionLine;
 use App\Models\Role;
+use App\Models\RolePermission;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Str;
@@ -85,7 +87,22 @@ trait TenantFixtures
         // assignRole requiere TenantContext activo desde P3.2.
         app(TenantContext::class)->set($organization->id);
 
-        $user->assignRole($this->role($organization, (string) config('tenancy.roles.admin')));
+        $role = $this->role($organization, (string) config('tenancy.roles.admin'));
+        $user->assignRole($role);
+
+        foreach ([
+            Permission::PlantsView->value,
+            Permission::PlantsManage->value,
+            Permission::LocationsViewAll->value,
+        ] as $permission) {
+            RolePermission::firstOrCreate([
+                'role_id' => $role->id,
+                'organization_id' => $organization->id,
+                'permission' => $permission,
+            ], [
+                'id' => (string) Str::uuid7(),
+            ]);
+        }
 
         return $user;
     }

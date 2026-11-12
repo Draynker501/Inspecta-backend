@@ -1,6 +1,6 @@
 # M2.1 — Modelo de autorización de INSPECTA
 
-**Estado:** D-40 Implementada en M2.2 (núcleo de autorización: enum `Permission`, modelo `RolePermission`, migración `role_permissions`, `User::hasPermission()`, caché en `TenantContext`, helper `TenantPolicy::hasPermission()`). D-41 a D-44 siguen Aprobadas (pendientes de implementación en M2.3+).
+**Estado:** D-40 Implementada (M2.2). D-42 Implementada en M2.3 (policies de Plant, Area y ProductionLine con alcance por asignación y permiso `locations.view_all`). D-41, D-43 y D-44 siguen Aprobadas (pendientes en M2.4+).
 **Fuente:** decisiones D-40 a D-44 registradas en `docs/M1.5/decisiones/REGISTRO_DECISIONES.md` (aprobadas por el responsable el 11-nov-2026). Cambios de estado: D-32, D-33, D-34, D-35 pasan a Aprobada; D-27 Implementada (merge de master, config.platform.php fijado a 8.4.1).
 **Norma de este documento:** si un permiso, rol, endpoint o comportamiento no está en este documento ni en el registro de decisiones, se considera **no autorizado en M2**.
 
@@ -59,6 +59,7 @@ Granularidad conservadora: pocos permisos, agrupados por recurso. Los nombres ma
 | Permiso | Recurso | Capacidad | Roles (según matriz) |
 |---|---|---|---|
 | `plants.view` | plants | Ver plantas, áreas y líneas | Administrador, Supervisor, Inspector (asignadas) |
+| `locations.view_all` | locations | Leer todas las plantas, áreas y líneas de la organización activa sin asignaciones individuales | Administrador, Supervisor |
 | `plants.manage` | plants | Gestionar plantas, áreas y líneas | Administrador |
 | `users.manage` | users | Gestionar usuarios | Administrador |
 | `roles.manage` | roles | Gestionar roles | Administrador |
@@ -128,3 +129,33 @@ Orden lógico: M2.2 → M2.3 → M2.4 → (M2.5 y M2.6 en paralelo tras M2.4) �
 ## 8. Alcance explícito de M2.1
 
 Este bloque **no escribe código**: no toca controladores, rutas de producción, pruebas, migraciones, `openapi.yaml` ni `.env`. Solo registra decisiones y crea la documentación de diseño bajo `docs/M2/`.
+
+
+## 9. M2.3 — Policies y alcance por asignación
+
+**Estado:** Implementado y validado localmente (pendiente de publicación e integración).
+
+### Permiso dedicado
+
+- `locations.view_all`: permite leer todas las plantas, áreas y líneas de la organización activa sin asignaciones individuales.
+- No sustituye `plants.view`.
+- No concede creación, modificación ni eliminación.
+- No otorga acceso a otras organizaciones.
+
+### Matriz de alcance
+
+| Rol base | Lectura | Escritura |
+|---|---|---|
+| Administrador | Organizacional completa con `plants.view` + `locations.view_all` | Organizacional completa con `plants.manage` |
+| Supervisor | Organizacional completa con `plants.view` + `locations.view_all`; sin `plants.manage` | Denegada salvo concesión explícita de `plants.manage` |
+| Inspector | Solo asignaciones con `plants.view` | Denegada salvo concesión explícita de `plants.manage` |
+
+### Herencia
+
+- Planta asignada: planta, sus áreas y las líneas descendientes.
+- Área asignada: área y sus líneas; no concede planta padre ni áreas hermanas.
+- Líneas: no tienen asignaciones directas; su alcance depende del área o planta correspondiente.
+
+### Requisito para M2.4
+
+`viewAny()` autoriza la capacidad general, pero no filtra colecciones. Toda consulta futura deberá filtrar por organización, `plants.view`, `locations.view_all` y asignaciones aplicando herencia.

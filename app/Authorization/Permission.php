@@ -16,6 +16,7 @@ namespace App\Authorization;
 enum Permission: string
 {
     case PlantsView = 'plants.view';
+    case LocationsViewAll = 'locations.view_all';
     case PlantsManage = 'plants.manage';
     case UsersManage = 'users.manage';
     case RolesManage = 'roles.manage';
