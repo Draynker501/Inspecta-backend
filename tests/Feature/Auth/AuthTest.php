@@ -106,7 +106,7 @@ class AuthTest extends TestCase
             ->assertUnauthorized();
     }
 
-    public function test_me_con_usuario_inactivo_devuelve_403(): void
+    public function test_me_con_usuario_inactivo_devuelve_401(): void
     {
         $user = $this->createUser(['email' => 'inactivo@example.test']);
         $token = $user->createToken('inspecta-api')->plainTextToken;
@@ -114,7 +114,8 @@ class AuthTest extends TestCase
 
         $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson('/api/auth/me')
-            ->assertForbidden();
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'unauthenticated');
     }
 
     public function test_logout_revoca_el_token_actual(): void

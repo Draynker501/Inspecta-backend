@@ -44,7 +44,7 @@ info:
       implementados en el servidor; mientras tanto devuelven `not_found`
       (404, código `not_found`). No deben considerarse disponibles para consumo.
 
-  version: 2.2.0
+  version: 2.3.0
 
 servers:
   - url: https://api.inspecta.com/api
@@ -6174,11 +6174,13 @@ components:
         Presente en todos los errores del catálogo. Las respuestas fuera
         del catálogo (403 de policies, 405, 500) pueden omitirlo.
 
-        - `unauthenticated` (401): token ausente, inválido o revocado.
+        - `unauthenticated` (401): token ausente, inválido, revocado o
+          perteneciente a un usuario globalmente desactivado.
         - `invalid_credentials` (401): login con email o contraseña incorrectos.
-        - `user_inactive` (403): usuario con status = false; se emite en login
-          y al usar el token de un usuario inactivo. Solo se evalúa después
-          de validar la contraseña.
+        - `user_inactive` (403): usuario con status = false; se emite únicamente
+          en login, después de validar la contraseña. Un token emitido a un
+          usuario que luego se desactiva deja de autenticar y responde
+          `unauthenticated` (401) en la siguiente petición (D-44, M2.5).
         - `validation_failed` (422): error de validación; el sobre incluye
           `errors` con el detalle por campo.
         - `too_many_attempts` (429): límite de intentos excedido; incluye

@@ -128,7 +128,7 @@ class ApiErrorCodesTest extends TestCase
         $this->assertEnvelope($response, 403, 'user_inactive', 'El usuario está inactivo. Contacte al administrador.');
     }
 
-    public function test_user_inactive_coincide_entre_login_y_token(): void
+    public function test_user_inactive_login_403_y_token_401(): void
     {
         $user = User::factory()->create(['email' => 'inactivo@example.test']);
         $user->forceFill(['status' => false])->save();
@@ -138,15 +138,21 @@ class ApiErrorCodesTest extends TestCase
             'password' => 'password',
         ]);
 
+        $login->assertStatus(403)
+            ->assertJsonPath('code', 'user_inactive');
+
         $token = $user->createToken('inspecta-api')->plainTextToken;
 
         $me = $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson('/api/auth/me');
 
-        $this->assertSame($login->json('code'), $me->json('code'));
-        $this->assertSame($login->json('message'), $me->json('message'));
-        $this->assertSame('user_inactive', $me->json('code'));
-        $me->assertStatus(403);
+        $me->assertStatus(401)
+            ->assertJsonPath('code', 'unauthenticated');
+
+        // El token no se elimina de la base de datos (D-44).
+        $this->assertDatabaseHas('personal_access_tokens', [
+            'tokenable_id' => $user->id,
+        ]);
     }
 
     public function test_usuario_inactivo_con_contraseña_incorrecta_recibe_invalid_credentials(): void

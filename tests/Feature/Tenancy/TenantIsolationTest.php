@@ -382,8 +382,8 @@ class TenantIsolationTest extends TestCase
 
         $this->actingAsApiInOrganization($adminA, $orgA)
             ->getJson('/api/tenant-test/plants')
-            ->assertForbidden()
-            ->assertJsonPath('message', 'El usuario está inactivo. Contacte al administrador.');
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'unauthenticated');
     }
 
     public function test_organizacion_inactiva_no_otorga_contexto(): void
