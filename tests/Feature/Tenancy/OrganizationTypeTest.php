@@ -3,7 +3,9 @@
 namespace Tests\Feature\Tenancy;
 
 use App\Models\Organization;
+use Database\Seeders\OrganizationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class OrganizationTypeTest extends TestCase
@@ -20,7 +22,7 @@ class OrganizationTypeTest extends TestCase
     public function test_se_puede_crear_organizacion_operador(): void
     {
         $organization = Organization::create([
-            'id' => (string) \Illuminate\Support\Str::uuid7(),
+            'id' => (string) Str::uuid7(),
             'name' => 'Consultora INSPECTA',
             'code' => 'INSPECTA-OP',
             'type' => Organization::TYPE_OPERATOR,
@@ -42,6 +44,6 @@ class OrganizationTypeTest extends TestCase
 
     private function seedOrganizations(): void
     {
-        (new \Database\Seeders\OrganizationSeeder())->run();
+        (new OrganizationSeeder)->run();
     }
 }

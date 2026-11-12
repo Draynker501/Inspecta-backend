@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
-class NormController extends Controller
+class NormController extends TenantController
 {
     /**
      * GET /api/norms

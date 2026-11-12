@@ -12,7 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-class QuestionNormRequirementController extends Controller
+class QuestionNormRequirementController extends TenantController
 {
     /**
      * GET /api/questions/{questionId}/norm-requirements

@@ -14,6 +14,7 @@ class QuestionNormRequirement extends Model
     protected $table = 'question_norm_requirement';
 
     public $incrementing = false;
+
     protected $keyType = 'string';
 
     protected $fillable = [

@@ -13,7 +13,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
-class QuestionController extends Controller
+class QuestionController extends TenantController
 {
     /**
      * GET /api/sections/{sectionId}/questions

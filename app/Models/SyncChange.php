@@ -11,6 +11,7 @@ class SyncChange extends Model
     use BelongsToOrganization;
 
     public $incrementing = false;
+
     protected $keyType = 'string';
 
     public $timestamps = false;

@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
-class ChecklistController extends Controller
+class ChecklistController extends TenantController
 {
     /**
      * Display a listing of the resource.

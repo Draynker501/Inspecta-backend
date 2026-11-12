@@ -33,7 +33,7 @@ class TenancyStrictModeDefaultTest extends TestCase
         if ($this->savedGetenv === null) {
             putenv('TENANCY_STRICT_MODE');
         } else {
-            putenv('TENANCY_STRICT_MODE=' . $this->savedGetenv);
+            putenv('TENANCY_STRICT_MODE='.$this->savedGetenv);
         }
 
         parent::tearDown();

@@ -2,7 +2,6 @@
 
 namespace App\Support\Tenancy;
 
-use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -46,6 +45,7 @@ class MembershipBackfill
 
                     if ($exists) {
                         $already++;
+
                         continue;
                     }
 
@@ -74,7 +74,6 @@ class MembershipBackfill
     /**
      * Ejecuta un dry-run: calcula cuántas membresías se crearían sin escribir.
      *
-     * @param  int  $chunk
      * @return array{would_create: int, already: int, skipped: int, users: int}
      */
     public static function dryRun(int $chunk = 500): array
@@ -99,6 +98,7 @@ class MembershipBackfill
 
                     if ($exists) {
                         $already++;
+
                         continue;
                     }
 

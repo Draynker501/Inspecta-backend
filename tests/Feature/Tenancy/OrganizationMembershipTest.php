@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Tenancy;
 
-use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\Support\TenantFixtures;
 use Tests\TestCase;
 
@@ -40,7 +40,7 @@ class OrganizationMembershipTest extends TestCase
                 ->exists()
         );
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         OrganizationMembership::create([
             'user_id' => $user->id,
@@ -52,10 +52,10 @@ class OrganizationMembershipTest extends TestCase
     {
         $organization = $this->organization('ORG-A');
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         OrganizationMembership::create([
-            'user_id' => (string) \Illuminate\Support\Str::uuid7(),
+            'user_id' => (string) Str::uuid7(),
             'organization_id' => $organization->id,
         ]);
     }
@@ -64,11 +64,11 @@ class OrganizationMembershipTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         OrganizationMembership::create([
             'user_id' => $user->id,
-            'organization_id' => (string) \Illuminate\Support\Str::uuid7(),
+            'organization_id' => (string) Str::uuid7(),
         ]);
     }
 

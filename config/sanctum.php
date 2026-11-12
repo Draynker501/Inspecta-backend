@@ -37,6 +37,19 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Sanctum Routes
+    |--------------------------------------------------------------------------
+    |
+    | Desactivadas: la API usa autenticación por token Bearer y CORS con
+    | supports_credentials=false; la ruta csrf-cookie solo sirve para SPA
+    | con cookies. Reactivar solo si se adopta auth por cookie (actualizar
+    | la prueba de superficie de rutas).
+    |
+    */
+    'routes' => false,
+
     'guard' => ['web'],
 
     /*

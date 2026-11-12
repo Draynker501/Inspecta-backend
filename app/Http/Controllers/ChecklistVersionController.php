@@ -13,7 +13,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Models\Question;
 
-class ChecklistVersionController extends Controller
+class ChecklistVersionController extends TenantController
 {
     /**
      * Display a listing of the resource.

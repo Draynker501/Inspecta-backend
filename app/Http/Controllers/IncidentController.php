@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Incident;
 use Illuminate\Http\Request;
 
-class IncidentController extends Controller
+class IncidentController extends TenantController
 {
     /**
      * Display a listing of the resource.
