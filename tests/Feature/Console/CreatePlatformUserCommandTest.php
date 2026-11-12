@@ -10,6 +10,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Policies\PlatformOperatorPolicy;
 use App\Support\Audit\AuditLogger;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -69,6 +70,59 @@ class CreatePlatformUserCommandTest extends TestCase
         $log = AuditLog::where('action', 'platform_user.created')->first();
         $this->assertNotNull($log);
         $this->assertSame($operator->id, $log->organization_id);
+    }
+
+    public function test_rol_de_plataforma_inactivo_impide_bootstrap_sin_reactivarlo(): void
+    {
+        $operator = $this->makeOperator();
+        $role = Role::query()->firstOrCreate(
+            ['organization_id' => $operator->id, 'name' => config('tenancy.roles.platform_admin')],
+            ['id' => (string) Str::uuid7(), 'status' => false],
+        );
+        $role->update(['status' => false]);
+
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => 'inactive-role@test.com',
+            '--name' => 'Plat User',
+        ])->expectsQuestion('Contraseña', self::VALID_PASSWORD)
+            ->expectsQuestion('Confirmar contraseña', self::VALID_PASSWORD)
+            ->assertExitCode(1);
+
+        $this->assertFalse(User::where('email', 'inactive-role@test.com')->exists());
+        $this->assertFalse((bool) $role->fresh()->status);
+        $this->assertSame(0, AuditLog::where('action', 'platform_user.created')->count());
+    }
+
+    public function test_usuario_existente_con_rol_inactivo_impide_duplicados(): void
+    {
+        $operator = $this->makeOperator();
+        $this->createPlatformUser();
+        $role = Role::where('organization_id', $operator->id)
+            ->where('name', config('tenancy.roles.platform_admin'))->firstOrFail();
+        $role->update(['status' => false]);
+
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => 'second@test.com',
+            '--name' => 'Second',
+        ])->expectsOutputToContain('Ya existe')
+            ->assertExitCode(1);
+
+        $this->assertFalse(User::where('email', 'second@test.com')->exists());
+        $this->assertFalse((bool) $role->fresh()->status);
+    }
+
+    public function test_usuario_existente_se_detecta_aunque_haya_otro_tenant_ambiente(): void
+    {
+        $this->makeOperator();
+        $this->createPlatformUser();
+        $other = $this->clientOrganization();
+        app(TenantContext::class)->set($other->id);
+        $this->artisan('inspecta:create-platform-user', [
+            '--email' => 'second@test.com',
+            '--name' => 'Second',
+        ])->expectsOutputToContain('Ya existe')->assertExitCode(1);
+        $this->assertFalse(User::where('email', 'second@test.com')->exists());
+        $this->assertSame($other->id, app(TenantContext::class)->id());
     }
 
     public function test_contraseñas_distintas_en_confirmacion_falla_sin_efectos(): void

@@ -8,7 +8,6 @@ use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Models\User;
 use App\Support\Audit\AuditLogger;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class MembershipService
@@ -50,9 +49,7 @@ class MembershipService
                 $membership->revoked_at = now();
                 $membership->save();
 
-                Auth::setUser($actor);
-
-                app(AuditLogger::class)->record(
+                $context->withAuditActor($actor->id, fn () => app(AuditLogger::class)->record(
                     'membership.revoked',
                     $membership,
                     ['status' => $previousStatus],
@@ -63,7 +60,7 @@ class MembershipService
                         'new_status' => OrganizationMembership::STATUS_REVOKED,
                         'revoked_at' => $membership->revoked_at?->toIso8601String(),
                     ],
-                );
+                ));
 
                 $context->flushPermissionCache($target->id, $organization->id);
 

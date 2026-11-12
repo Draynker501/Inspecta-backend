@@ -164,6 +164,10 @@ class CreatePlatformUserCommand extends Command
                         ],
                     );
 
+                    if (! $role->status) {
+                        throw new \RuntimeException('El rol de plataforma está inactivo.');
+                    }
+
                     $user->assignRole($role);
                 });
 
@@ -200,7 +204,7 @@ class CreatePlatformUserCommand extends Command
      */
     protected function platformUserExists(Organization $operator, string $platformRoleName): bool
     {
-        return User::query()
+        return app(TenantContext::class)->runAs($operator->id, fn (): bool => User::query()
             ->whereHas('memberships', function ($query) use ($operator): void {
                 $query->where('organization_id', $operator->id)
                     ->where('status', OrganizationMembership::STATUS_ACTIVE);
@@ -209,7 +213,7 @@ class CreatePlatformUserCommand extends Command
                 $query->where('roles.organization_id', $operator->id)
                     ->where('roles.name', $platformRoleName);
             })
-            ->exists();
+            ->exists());
     }
 
     private function isInteractive(): bool
