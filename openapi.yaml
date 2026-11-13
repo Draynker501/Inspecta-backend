@@ -10,14 +10,14 @@ info:
 
     - Todas las colecciones usan paginación con parámetros `page` y `per_page`
       (estándar Laravel API Resources) y devuelven el envelope `{data, meta}`.
-    - El campo `status` es booleano (BD `TINYINT(1)`): `true` = activo, `false` = inactivo.
-      La baja lógica se realiza enviando `{"status": false}` en endpoints `PATCH …/status`.
-    - Los campos de auditoría (`user_id`, `created_by`, `reported_by`, `assigned_to`,
-      `uploaded_by`) y `organization_id` se toman del token de acceso y no deben
-      enviarse en el body. Un `organization_id` distinto al del token se rechaza
-      con 422.
-    - Aislamiento multi-tenant: la organización se deriva del token. Un recurso de
-      otra organización se comporta como inexistente (404) y no revela su existencia.
+    - El campo `status` es booleano: `true` = activo, `false` = inactivo.
+      La baja lógica mediante `deleted_at` es independiente del estado `status`.
+    - El token identifica al usuario autenticado; la organización activa de las
+      rutas de dominio se selecciona con `X-Organization-Id` y membresía activa,
+      no se deriva del token. Los campos de actor y organización de cada operación
+      se rigen por su contrato; en POST /plants `organization_id` no se admite en el body.
+    - Aislamiento multi-tenant: un recurso de otra organización se comporta como
+      inexistente (404) cuando se consulta por identificador y no revela su existencia.
     - v1.4.0 (aditiva, M1.5): cabecera X-Organization-Id (UUID) obligatoria en rutas de dominio; GET /auth/organizations; campo type en Organization (client/operator); identidad global en /auth/me.
     - v2.0.0 (D-16, D-31b, D-31c): sobre de error uniforme `{ message, code, errors? }`
       con códigos estables del catálogo (ver components/schemas/ErrorCode).
@@ -215,7 +215,10 @@ paths:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Plantas
-      description: Obtiene una lista paginada de todas las plantas registradas. Ideal para la sincronización offline.
+      description: |
+        Lista paginada de plantas del tenant activo. Requiere `plants.view`;
+        sin `locations.view_all` solo incluye plantas asignadas al usuario.
+        No devuelve áreas ni líneas anidadas.
       tags:
         - Organization
       parameters:
@@ -223,9 +226,13 @@ paths:
         - $ref: '#/components/parameters/perPageParam'
         - in: query
           name: include_hierarchy
+          deprecated: true
           schema:
             type: boolean
-          description: Si es true, retorna las áreas y líneas de producción anidadas.
+          description: |
+            Parámetro heredado ignorado por el backend actual: no devuelve áreas
+            ni líneas y no habilita la selección jerárquica remota de la PWA.
+            Su futura retirada requiere una transición coordinada con consumidores.
       responses:
         '200':
           description: Lista de plantas obtenida exitosamente.
@@ -270,9 +277,24 @@ paths:
                   $ref: '#/components/examples/OrganizationNotTenant'
                 forbiddenPolicy:
                   $ref: '#/components/examples/ForbiddenPolicy'
+        '422':
+          description: Parámetros de paginación inválidos; code validation_failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     post:
-      x-status: planned
       summary: Crear Planta
+      description: |
+        Requiere usuario autenticado, organización cliente activa seleccionada
+        mediante `X-Organization-Id`, membresía activa y permiso `plants.manage`.
+        Solo admite atributos en el body JSON; rechaza cualquier parámetro query,
+        archivo adjunto o campo adicional con 422 `validation_failed`.
+        El código se recorta y convierte a mayúsculas antes de comprobar que
+        contiene solo A-Z, 0-9 y guion ASCII, con máximo 50 caracteres.
+        Un código duplicado en la organización, incluso con soft delete, se
+        rechaza con 422; la garantía final es el índice `plants_org_code_unique`.
+        Otros errores SQL no se convierten en validación.
       tags:
         - Organization
       requestBody:
@@ -280,7 +302,12 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PlantInput'
+              $ref: '#/components/schemas/PlantCreateInput'
+            example:
+              name: Planta Norte
+              code: " pl-01 "
+              address: Av. Industria 100
+              description: null
       responses:
         '201':
           description: Planta creada.
@@ -288,9 +315,20 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
+                additionalProperties: false
                 properties:
                   data:
-                    $ref: '#/components/schemas/Plant'
+                    $ref: '#/components/schemas/PlantCreated'
+              example:
+                data:
+                  id: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+                  organization_id: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e40"
+                  name: Planta Norte
+                  code: PL-01
+                  address: Av. Industria 100
+                  description: null
+                  status: true
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -322,7 +360,7 @@ paths:
                 forbiddenPolicy:
                   $ref: '#/components/examples/ForbiddenPolicy'
         '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
+          description: Datos inválidos, campos adicionales, query o archivos no permitidos, o código duplicado en la organización; code validation_failed.
           content:
             application/json:
               schema:
@@ -330,8 +368,6 @@ paths:
               examples:
                 validationFailed:
                   $ref: '#/components/examples/ValidationFailed'
-                crossTenantOperation:
-                  $ref: '#/components/examples/CrossTenantRelation'
 
   /plants/{plantId}:
     x-status: planned
@@ -6309,7 +6345,7 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: Fecha de baja lógica (soft delete). Nulo si la organización está activa.
+          description: Fecha de baja lógica (soft delete); nulo si no está eliminada lógicamente. Independiente de status.
           example: null
         created_at:
           type: string
@@ -6403,12 +6439,12 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: Fecha de baja lógica (soft delete). Nulo si la planta está activa.
+          description: Fecha de baja lógica (soft delete); nulo si no está eliminada lógicamente. Independiente de status.
           example: null
         areas:
           type: array
           nullable: true
-          description: "Opcional. Se devuelve si se solicita la jerarquía."
+          description: "Jerarquía prevista para operaciones futuras; GET /plants no la devuelve."
           items:
             $ref: '#/components/schemas/Area'
         created_at:
@@ -6421,6 +6457,67 @@ components:
           format: date-time
           nullable: true
           example: "2026-10-01T09:00:00Z"
+
+    PlantCreateInput:
+      type: object
+      additionalProperties: false
+      required: [name, code]
+      properties:
+        name:
+          type: string
+          maxLength: 150
+          description: Nombre no vacío.
+          example: "Planta Norte"
+        code:
+          type: string
+          minLength: 1
+          description: |
+            Obligatorio. El middleware recorta espacios y caracteres invisibles
+            de los extremos; después se aplica trim de PHP y se convierten letras
+            ASCII a mayúsculas. El resultado debe contener entre 1 y 50 caracteres,
+            exclusivamente A-Z, 0-9 o guion ASCII, y ser único por organización,
+            incluidas plantas con soft delete. Se aceptan minúsculas y caracteres
+            recortables en los extremos, pero no caracteres inválidos en el interior.
+            Las restricciones OpenAPI sobre el valor bruto no representan de forma
+            portable esta normalización: validar solo este esquema no garantiza
+            que el servidor acepte el código; el servidor aplica la regla completa.
+          example: "PLN-01"
+        address:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+
+    PlantCreated:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, name, code, address, description, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUIDv7 generado por el servidor.
+        organization_id:
+          type: string
+          format: uuid
+          description: Organización obtenida del contexto tenant.
+        name:
+          type: string
+          maxLength: 150
+        code:
+          type: string
+          maxLength: 50
+          pattern: '^[A-Z0-9-]+$'
+        address:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        status:
+          type: boolean
+          description: true al crear la planta.
 
     PlantInput:
       type: object
@@ -6490,7 +6587,7 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: Fecha de baja lógica (soft delete). Nulo si el área está activa.
+          description: Fecha de baja lógica (soft delete); nulo si no está eliminada lógicamente. Independiente de status.
           example: null
         production_lines:
           type: array
@@ -6571,7 +6668,7 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: Fecha de baja lógica (soft delete). Nulo si la línea está activa.
+          description: Fecha de baja lógica (soft delete); nulo si no está eliminada lógicamente. Independiente de status.
           example: null
         created_at:
           type: string
