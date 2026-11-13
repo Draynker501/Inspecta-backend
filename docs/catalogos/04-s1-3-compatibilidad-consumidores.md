@@ -1,0 +1,7 @@
+# S1.3 — Compatibilidad de consumidores: estado pendiente
+
+La PWA `Jairo2605/inspecta-pwa`, revisión `d23478f133df3005ac9c3bc0d79c6cd965218655`, prepara en modo remoto `GET /plants?include_hierarchy=true`; la pantalla de inspecciones utiliza áreas y líneas anidadas. `GET /api/plants` en el backend actual ignora ese parámetro y no implementa jerarquía. En la PWA inspeccionada, el modo predeterminado utiliza mocks; el login remoto no está conectado y el cliente no envía la cabecera de organización. Por ello, el funcionamiento remoto no está acreditado; conservar la forma de la petición no demuestra compatibilidad funcional.
+
+El panel administrativo no estuvo disponible para inspección: su uso de GET, POST, jerarquía y clientes generados permanece **pendiente de verificar**. No se debe asumir que no existen otros consumidores.
+
+**Resolución posterior S1.5:** la recomendación de mantener temporalmente `include_hierarchy` como parámetro heredado ignorado, marcado `deprecated` y descrito explícitamente como no funcional fue aprobada por el responsable el 12 de noviembre de 2026 como CAT-TEC-09. Su retirada requiere transición coordinada con los consumidores. No implementar jerarquía en S1 ni activar el flujo remoto de inspecciones sin un contrato e integración funcionales. El panel y el versionado contractual permanecen pendientes; no se acredita compatibilidad funcional por conservar el parámetro.
