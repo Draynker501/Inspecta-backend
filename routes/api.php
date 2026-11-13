@@ -27,3 +27,4 @@ Route::prefix('auth')->group(function () {
 });
 
 Route::get('plants', [PlantController::class, 'index'])->middleware('api.tenant');
+Route::post('plants', [PlantController::class, 'store'])->middleware('api.tenant');
