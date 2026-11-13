@@ -199,7 +199,12 @@ class PlantsIndexTest extends TestCase
 
         $this->actingAsApiInOrganization($user, $org)
             ->getJson('/api/plants?per_page=0')
-            ->assertStatus(422);
+            ->assertStatus(422)->assertJsonPath('code', 'validation_failed')->assertJsonValidationErrors('per_page');
+
+        foreach (['page=0' => 'page', 'per_page=101' => 'per_page', 'page=abc' => 'page'] as $query => $field) {
+            $this->getJson('/api/plants?'.$query)
+                ->assertUnprocessable()->assertJsonPath('code', 'validation_failed')->assertJsonValidationErrors($field);
+        }
     }
 
     public function test_revocacion_permiso_entre_peticiones(): void

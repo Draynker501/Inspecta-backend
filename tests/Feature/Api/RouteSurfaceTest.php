@@ -44,7 +44,7 @@ class RouteSurfaceTest extends TestCase
         );
     }
 
-    public function test_las_cinco_operaciones_api_esperadas_estan_registradas(): void
+    public function test_las_seis_operaciones_api_esperadas_estan_registradas(): void
     {
         $operations = [];
 
@@ -64,6 +64,7 @@ class RouteSurfaceTest extends TestCase
             'GET api/auth/me',
             'GET api/auth/organizations',
             'GET api/plants',
+            'POST api/plants',
         ];
 
         foreach ($expected as $operation) {
@@ -86,6 +87,7 @@ class RouteSurfaceTest extends TestCase
             'GET api/auth/me',
             'GET api/auth/organizations',
             'GET api/plants',
+            'POST api/plants',
         ];
 
         $unexpected = array_values(array_diff($apiOperations, $allowed));
