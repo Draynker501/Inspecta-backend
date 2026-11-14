@@ -2,14 +2,28 @@
 
 namespace Tests\Feature\Database;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class NormsMigrationReversibilityMariaDbTest extends TestCase
 {
-    use RefreshDatabase;
+    protected function tearDown(): void
+    {
+        RefreshDatabaseState::$migrated = false;
+        parent::tearDown();
+    }
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        if ($this->isMariaDb()) {
+            $this->assertStringEndsWith('_test', DB::connection()->getDatabaseName());
+            $this->assertSame(0, Artisan::call('migrate:fresh', ['--force' => true]));
+        }
+    }
 
     private function isMariaDb(): bool
     {
