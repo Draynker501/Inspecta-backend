@@ -77,3 +77,11 @@ CAT-03 quedó integrada en `master` mediante PR #39. La evidencia y las decision
 - La sensibilidad a mayúsculas/acentos depende de la collation del motor; no se modificó arbitrariamente.
 - La compatibilidad con panel y PWA sigue pendiente de verificación directa.
 - OpenAPI permanece en `2.3.0` sin publicación contractual.
+
+## S3 — Consolidación y publicación
+
+- Commits locales temáticos creados.
+- Validación final SQLite: 567 pruebas, 531 aprobadas, 36 omitidas, 2361 aserciones.
+- Validación final MariaDB: 567 pruebas, 539 aprobadas, 28 omitidas, 2557 aserciones.
+- PHP lint, Pint y `git diff --check`: aprobados.
+- Publicación y GitHub Actions pendientes de ejecución.
