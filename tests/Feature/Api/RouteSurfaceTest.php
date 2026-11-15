@@ -65,8 +65,13 @@ class RouteSurfaceTest extends TestCase
             'GET api/auth/organizations',
             'GET api/plants',
             'POST api/plants',
+            'GET api/plants/{plantId}',
+            'GET api/plants/{plantId}/areas',
             'POST api/plants/{plantId}/areas',
+            'GET api/areas/{areaId}',
+            'GET api/areas/{areaId}/lines',
             'POST api/areas/{areaId}/lines',
+            'GET api/production-lines/{productionLineId}',
         ];
 
         foreach ($expected as $operation) {
@@ -90,8 +95,13 @@ class RouteSurfaceTest extends TestCase
             'GET api/auth/organizations',
             'GET api/plants',
             'POST api/plants',
+            'GET api/plants/{plantId}',
+            'GET api/plants/{plantId}/areas',
             'POST api/plants/{plantId}/areas',
+            'GET api/areas/{areaId}',
+            'GET api/areas/{areaId}/lines',
             'POST api/areas/{areaId}/lines',
+            'GET api/production-lines/{productionLineId}',
         ];
 
         $unexpected = array_values(array_diff($apiOperations, $allowed));
@@ -163,7 +173,7 @@ class RouteSurfaceTest extends TestCase
             $uris[] = $route->uri();
         }
 
-        $this->assertNotContains('api/areas/{areaId}', $uris);
+        $this->assertNotContains('api/checklists', $uris);
         $this->assertNotContains('api/users', $uris);
         $this->assertNotContains('api/checklists', $uris);
     }

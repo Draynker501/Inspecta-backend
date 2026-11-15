@@ -2,64 +2,35 @@
 
 namespace App\Http\Controllers;
 
+use App\Authorization\Permission;
 use App\Models\ProductionLine;
+use App\Support\Locations\LocationReadScope;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
 
 class ProductionLineController extends TenantController
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function show(Request $request, string $productionLineId)
     {
-        //
-    }
+        $user = $request->user();
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
+        if (! $user->hasPermission(Permission::PlantsView)) {
+            abort(403);
+        }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
+        LocationReadScope::rejectUnknownQuery($request, []);
+        $organizationId = app(TenantContext::class)->requireId();
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(ProductionLine $productionLine)
-    {
-        //
-    }
+        $line = ProductionLine::query()
+            ->where('organization_id', $organizationId)
+            ->whereKey($productionLineId)
+            ->first();
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(ProductionLine $productionLine)
-    {
-        //
-    }
+        if ($line === null || $line->area === null || $line->area->plant === null
+            || ! LocationReadScope::canViewLine($user, $line)) {
+            abort(404);
+        }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, ProductionLine $productionLine)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(ProductionLine $productionLine)
-    {
-        //
+        return response()->json(['data' => $line->toArray()]);
     }
 }

@@ -68,7 +68,7 @@ class PlantsOpenApiContractTest extends TestCase
         $error = $get['responses'][422];
         $this->assertStringContainsString('validation_failed', $error['description']);
         $this->assertSame('#/components/schemas/Error', $error['content']['application/json']['schema']['$ref']);
-        $this->assertSame('planned', $spec['paths']['/plants/{plantId}']['x-status']);
+        $this->assertArrayNotHasKey('x-status', $spec['paths']['/plants/{plantId}']);
         $this->assertSame('#/components/schemas/PlantInput', $spec['paths']['/plants/{plantId}']['put']['requestBody']['content']['application/json']['schema']['$ref']);
     }
 }
