@@ -72,6 +72,7 @@ class RouteSurfaceTest extends TestCase
             'GET api/areas/{areaId}/lines',
             'POST api/areas/{areaId}/lines',
             'GET api/production-lines/{productionLineId}',
+            'GET api/locations/hierarchy',
         ];
 
         foreach ($expected as $operation) {
@@ -102,6 +103,7 @@ class RouteSurfaceTest extends TestCase
             'GET api/areas/{areaId}/lines',
             'POST api/areas/{areaId}/lines',
             'GET api/production-lines/{productionLineId}',
+            'GET api/locations/hierarchy',
         ];
 
         $unexpected = array_values(array_diff($apiOperations, $allowed));
