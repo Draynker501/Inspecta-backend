@@ -148,4 +148,32 @@ Implementado `GET /api/locations/hierarchy` con controlador dedicado, reutilizan
 
 ### Preparación para S3
 
-CAT-05 validada independientemente en SQLite y MariaDB, preparada para consolidación, publicación e integración. No se realizaron commits.
+CAT-05 validada independientemente en SQLite y MariaDB, preparada para consolidación, publicación e integración.
+
+## S3 — Consolidación y publicación
+
+### Comprobación final de consistencia
+
+- No se identificó exposición de nodos fuera del alcance autorizado.
+- Las inconsistencias temporales entre snapshots no permiten inclusión de descendientes bajo padres incorrectos.
+- La respuesta nunca supera 1,000 nodos; las colecciones se materializan con límites defensivos.
+- No hay truncamiento silencioso: cualquier desborde responde `422`.
+- Las garantías reales son de consistencia de lectura por snapshot, no de aislamiento transaccional.
+
+### Commits locales
+
+- `docs(catalogs): document CAT-05 hierarchy decisions`
+- `feat(locations): implement tenant-scoped location hierarchy`
+- `docs(catalogs): close CAT-05 technical validation`
+
+### Validación local final
+
+- SQLite `:memory:`: 587 pruebas, 551 aprobadas, 36 omitidas, 2435 aserciones.
+- MariaDB 11.8.9 efímera: 587 pruebas, 559 aprobadas, 28 omitidas, 2631 aserciones.
+- PHP lint, Pint y `git diff --check`: aprobados.
+
+### Publicación
+
+- Rama publicada en `origin` sin force push.
+- Draft PR contra `master`.
+- GitHub Actions pendiente de verificación.
