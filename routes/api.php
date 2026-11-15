@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\AreaController;
 use App\Http\Controllers\AreaStoreController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\OrganizationController;
 use App\Http\Controllers\PlantController;
+use App\Http\Controllers\ProductionLineController;
 use App\Http\Controllers\ProductionLineStoreController;
 use Illuminate\Support\Facades\Route;
 
@@ -30,5 +32,10 @@ Route::prefix('auth')->group(function () {
 
 Route::get('plants', [PlantController::class, 'index'])->middleware('api.tenant');
 Route::post('plants', [PlantController::class, 'store'])->middleware('api.tenant');
+Route::get('plants/{plantId}', [PlantController::class, 'show'])->middleware('api.tenant');
+Route::get('plants/{plantId}/areas', [PlantController::class, 'areas'])->middleware('api.tenant');
 Route::post('plants/{plantId}/areas', [AreaStoreController::class, 'store'])->middleware('api.tenant');
+Route::get('areas/{areaId}', [AreaController::class, 'show'])->middleware('api.tenant');
+Route::get('areas/{areaId}/lines', [AreaController::class, 'lines'])->middleware('api.tenant');
 Route::post('areas/{areaId}/lines', [ProductionLineStoreController::class, 'store'])->middleware('api.tenant');
+Route::get('production-lines/{productionLineId}', [ProductionLineController::class, 'show'])->middleware('api.tenant');

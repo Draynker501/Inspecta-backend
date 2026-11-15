@@ -13,7 +13,7 @@ class AreaOpenApiContractTest extends TestCase
         $path = $spec['paths']['/plants/{plantId}/areas'];
 
         $this->assertArrayNotHasKey('x-status', $path);
-        $this->assertSame('planned', $path['get']['x-status']);
+        $this->assertArrayNotHasKey('x-status', $path['get']);
         $this->assertArrayNotHasKey('x-status', $path['post']);
         $this->assertSame(['bearerAuth' => []], $path['post']['security'][0]);
         $this->assertContains('#/components/parameters/organizationIdHeader', array_column($path['parameters'], '$ref'));

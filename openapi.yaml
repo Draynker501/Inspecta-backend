@@ -225,6 +225,15 @@ paths:
         - $ref: '#/components/parameters/pageParam'
         - $ref: '#/components/parameters/perPageParam'
         - in: query
+          name: status
+          schema:
+            type: boolean
+        - in: query
+          name: q
+          schema:
+            type: string
+            maxLength: 100
+        - in: query
           name: include_hierarchy
           deprecated: true
           schema:
@@ -370,7 +379,6 @@ paths:
                   $ref: '#/components/examples/ValidationFailed'
 
   /plants/{plantId}:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -422,6 +430,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
     put:
+      x-status: planned
       summary: Actualizar Planta
       tags:
         - Organization
@@ -487,6 +496,7 @@ paths:
                 crossTenantOperation:
                   $ref: '#/components/examples/CrossTenantRelation'
     patch:
+      x-status: planned
       summary: Activar/Desactivar Planta
       description: Cambia el estado lógico de la planta (activa o inactiva).
       tags:
@@ -552,7 +562,6 @@ paths:
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
-      x-status: planned
       summary: Listar Áreas de una Planta
       tags:
         - Organization
@@ -560,6 +569,15 @@ paths:
         - $ref: '#/components/parameters/plantIdParam'
         - $ref: '#/components/parameters/pageParam'
         - $ref: '#/components/parameters/perPageParam'
+        - in: query
+          name: status
+          schema:
+            type: boolean
+        - in: query
+          name: q
+          schema:
+            type: string
+            maxLength: 100
       responses:
         '200':
           description: Áreas listadas.
@@ -699,7 +717,6 @@ paths:
                         - El código ya está en uso.
 
   /areas/{areaId}:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -751,6 +768,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
     put:
+      x-status: planned
       summary: Actualizar Área
       tags:
         - Organization
@@ -816,6 +834,7 @@ paths:
                 crossTenantOperation:
                   $ref: '#/components/examples/CrossTenantRelation'
     patch:
+      x-status: planned
       summary: Activar/Desactivar Área
       tags:
         - Organization
@@ -879,13 +898,21 @@ paths:
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
-      x-status: planned
       summary: Listar Líneas de Producción de un Área
       tags:
         - Organization      parameters:
         - $ref: '#/components/parameters/areaIdParam'
         - $ref: '#/components/parameters/pageParam'
         - $ref: '#/components/parameters/perPageParam'
+        - in: query
+          name: status
+          schema:
+            type: boolean
+        - in: query
+          name: q
+          schema:
+            type: string
+            maxLength: 100
       responses:
         '200':
           description: Líneas listadas.
@@ -1034,7 +1061,6 @@ paths:
                       code:
                         - El código ya está en uso.
   /production-lines/{productionLineId}:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -1086,6 +1112,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
     put:
+      x-status: planned
       summary: Actualizar Línea de Producción
       tags:
         - Organization
@@ -1151,6 +1178,7 @@ paths:
                 crossTenantOperation:
                   $ref: '#/components/examples/CrossTenantRelation'
     patch:
+      x-status: planned
       summary: Activar/Desactivar Línea de Producción
       tags:
         - Organization
