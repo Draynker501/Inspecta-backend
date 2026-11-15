@@ -1,4 +1,4 @@
-name: Tests (MariaDB 11.8)
+name: Tests (MariaDB 11.8.9)
 
 on:
   push:
@@ -24,34 +24,18 @@ jobs:
       matrix:
         php: [8.4, 8.5]
 
-    name: PHP ${{ matrix.php }} (MariaDB 11.8)
+    name: PHP ${{ matrix.php }} (MariaDB 11.8.9)
 
     env:
       APP_ENV: local
       APP_KEY: ""
       DB_CONNECTION: mariadb
       DB_HOST: 127.0.0.1
-      DB_PORT: "3306"
       DB_DATABASE: inspecta_test
-      DB_USERNAME: root
-      DB_PASSWORD: testpass
+      DB_USERNAME: inspecta_ci
+      CI_DB_CONTAINER: inspecta-ci-${{ github.run_id }}-${{ github.run_attempt }}-php${{ matrix.php }}
       TENANCY_STRICT_MODE: "true"
       TENANCY_ALLOW_CONSOLE_WITHOUT_TENANT: "true"
-
-    services:
-      mariadb:
-        image: mariadb:11.8
-        env:
-          MARIADB_ROOT_PASSWORD: testpass
-          MARIADB_DATABASE: inspecta_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="healthcheck.sh --connect --innodb_initialized"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
-          --health-start-period=30s
 
     steps:
       - name: Checkout code
@@ -71,6 +55,55 @@ jobs:
           APP_KEY_VALUE="base64:$(openssl rand -base64 32)"
           echo "::add-mask::$APP_KEY_VALUE"
           echo "APP_KEY=$APP_KEY_VALUE" >> "$GITHUB_ENV"
+
+      # Las claves se generan después de iniciar el job y se enmascaran antes
+      # de exponerlas a pasos posteriores. La base vive exclusivamente en tmpfs.
+      - name: Start isolated MariaDB for tests
+        run: |
+          set -euo pipefail
+          export MARIADB_ROOT_PASSWORD="$(openssl rand -hex 32)"
+          export MARIADB_PASSWORD="$(openssl rand -hex 32)"
+          echo "::add-mask::$MARIADB_ROOT_PASSWORD"
+          echo "::add-mask::$MARIADB_PASSWORD"
+          export MARIADB_DATABASE="$DB_DATABASE" MARIADB_USER="$DB_USERNAME" MARIADB_ROOT_HOST=localhost
+          trap 'docker rm -f "$CI_DB_CONTAINER" >/dev/null 2>&1 || true' ERR
+          docker run --detach --rm --name "$CI_DB_CONTAINER" \
+            --tmpfs /var/lib/mysql:rw,size=512m \
+            --publish 127.0.0.1::3306 \
+            --env MARIADB_ROOT_PASSWORD --env MARIADB_PASSWORD \
+            --env MARIADB_DATABASE --env MARIADB_USER --env MARIADB_ROOT_HOST \
+            mariadb:11.8.9 > /dev/null
+          ready=false
+          for attempt in {1..90}; do
+            if docker exec "$CI_DB_CONTAINER" healthcheck.sh --connect --innodb_initialized > /dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            echo "MariaDB did not become ready in time."
+            exit 1
+          fi
+          # PROCESS se concede únicamente al usuario de este contenedor efímero.
+          export MYSQL_PWD="$MARIADB_ROOT_PASSWORD"
+          docker exec --env MYSQL_PWD "$CI_DB_CONTAINER" \
+            mariadb --protocol=socket --user=root \
+            --execute="GRANT PROCESS ON *.* TO 'inspecta_ci'@'%'"
+          export MYSQL_PWD="$MARIADB_PASSWORD"
+          docker exec --env MYSQL_PWD "$CI_DB_CONTAINER" \
+            mariadb --protocol=tcp --host=127.0.0.1 --user="$DB_USERNAME" \
+            --database="$DB_DATABASE" --execute="SELECT COUNT(*) FROM information_schema.INNODB_LOCK_WAITS" \
+            > /dev/null
+          binding="$(docker port "$CI_DB_CONTAINER" 3306/tcp)"
+          case "$binding" in
+            127.0.0.1:*) port="${binding##*:}" ;;
+            *) echo "Unexpected MariaDB port binding."; exit 1 ;;
+          esac
+          echo "DB_PORT=$port" >> "$GITHUB_ENV"
+          echo "DB_PASSWORD=$MARIADB_PASSWORD" >> "$GITHUB_ENV"
+          unset MARIADB_ROOT_PASSWORD MARIADB_PASSWORD MYSQL_PWD
+          trap - ERR
 
       - name: Validate Composer manifest
         run: composer validate --no-check-publish
@@ -94,3 +127,7 @@ jobs:
           php artisan migrate:fresh
           php artisan migrate:reset
           php artisan migrate
+
+      - name: Remove isolated MariaDB
+        if: always()
+        run: docker rm -f "$CI_DB_CONTAINER" > /dev/null 2>&1 || true

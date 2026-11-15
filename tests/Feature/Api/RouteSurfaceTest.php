@@ -44,7 +44,7 @@ class RouteSurfaceTest extends TestCase
         );
     }
 
-    public function test_las_seis_operaciones_api_esperadas_estan_registradas(): void
+    public function test_las_siete_operaciones_api_esperadas_estan_registradas(): void
     {
         $operations = [];
 
@@ -65,6 +65,7 @@ class RouteSurfaceTest extends TestCase
             'GET api/auth/organizations',
             'GET api/plants',
             'POST api/plants',
+            'POST api/plants/{plantId}/areas',
         ];
 
         foreach ($expected as $operation) {
@@ -88,6 +89,7 @@ class RouteSurfaceTest extends TestCase
             'GET api/auth/organizations',
             'GET api/plants',
             'POST api/plants',
+            'POST api/plants/{plantId}/areas',
         ];
 
         $unexpected = array_values(array_diff($apiOperations, $allowed));
@@ -95,12 +97,13 @@ class RouteSurfaceTest extends TestCase
         $this->assertSame([], $unexpected, 'Operaciones API inesperadas: '.implode(', ', $unexpected));
     }
 
-    public function test_las_cuatro_rutas_autenticadas_requieren_token(): void
+    public function test_las_rutas_autenticadas_incluida_el_alta_de_areas_requieren_token(): void
     {
         $this->postJson('/api/auth/logout')->assertStatus(401);
         $this->getJson('/api/auth/me')->assertStatus(401);
         $this->getJson('/api/auth/organizations')->assertStatus(401);
         $this->getJson('/api/plants')->assertStatus(401);
+        $this->postJson('/api/plants/'.str_repeat('0', 36).'/areas', [])->assertStatus(401);
     }
 
     public function test_login_es_publico(): void
@@ -114,6 +117,24 @@ class RouteSurfaceTest extends TestCase
 
         $this->assertNotNull($route);
         $this->assertContains('api.tenant', $route->middleware());
+    }
+
+    public function test_alta_de_areas_declara_api_tenant_y_requiere_contexto(): void
+    {
+        $route = collect(Route::getRoutes())->first(fn ($route) => $route->uri() === 'api/plants/{plantId}/areas' && in_array('POST', $route->methods(), true));
+
+        $this->assertNotNull($route);
+        $this->assertContains('api.tenant', $route->middleware());
+
+        $organization = $this->clientOrganization('ORG-AREA-ROUTE');
+        $user = $this->admin($organization);
+        $token = $user->createToken('tests')->plainTextToken;
+        $plant = $this->plant($organization, 'P');
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson("/api/plants/{$plant->id}/areas", ['name' => 'A', 'code' => 'A'])
+            ->assertStatus(400)
+            ->assertJsonPath('code', 'organization_required');
     }
 
     public function test_plants_requiere_contexto_de_tenant(): void

@@ -2,14 +2,21 @@
 
 namespace Tests\Feature\Database;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class NormsMigrationReversibilityTest extends TestCase
 {
-    use RefreshDatabase;
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            $this->assertSame(':memory:', DB::connection()->getDatabaseName());
+            $this->assertSame(0, Artisan::call('migrate:fresh', ['--force' => true]));
+        }
+    }
 
     public function test_rollback_aborta_si_hay_normas_duplicadas_entre_organizaciones(): void
     {

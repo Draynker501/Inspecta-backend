@@ -549,10 +549,10 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /plants/{plantId}/areas:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
+      x-status: planned
       summary: Listar Áreas de una Planta
       tags:
         - Organization
@@ -608,9 +608,16 @@ paths:
           $ref: '#/components/responses/NotFoundError'
     post:
       summary: Crear Área
-      description: Crea una nueva área asignada directamente a la planta especificada en la URL.
+      description: |
+        Crea un área en la planta indicada. Requiere una membresía activa en
+        X-Organization-Id y el permiso plants.manage; no requiere plants.view
+        ni asignación a la planta. Los códigos se normalizan con trim y
+        mayúsculas antes de validar ASCII A–Z, 0–9 y guion, y son únicos por
+        planta incluso si el área previa está eliminada lógicamente.
       tags:
         - Organization
+      security:
+        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/plantIdParam'
       requestBody:
@@ -618,17 +625,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AreaInput'
+              $ref: '#/components/schemas/AreaCreateInput'
       responses:
         '201':
           description: Área creada.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/Area'
+                $ref: '#/components/schemas/AreaCreatedResponse'
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -661,8 +665,17 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
+        '415':
+          description: El Content-Type no es application/json; también se rechaza multipart.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
+          description: |
+            JSON inválido, propiedades extra, parámetros query, datos inválidos,
+            planta propia inactiva o código duplicado en la planta. La planta
+            inactiva se identifica en errors.plantId; la duplicidad en errors.code.
           content:
             application/json:
               schema:
@@ -670,8 +683,20 @@ paths:
               examples:
                 validationFailed:
                   $ref: '#/components/examples/ValidationFailed'
-                crossTenantOperation:
-                  $ref: '#/components/examples/CrossTenantRelation'
+                inactivePlant:
+                  value:
+                    message: The given data was invalid.
+                    code: validation_failed
+                    errors:
+                      plantId:
+                        - La planta está inactiva.
+                duplicateCode:
+                  value:
+                    message: The given data was invalid.
+                    code: validation_failed
+                    errors:
+                      code:
+                        - El código ya está en uso.
 
   /areas/{areaId}:
     x-status: planned
@@ -6632,6 +6657,83 @@ components:
           type: string
           nullable: true
           example: "Zona de soldadura robótica"
+
+    AreaCreateInput:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - code
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+          example: "Área de Soldadura"
+        code:
+          type: string
+          description: Se recorta y convierte a mayúsculas antes de validar; el valor normalizado debe tener 1–50 caracteres ASCII A–Z, 0–9 o guion.
+          example: " ar-sold-01 "
+        type:
+          type: string
+          maxLength: 50
+          nullable: true
+          description: Campo opcional, nullable y no limitado a un enum.
+          example: "production"
+        description:
+          type: string
+          nullable: true
+          example: "Zona de soldadura robótica"
+
+    AreaCreated:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - organization_id
+        - plant_id
+        - name
+        - code
+        - type
+        - description
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUIDv7 generado por el servidor.
+        organization_id:
+          type: string
+          format: uuid
+        plant_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 150
+        code:
+          type: string
+          maxLength: 50
+          pattern: '^[A-Z0-9-]+$'
+        type:
+          type: string
+          maxLength: 50
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        status:
+          type: boolean
+          enum: [true]
+
+    AreaCreatedResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          $ref: '#/components/schemas/AreaCreated'
 
     ProductionLine:
       type: object
