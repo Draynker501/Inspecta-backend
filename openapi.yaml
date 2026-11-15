@@ -876,14 +876,13 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /areas/{areaId}/lines:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
+      x-status: planned
       summary: Listar Líneas de Producción de un Área
       tags:
-        - Organization
-      parameters:
+        - Organization      parameters:
         - $ref: '#/components/parameters/areaIdParam'
         - $ref: '#/components/parameters/pageParam'
         - $ref: '#/components/parameters/perPageParam'
@@ -935,9 +934,18 @@ paths:
           $ref: '#/components/responses/NotFoundError'
     post:
       summary: Crear Línea de Producción
-      description: Crea una nueva línea de producción para el área especificada.
+      description: |
+        Crea una línea de producción en el área indicada. Requiere membresía
+        activa en X-Organization-Id y el permiso plants.manage; no requiere
+        plants.view ni asignación al área o a la planta. El área y su planta
+        deben existir, pertenecer al tenant, no estar eliminadas y estar activas.
+        Los códigos se normalizan con trim y mayúsculas antes de validar ASCII
+        A–Z, 0–9 y guion, y son únicos por área incluso si la línea previa
+        está eliminada lógicamente.
       tags:
         - Organization
+      security:
+        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/areaIdParam'
       requestBody:
@@ -945,17 +953,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProductionLineInput'
+              $ref: '#/components/schemas/ProductionLineCreateInput'
       responses:
         '201':
           description: Línea de producción creada.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/ProductionLine'
+                $ref: '#/components/schemas/ProductionLineCreatedResponse'
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -988,8 +993,18 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
+        '415':
+          description: El Content-Type no es application/json; también se rechaza multipart.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
+          description: |
+            JSON inválido, propiedades extra, parámetros query, datos inválidos,
+            área o planta propia inactiva o código duplicado en el área. El área
+            inactiva se identifica en errors.areaId; la planta inactiva en
+            errors.plantId; la duplicidad en errors.code.
           content:
             application/json:
               schema:
@@ -997,9 +1012,27 @@ paths:
               examples:
                 validationFailed:
                   $ref: '#/components/examples/ValidationFailed'
-                crossTenantOperation:
-                  $ref: '#/components/examples/CrossTenantRelation'
-
+                inactiveArea:
+                  value:
+                    message: The given data was invalid.
+                    code: validation_failed
+                    errors:
+                      areaId:
+                        - El área está inactiva.
+                inactivePlant:
+                  value:
+                    message: The given data was invalid.
+                    code: validation_failed
+                    errors:
+                      plantId:
+                        - La planta está inactiva.
+                duplicateCode:
+                  value:
+                    message: The given data was invalid.
+                    code: validation_failed
+                    errors:
+                      code:
+                        - El código ya está en uso.
   /production-lines/{productionLineId}:
     x-status: planned
     parameters:
@@ -6805,6 +6838,72 @@ components:
           type: string
           nullable: true
           example: "Ensamblaje de chasis"
+
+    ProductionLineCreateInput:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - code
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+          example: "Línea Automotriz A"
+        code:
+          type: string
+          description: Se recorta y convierte a mayúsculas antes de validar; el valor normalizado debe tener 1–50 caracteres ASCII A–Z, 0–9 o guion.
+          example: " ln-aut-a "
+        description:
+          type: string
+          nullable: true
+          example: "Ensamblaje de chasis"
+
+    ProductionLineCreated:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - organization_id
+        - area_id
+        - name
+        - code
+        - description
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUIDv7 generado por el servidor.
+        organization_id:
+          type: string
+          format: uuid
+        area_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 150
+        code:
+          type: string
+          maxLength: 50
+          pattern: '^[A-Z0-9-]+$'
+        description:
+          type: string
+          nullable: true
+        status:
+          type: boolean
+          enum: [true]
+
+    ProductionLineCreatedResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          $ref: '#/components/schemas/ProductionLineCreated'
 
     # -------------------------------------------------------------------
     # Users
