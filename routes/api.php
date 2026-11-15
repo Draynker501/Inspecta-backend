@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AreaStoreController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\OrganizationController;
 use App\Http\Controllers\PlantController;
@@ -28,3 +29,4 @@ Route::prefix('auth')->group(function () {
 
 Route::get('plants', [PlantController::class, 'index'])->middleware('api.tenant');
 Route::post('plants', [PlantController::class, 'store'])->middleware('api.tenant');
+Route::post('plants/{plantId}/areas', [AreaStoreController::class, 'store'])->middleware('api.tenant');
