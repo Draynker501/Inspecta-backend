@@ -77,3 +77,18 @@ Contractual: OpenAPI permanece en `2.3.0`; POST conciliado, GET vecino sigue `pl
 CI: se reutilizó el workflow endurecido; MariaDB 11.8.9, PROCESS exclusivo en la instancia efímera, APP_KEY temporal. Ejecución efectiva en Actions pendiente para este commit.
 
 Limitaciones: no se probaron deadlocks generales, tráfico HTTP por red ni recuperación real ante caída durante DDL. La credencial histórica de CI quedó en logs anteriores y no se eliminaron. No se autoriza despliegue ni publicación contractual.
+
+## 8. S3 — consolidación y preparación de integración
+
+**Veredicto:** CAT-03 consolidada localmente, sin bloqueantes técnicos dentro del alcance aprobado. Lista para Draft PR contra `master`.
+
+Cambios de cierre:
+- Reversibilidad MariaDB 11.8.9 validada: up/down/up, FK compuesta `prod_lines_area_org_fk` RESTRICT/RESTRICT, índice `prod_lines_area_org_idx`, restauración de la FK histórica `production_lines_area_id_foreign` (CASCADE/RESTRICT) y del índice, preservación de filas y de `inspections`/`incidents`, rechazo SQL de relaciones cross-tenant, rechazo de datos históricos inconsistentes, rechazo de DDL inválido sin alterar restricciones.
+- Pruebas de migración añadidas para SQLite y MariaDB (`ProductionLineAreaTenantMigrationTest`, `ProductionLineAreaTenantMigrationMariaDbTest`), 10 y 6 pruebas respectivamente.
+- Descubrimiento de pruebas: ambas configuraciones descubren 558 pruebas. SQLite omite 36 (21 específicas de MariaDB + 9 de concurrencia + 6 de migración MariaDB). MariaDB omite 28 (21 específicas de SQLite + 6 de migración SQLite + 1 clasificador? ajuste por motor). No se forzó igualdad de conteos; las diferencias se explican por guards de motor.
+- Revalidación jerárquica: se añadió prueba focalizada `test_referencia_obsoleta_entre_area_y_planta_se_rechaza`, que acredita el rechazo (404) cuando el área cambia de planta entre la lectura inicial y el bloqueo.
+- Resultados finales: SQLite `:memory:` 558/522/36/2312; MariaDB 11.8.9 efímera 558/530/28/2508; PHP lint, Pint y `git diff --check` aprobados.
+- Contractual: OpenAPI permanece en `2.3.0`; `POST /areas/{areaId}/lines` conciliado; GET vecino sigue `planned`. Compatibilidad con panel/PWA no verificada.
+- Commits locales temáticos realizados. No se hizo push, PR, merge ni rebase.
+
+Riesgos residuales: ausencia general de deadlocks no acreditada; tráfico HTTP por red no probado; recuperación real ante caída durante DDL no probada; credencial histórica de CI en logs anteriores; compatibilidad con consumidores no verificada; no se autoriza despliegue ni publicación contractual.
