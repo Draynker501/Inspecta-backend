@@ -1,4 +1,4 @@
-name: Tests (MariaDB 11.8)
+name: Tests (MariaDB 11.8.9)
 
 on:
   push:
@@ -24,7 +24,7 @@ jobs:
       matrix:
         php: [8.4, 8.5]
 
-    name: PHP ${{ matrix.php }} (MariaDB 11.8)
+    name: PHP ${{ matrix.php }} (MariaDB 11.8.9)
 
     env:
       APP_ENV: local
@@ -33,17 +33,19 @@ jobs:
       DB_HOST: 127.0.0.1
       DB_PORT: "3306"
       DB_DATABASE: inspecta_test
-      DB_USERNAME: root
+      DB_USERNAME: inspecta_ci
       DB_PASSWORD: testpass
       TENANCY_STRICT_MODE: "true"
       TENANCY_ALLOW_CONSOLE_WITHOUT_TENANT: "true"
 
     services:
       mariadb:
-        image: mariadb:11.8
+        image: mariadb:11.8.9
         env:
           MARIADB_ROOT_PASSWORD: testpass
           MARIADB_DATABASE: inspecta_test
+          MARIADB_USER: inspecta_ci
+          MARIADB_PASSWORD: testpass
         ports:
           - 3306:3306
         options: >-
@@ -77,6 +79,20 @@ jobs:
 
       - name: Install Composer dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
+
+      # PROCESS solo permite observar esperas InnoDB en este servicio efímero
+      # de CI; nunca se concede al usuario de aplicación en producción.
+      - name: Allow test user to inspect InnoDB lock waits
+        env:
+          MARIADB_SERVICE_ID: ${{ job.services.mariadb.id }}
+        run: |
+          docker exec -e MYSQL_PWD="$DB_PASSWORD" "$MARIADB_SERVICE_ID" \
+            mariadb --protocol=socket --user=root \
+            --execute="GRANT PROCESS ON *.* TO 'inspecta_ci'@'%'"
+          docker exec -e MYSQL_PWD="$DB_PASSWORD" "$MARIADB_SERVICE_ID" \
+            mariadb --protocol=tcp --host=127.0.0.1 --user="$DB_USERNAME" \
+            --database="$DB_DATABASE" --execute="SELECT COUNT(*) FROM information_schema.INNODB_LOCK_WAITS" \
+            > /dev/null
 
       - name: Migrate and seed
         run: php artisan migrate:fresh --seed
