@@ -5781,6 +5781,51 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
+  /locations/hierarchy:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    get:
+      summary: Consultar jerarquía de ubicaciones
+      tags:
+        - Organization
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+        - in: query
+          name: plant_id
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: area_id
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Jerarquía obtenida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationHierarchyResponse'
+        '400':
+          description: Contexto de organización inválido.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Sin permiso plants.view.
+        '422':
+          description: Parámetros inválidos o jerarquía superior a 1,000 nodos.
+
 
 components:
 
@@ -6192,6 +6237,81 @@ components:
               $ref: '#/components/examples/ServiceUnavailableExample'
 
   schemas:
+
+    LocationHierarchyLine:
+      type: object
+      additionalProperties: false
+      required: [id, name, code, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 150
+        code:
+          type: string
+          maxLength: 50
+        status:
+          type: boolean
+
+    LocationHierarchyArea:
+      type: object
+      additionalProperties: false
+      required: [id, name, code, type, status, production_lines]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 150
+        code:
+          type: string
+          maxLength: 50
+        type:
+          type: string
+          nullable: true
+          maxLength: 50
+        status:
+          type: boolean
+        production_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocationHierarchyLine'
+
+    LocationHierarchyPlant:
+      type: object
+      additionalProperties: false
+      required: [id, name, code, status, areas]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 150
+        code:
+          type: string
+          maxLength: 50
+        status:
+          type: boolean
+        areas:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocationHierarchyArea'
+
+    LocationHierarchyResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocationHierarchyPlant'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
 
     # -------------------------------------------------------------------
     # Authentication

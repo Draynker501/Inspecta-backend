@@ -4,6 +4,7 @@ use App\Http\Controllers\AreaController;
 use App\Http\Controllers\AreaStoreController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\OrganizationController;
+use App\Http\Controllers\LocationHierarchyController;
 use App\Http\Controllers\PlantController;
 use App\Http\Controllers\ProductionLineController;
 use App\Http\Controllers\ProductionLineStoreController;
@@ -39,3 +40,4 @@ Route::get('areas/{areaId}', [AreaController::class, 'show'])->middleware('api.t
 Route::get('areas/{areaId}/lines', [AreaController::class, 'lines'])->middleware('api.tenant');
 Route::post('areas/{areaId}/lines', [ProductionLineStoreController::class, 'store'])->middleware('api.tenant');
 Route::get('production-lines/{productionLineId}', [ProductionLineController::class, 'show'])->middleware('api.tenant');
+Route::get('locations/hierarchy', [LocationHierarchyController::class, 'index'])->middleware('api.tenant');
