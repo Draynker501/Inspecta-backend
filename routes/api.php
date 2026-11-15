@@ -9,6 +9,7 @@ use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\NormController;
 use App\Http\Controllers\NormRequirementController;
 use App\Http\Controllers\QuestionNormRequirementController;
+use App\Http\Controllers\IncidentController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -89,4 +90,12 @@ Route::middleware('api.tenant')->group(function () {
     Route::get('questions/{questionId}/norm-requirements', [QuestionNormRequirementController::class, 'index']);
     Route::post('questions/{questionId}/norm-requirements', [QuestionNormRequirementController::class, 'store']);
     Route::delete('questions/{questionId}/norm-requirements/{linkId}', [QuestionNormRequirementController::class, 'destroy']);
+});
+
+Route::middleware('api.tenant')->group(function () {
+    Route::get('incidents', [IncidentController::class, 'index']);
+    Route::post('incidents', [IncidentController::class, 'store']);
+
+    Route::get('incidents/{incidentId}', [IncidentController::class, 'show']);
+    Route::patch('incidents/{incidentId}/status',[IncidentController::class, 'updateStatus']);
 });
