@@ -19,6 +19,9 @@ documentan aquí por los grupos expresamente indicados.
 | EHS-DEC-15 | Restricciones CHECK positivas nuevas, preflight y validación por motor, detalladas en [README](README.md#ehs-dec-15--órdenes-positivos-en-sql). |
 | EHS-DEC-16 | Integración manual trazada, detallada en [README](README.md#ehs-dec-16--integración-manual-trazada). |
 | EHS-DEC-17 | Aprobada durante S2: índices candidatos y FK compuestas `(question_id, organization_id)` y `(norm_requirement_id, organization_id)` para `question_norm_requirement`, preflight sin reparación y reversibilidad SQLite/MariaDB aisladas. Véase [informe S2](s2-auditoria.md). |
+| EHS-DEC-18 | Diferir la publicación contractual y mantener OpenAPI en 2.3.0, según la solicitud INS-01 S1. |
+| EHS-DEC-19 | Aceptar y diferir los riesgos residuales documentados, sin autorizar producción, según la solicitud INS-01 S1. |
+| EHS-DEC-20 | Autorizar el merge del PR #42 ya efectuado en `c3f2dc8024f670dbb64badea0ad371272db76d1e`, según la solicitud INS-01 S1. |
 
 Las decisiones son requisitos aprobados, no evidencia de implementación. La
 [trazabilidad](trazabilidad-origin-api.md) y el [estado](README.md) distinguen

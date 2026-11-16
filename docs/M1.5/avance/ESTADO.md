@@ -1,5 +1,13 @@
 # Estado del avance — M1.5 de INSPECTA (actualizado)
 
+> **Avance posterior — INS-01 S3 (2026-11-16):** creación online de inspecciones
+> en `draft`, listado y detalle implementados en la rama
+> `feat/ins-01-inspections`, todavía sin integración ni aprobación para
+> producción. S2 validó ambos motores; S3 añadió revisión focalizada y
+> escenarios de ambos órdenes. Estado, cifras y riesgos en
+> [informe INS-01](../../inspecciones/s2-auditoria.md). Las fotografías M1.5/M2
+> debajo son históricas y no describen la superficie vigente de esta rama.
+
 > **Estado vigente al cierre documental M2 (2026-11-12):** M2.1–M2.7 integradas en `master`. M2.6: PR #33, `7f0465702aba452dc6d0363ef00be567099f0cf4`. M2.7: PR #34, `902ef0ba96f7121a8b0d4132488335ad14ae805f`, aprobada con salvedades para infraestructura de contexto y pruebas T20–T22; no habilita jobs de negocio ni demuestra worker real. Evidencias M2.7 previas, no repetidas en este cierre: SQLite 469 pruebas (460 aprobadas, 9 omitidas), 1443 aserciones; MariaDB 11.8 (469, 461 aprobadas, 8 omitidas), 1472 aserciones; regresión SQLite posterior, 55 pruebas y 256 aserciones. Checks de CI del PR #34 satisfactorios. Ver `docs/M2/09-acta-cierre-m2.md`.
 
 Última actualización documental: 2026-11-12. Los metadatos y mediciones de la fotografía histórica inmediatamente abajo están fechados 2026-11-11 y no representan el estado Git ni la suite de M2 al cierre formal.
