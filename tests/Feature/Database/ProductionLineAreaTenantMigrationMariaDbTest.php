@@ -36,6 +36,8 @@ class ProductionLineAreaTenantMigrationMariaDbTest extends TestCase
         $version = (string) $connection->selectOne('SELECT VERSION() AS version')->version;
         $this->assertMatchesRegularExpression('/(?:^|[^0-9])11\\.8\\.[0-9]+.*MariaDB/i', $version);
         $this->assertSame(0, Artisan::call('migrate:fresh', ['--force' => true]));
+        // CAT-03 se ensaya después de revertir las migraciones dependientes.
+        (require database_path('migrations/2026_11_18_000001_enforce_inspection_location_tenant_foreign_keys.php'))->down();
     }
 
     private function migration(): object
