@@ -39,6 +39,17 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant.require' => EnsureTenantContext::class,
         ]);
 
+        // Las respuestas de inspección se comparan de forma estricta (booleanos
+        // y valores de opción). El recorte de espacios alteraría el valor
+        // recibido y podría aceptar entradas inválidas o modificar texto
+        // libre del inspector. La excepción se limita a la escritura de
+        // respuestas: el resto de la API conserva el recorte global y no se
+        // altera ningún otro módulo por nombres de campo comunes.
+        $middleware->trimStrings(except: [
+            static fn (Request $request): bool => $request->isMethod('PUT')
+                && $request->is('api/inspections/*/answers/*'),
+        ]);
+
         // Autenticación + contexto organizacional + route model binding.
         // Todo endpoint de dominio debe usar este grupo: el binding se
         // resuelve después del tenant, de modo que un ID ajeno produce 404.

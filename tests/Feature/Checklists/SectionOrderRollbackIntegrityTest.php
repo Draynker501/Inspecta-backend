@@ -50,7 +50,33 @@ class SectionOrderRollbackIntegrityTest extends TestCase
             $this->assertSame([], $db->select('PRAGMA foreign_key_check'));
             $this->assertSame('ok', $db->scalar('PRAGMA integrity_check'));
         }
-        $this->assertEquals($beforeIndexes, $db->select('PRAGMA index_list("checklist_sections")'));
+        // La comparación es semántica (el orden físico de `PRAGMA index_list`
+        // depende del motor y de las migraciones aplicadas), pero conserva la
+        // garantía original: mismos índices, unicidad, origen, parcialidad y
+        // las mismas columnas en cada índice.
+        $indexSignature = static function (array $rows) use ($db): array {
+            return collect($rows)
+                ->map(static function (object $row) use ($db): array {
+                    $quoted = '"'.str_replace('"', '""', (string) $row->name).'"';
+
+                    return [
+                        'name' => $row->name,
+                        'unique' => (int) $row->unique,
+                        'origin' => $row->origin,
+                        'partial' => (int) $row->partial,
+                        'columns' => collect($db->select('PRAGMA index_info('.$quoted.')'))
+                            ->map(static fn (object $column): string => (string) $column->name)
+                            ->all(),
+                    ];
+                })
+                ->sortBy('name')
+                ->values()
+                ->all();
+        };
+        $this->assertEquals(
+            $indexSignature($beforeIndexes),
+            $indexSignature($db->select('PRAGMA index_list("checklist_sections")')),
+        );
 
         $changes = [];
         foreach (['checklist_sections' => 'sections_display_order_positive', 'questions' => 'questions_display_order_positive'] as $table => $name) {
