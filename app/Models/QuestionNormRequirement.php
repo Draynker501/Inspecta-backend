@@ -11,6 +11,9 @@ class QuestionNormRequirement extends Model
 {
     use BelongsToOrganization;
 
+    // Tabla singular heredada; corrección de origin/api e26aac3.
+    protected $table = 'question_norm_requirement';
+
     public $incrementing = false;
 
     protected $keyType = 'string';
