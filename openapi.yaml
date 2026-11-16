@@ -3747,12 +3747,16 @@ paths:
   # ===================================================================
 
   /inspections:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Inspecciones
-      description: Obtiene una lista paginada de inspecciones. Útil para el dashboard web de supervisores.
+      description: |
+        Requiere membresía activa y `inspections.execute` o `inspections.manage`.
+        Solo se devuelven inspecciones en plantas o áreas asignadas; las ajenas
+        requieren `inspections.manage`. `locations.view_all` no sustituye la
+        asignación. Se rechazan parámetros desconocidos. Orden descendente por
+        `created_at` e `id`; `per_page` predeterminado 15, máximo 100.
       tags:
         - Inspections
       parameters:
@@ -3776,30 +3780,6 @@ paths:
             type: string
             format: uuid
           description: Filtrar inspecciones por área.
-        - in: query
-          name: user_id
-          schema:
-            type: string
-            format: uuid
-          description: Filtrar inspecciones por inspector.
-        - in: query
-          name: supervisor_id
-          schema:
-            type: string
-            format: uuid
-          description: Filtrar inspecciones por supervisor.
-        - in: query
-          name: date_from
-          schema:
-            type: string
-            format: date
-          description: Fecha de inicio del rango (inclusive).
-        - in: query
-          name: date_to
-          schema:
-            type: string
-            format: date
-          description: Fecha de fin del rango (inclusive).
       responses:
         '200':
           description: Lista de inspecciones obtenida exitosamente.
@@ -3811,7 +3791,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/InspectionBase'
+                      $ref: '#/components/schemas/InspectionOnline'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
         '400':
@@ -3844,9 +3824,21 @@ paths:
                   $ref: '#/components/examples/OrganizationNotTenant'
                 forbiddenPolicy:
                   $ref: '#/components/examples/ForbiddenPolicy'
+        '422':
+          description: Filtros inválidos o no admitidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     post:
-      summary: Sincronizar/Crear Inspección
-      description: Crea una inspección completa incluyendo sus respuestas en una sola transacción. Es el endpoint principal que consume la PWA al recuperar la conexión a internet.
+      summary: Crear inspección online
+      description: |
+        Requiere `inspections.execute`, membresía activa y asignación a planta
+        o área. Crea una inspección propia en `draft`, con UUIDv7 y fecha de
+        inicio del servidor. No admite respuestas, fechas, estado ni usuarios
+        del cliente. No ofrece idempotencia ni sincronización offline; es
+        incompatible con el POST offline anteriormente planeado y la PWA
+        inspeccionada.
       tags:
         - Inspections
       requestBody:
@@ -3854,17 +3846,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/InspectionSyncInput'
+              $ref: '#/components/schemas/InspectionCreateInput'
       responses:
         '201':
-          description: Inspección sincronizada correctamente.
+          description: Inspección creada correctamente.
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   data:
-                    $ref: '#/components/schemas/InspectionDetail'
+                    $ref: '#/components/schemas/InspectionOnline'
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -3895,8 +3887,10 @@ paths:
                   $ref: '#/components/examples/OrganizationNotTenant'
                 forbiddenPolicy:
                   $ref: '#/components/examples/ForbiddenPolicy'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
         '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
+          description: Datos inválidos. Las referencias ajenas al tenant o no disponibles responden 404.
           content:
             application/json:
               schema:
@@ -3904,16 +3898,16 @@ paths:
               examples:
                 validationFailed:
                   $ref: '#/components/examples/ValidationFailed'
-                crossTenantOperation:
-                  $ref: '#/components/examples/CrossTenantRelation'
 
   /inspections/{inspectionId}:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Detalle de Inspección
-      description: Obtiene todos los datos de la inspección, incluyendo las respuestas a cada pregunta para su revisión.
+      description: |
+        Requiere `inspections.execute` o `inspections.manage` y asignación a
+        planta o área. La lectura de inspecciones ajenas requiere
+        `inspections.manage`. No incluye respuestas ni relaciones anidadas.
       tags:
         - Inspections
       parameters:
@@ -3927,7 +3921,7 @@ paths:
                 type: object
                 properties:
                   data:
-                    $ref: '#/components/schemas/InspectionDetail'
+                    $ref: '#/components/schemas/InspectionOnline'
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -7779,6 +7773,123 @@ components:
     # -------------------------------------------------------------------
     # Inspections
     # -------------------------------------------------------------------
+
+    InspectionCreateInput:
+      type: object
+      additionalProperties: false
+      required: [checklist_version_id, plant_id, area_id]
+      description: |
+        Las coordenadas deben informarse juntas o estar ambas ausentes o nulas.
+        Las observaciones no pueden superar 65535 bytes UTF-8.
+      properties:
+        checklist_version_id:
+          type: string
+          format: uuid
+        plant_id:
+          type: string
+          format: uuid
+        area_id:
+          type: string
+          format: uuid
+        production_line_id:
+          type: string
+          format: uuid
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+          minimum: -90
+          maximum: 90
+          multipleOf: 0.0000001
+        longitude:
+          type: number
+          nullable: true
+          minimum: -180
+          maximum: 180
+          multipleOf: 0.0000001
+        location_description:
+          type: string
+          nullable: true
+          maxLength: 255
+        observations:
+          type: string
+          nullable: true
+          description: Máximo 65535 bytes.
+
+    InspectionOnline:
+      type: object
+      description: DTO sin respuestas ni relaciones anidadas.
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        supervisor_id:
+          type: string
+          format: uuid
+          nullable: true
+        checklist_version_id:
+          type: string
+          format: uuid
+        plant_id:
+          type: string
+          format: uuid
+        area_id:
+          type: string
+          format: uuid
+        production_line_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum: [draft, completed, confirmed, rejected]
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        supervisor_confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+        rejected_at:
+          type: string
+          format: date-time
+          nullable: true
+        supervisor_observations:
+          type: string
+          nullable: true
+        latitude:
+          type: string
+          nullable: true
+          description: Decimal con siete posiciones.
+        longitude:
+          type: string
+          nullable: true
+          description: Decimal con siete posiciones.
+        location_description:
+          type: string
+          nullable: true
+        observations:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
 
     InspectionBase:
       type: object

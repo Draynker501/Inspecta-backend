@@ -27,6 +27,11 @@ class AreaPlantTenantMigrationTest extends TestCase
 
     private function migration(): object
     {
+        // Restore the schema at the historical migration boundary before exercising its down/up.
+        $later = require database_path('migrations/2026_11_18_000001_enforce_inspection_location_tenant_foreign_keys.php');
+        $later->down();
+        $this->assertSame(0, (int) DB::scalar("SELECT count(*) FROM sqlite_master WHERE name = 'ins_areas_id_plant_org_unique'"));
+        $this->assertSame([], DB::select('PRAGMA foreign_key_check'));
         $files = glob(database_path('migrations/*replace_areas_plant_foreign_key.php'));
         $this->assertCount(1, $files);
 
