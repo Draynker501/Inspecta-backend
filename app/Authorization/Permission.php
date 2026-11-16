@@ -21,6 +21,8 @@ enum Permission: string
     case UsersManage = 'users.manage';
     case RolesManage = 'roles.manage';
     case MembershipsManage = 'memberships.manage';
+    case ChecklistsView = 'checklists.view';
+    case ChecklistsManage = 'checklists.manage';
     case NormsView = 'norms.view';
     case NormsManage = 'norms.manage';
     case InspectionsManage = 'inspections.manage';
