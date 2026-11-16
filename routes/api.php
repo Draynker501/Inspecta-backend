@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\OrganizationController;
 use App\Http\Controllers\ChecklistController;
 use App\Http\Controllers\ChecklistSectionController;
 use App\Http\Controllers\ChecklistVersionController;
+use App\Http\Controllers\InspectionController;
 use App\Http\Controllers\LocationHierarchyController;
 use App\Http\Controllers\NormController;
 use App\Http\Controllers\NormRequirementController;
@@ -48,6 +49,9 @@ Route::get('areas/{areaId}/lines', [AreaController::class, 'lines'])->middleware
 Route::post('areas/{areaId}/lines', [ProductionLineStoreController::class, 'store'])->middleware('api.tenant');
 Route::get('production-lines/{productionLineId}', [ProductionLineController::class, 'show'])->middleware('api.tenant');
 Route::get('locations/hierarchy', [LocationHierarchyController::class, 'index'])->middleware('api.tenant');
+Route::get('inspections', [InspectionController::class, 'index'])->middleware('api.tenant');
+Route::post('inspections', [InspectionController::class, 'store'])->middleware('api.tenant');
+Route::get('inspections/{inspectionId}', [InspectionController::class, 'show'])->middleware('api.tenant');
 Route::get('checklists', [ChecklistController::class, 'index'])->middleware('api.tenant');
 Route::post('checklists', [ChecklistController::class, 'store'])->middleware('api.tenant');
 Route::get('checklists/{checklistId}', [ChecklistController::class, 'show'])->middleware('api.tenant');
