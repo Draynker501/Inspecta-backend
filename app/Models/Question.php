@@ -23,6 +23,7 @@ class Question extends Model
         'question_text',
         'description',
         'answer_type',
+        'options',
         'display_order',
         'required',
         'allows_evidence',
@@ -30,6 +31,7 @@ class Question extends Model
     ];
 
     protected $casts = [
+        'options' => 'array',
         'display_order' => 'integer',
         'required' => 'boolean',
         'allows_evidence' => 'boolean',
@@ -64,7 +66,7 @@ class Question extends Model
             'question_norm_requirement',
             'question_id',
             'norm_requirement_id'
-        );
+        )->withPivot('id');
     }
 
     public function inspectionAnswers(): HasMany

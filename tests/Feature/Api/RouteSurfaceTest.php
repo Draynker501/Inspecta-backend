@@ -73,6 +73,37 @@ class RouteSurfaceTest extends TestCase
             'POST api/areas/{areaId}/lines',
             'GET api/production-lines/{productionLineId}',
             'GET api/locations/hierarchy',
+            'GET api/norms',
+            'GET api/norms/{normId}',
+            'GET api/norms/{normId}/requirements',
+            'GET api/requirements/{requirementId}',
+            'GET api/checklists',
+            'POST api/checklists',
+            'GET api/checklists/{checklistId}',
+            'GET api/checklists/{checklistId}/versions',
+            'POST api/checklists/{checklistId}/versions',
+            'GET api/versions/{versionId}/sections',
+            'POST api/versions/{versionId}/sections',
+            'PUT api/checklists/{checklistId}',
+            'PATCH api/checklists/{checklistId}',
+            'GET api/checklists/{checklistId}/active-version',
+            'GET api/checklists/{checklistId}/versions/{versionId}',
+            'PUT api/checklists/{checklistId}/versions/{versionId}',
+            'PATCH api/checklists/{checklistId}/versions/{versionId}',
+            'PUT api/sections/{sectionId}',
+            'GET api/sections/{sectionId}',
+            'PUT api/questions/{questionId}',
+            'GET api/questions/{questionId}',
+            'POST api/norms',
+            'PUT api/norms/{normId}',
+            'PATCH api/norms/{normId}',
+            'POST api/norms/{normId}/requirements',
+            'PUT api/requirements/{requirementId}',
+            'GET api/questions/{questionId}/norm-requirements',
+            'POST api/questions/{questionId}/norm-requirements',
+            'DELETE api/questions/{questionId}/norm-requirements/{linkId}',
+            'GET api/sections/{sectionId}/questions',
+            'POST api/sections/{sectionId}/questions',
         ];
 
         foreach ($expected as $operation) {
@@ -104,6 +135,37 @@ class RouteSurfaceTest extends TestCase
             'POST api/areas/{areaId}/lines',
             'GET api/production-lines/{productionLineId}',
             'GET api/locations/hierarchy',
+            'GET api/norms',
+            'GET api/norms/{normId}',
+            'GET api/norms/{normId}/requirements',
+            'GET api/requirements/{requirementId}',
+            'GET api/checklists',
+            'POST api/checklists',
+            'GET api/checklists/{checklistId}',
+            'GET api/checklists/{checklistId}/versions',
+            'POST api/checklists/{checklistId}/versions',
+            'GET api/versions/{versionId}/sections',
+            'POST api/versions/{versionId}/sections',
+            'PUT api/checklists/{checklistId}',
+            'PATCH api/checklists/{checklistId}',
+            'GET api/checklists/{checklistId}/active-version',
+            'GET api/checklists/{checklistId}/versions/{versionId}',
+            'PUT api/checklists/{checklistId}/versions/{versionId}',
+            'PATCH api/checklists/{checklistId}/versions/{versionId}',
+            'PUT api/sections/{sectionId}',
+            'GET api/sections/{sectionId}',
+            'PUT api/questions/{questionId}',
+            'GET api/questions/{questionId}',
+            'POST api/norms',
+            'PUT api/norms/{normId}',
+            'PATCH api/norms/{normId}',
+            'POST api/norms/{normId}/requirements',
+            'PUT api/requirements/{requirementId}',
+            'GET api/questions/{questionId}/norm-requirements',
+            'POST api/questions/{questionId}/norm-requirements',
+            'DELETE api/questions/{questionId}/norm-requirements/{linkId}',
+            'GET api/sections/{sectionId}/questions',
+            'POST api/sections/{sectionId}/questions',
         ];
 
         $unexpected = array_values(array_diff($apiOperations, $allowed));
@@ -175,9 +237,7 @@ class RouteSurfaceTest extends TestCase
             $uris[] = $route->uri();
         }
 
-        $this->assertNotContains('api/checklists', $uris);
         $this->assertNotContains('api/users', $uris);
-        $this->assertNotContains('api/checklists', $uris);
     }
 
     public function test_no_estan_registradas_las_rutas_desactivadas(): void

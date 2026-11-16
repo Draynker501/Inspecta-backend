@@ -1697,12 +1697,11 @@ paths:
   # ===================================================================
 
   /checklists:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Checklists
-      description: Obtiene la lista paginada de checklists disponibles.
+      description: Obtiene la lista paginada de checklists de la organización activa. Requiere `checklists.view`.
       tags:
         - Checklists
       parameters:
@@ -1754,6 +1753,7 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
     post:
       summary: Crear Checklist Base
+      description: Requiere `checklists.manage`. La organización procede exclusivamente del contexto activo; se rechazan campos no permitidos.
       tags:
         - Checklists
       requestBody:
@@ -1815,11 +1815,11 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /checklists/{checklistId}:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener Checklist
+      description: Requiere `checklists.view`. Los identificadores inexistentes o de otra organización responden 404.
       tags:
         - Checklists
       parameters:
@@ -1877,7 +1877,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ChecklistInput'
+              $ref: '#/components/schemas/ChecklistUpdateInput'
       responses:
         '200':
           description: Checklist actualizado.
@@ -1943,6 +1943,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               required:
                 - status
               properties:
@@ -1992,11 +1993,11 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /checklists/{checklistId}/versions:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Versiones de un Checklist
+      description: Requiere `checklists.view`; el checklist debe pertenecer a la organización activa.
       tags:
         - Checklists
       parameters:
@@ -2051,7 +2052,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
     post:
       summary: Crear Versión de Checklist
-      description: Crea una nueva versión del checklist en estado draft.
+      description: Crea una nueva versión del checklist en estado draft. Requiere `checklists.manage`; se rechazan campos adicionales.
       tags:
         - Checklists
       parameters:
@@ -2062,6 +2063,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               required:
                 - version
               properties:
@@ -2124,7 +2126,6 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /checklists/{checklistId}/versions/{versionId}:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -2178,7 +2179,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
     put:
       summary: Actualizar Versión de Checklist
-      description: Actualiza los metadatos de la versión (número, estado draft).
+      description: Actualiza el número de una versión draft nunca publicada. Requiere `checklists.manage`.
       tags:
         - Checklists
       parameters:
@@ -2190,14 +2191,13 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
+              required: [version]
               properties:
                 version:
                   type: string
                   maxLength: 20
                   example: "v1.2"
-                status:
-                  type: string
-                  enum: [draft, archived]
       responses:
         '200':
           description: Versión actualizada.
@@ -2253,7 +2253,7 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
     patch:
       summary: Publicar Versión de Checklist
-      description: Cambia el estado de la versión. `publicada` la marca como versión activa y registra `published_at`.
+      description: Requiere `checklists.manage`. Publica un borrador válido o archiva la versión; publicar archiva y audita la versión anterior en la misma transacción.
       tags:
         - Checklists
       parameters:
@@ -2265,6 +2265,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               required:
                 - status
               properties:
@@ -2326,7 +2327,6 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /checklists/{checklistId}/active-version:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -2380,11 +2380,11 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /versions/{versionId}/sections:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Secciones de una Versión
+      description: Requiere `checklists.view`; se verifica la jerarquía dentro de la organización activa.
       tags:
         - Checklists
       parameters:
@@ -2439,7 +2439,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
     post:
       summary: Crear Sección
-      description: Crea una nueva sección dentro de una versión de checklist.
+      description: Requiere `checklists.manage` y una versión draft nunca publicada. Se rechazan campos adicionales.
       tags:
         - Checklists
       parameters:
@@ -2450,6 +2450,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               required:
                 - name
               properties:
@@ -2459,11 +2460,13 @@ paths:
                   example: "1. Equipos de Emergencia"
                 description:
                   type: string
-                  maxLength: 65535
+                  nullable: true
+                  description: Máximo 65535 bytes en UTF-8.
                   example: "Validación de extintores y mangueras."
                 display_order:
                   type: integer
-                  minimum: 0
+                  minimum: 1
+                  maximum: 2147483647
                   example: 1
       responses:
         '201':
@@ -2520,7 +2523,6 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /sections/{sectionId}:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -2583,16 +2585,19 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 name:
                   type: string
                   maxLength: 150
                 description:
                   type: string
-                  maxLength: 65535
+                  nullable: true
+                  description: Máximo 65535 bytes en UTF-8.
                 display_order:
                   type: integer
-                  minimum: 0
+                  minimum: 1
+                  maximum: 2147483647
       responses:
         '200':
           description: Sección actualizada.
@@ -2647,6 +2652,7 @@ paths:
                 crossTenantOperation:
                   $ref: '#/components/examples/CrossTenantRelation'
     patch:
+      x-status: planned
       summary: Activar/Desactivar Sección
       tags:
         - Checklists
@@ -2707,11 +2713,11 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /sections/{sectionId}/questions:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Preguntas de una Sección
+      description: Requiere `checklists.view`; se verifica la jerarquía dentro de la organización activa.
       tags:
         - Checklists
       parameters:
@@ -2766,7 +2772,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
     post:
       summary: Crear Pregunta
-      description: Crea una nueva pregunta dentro de una sección del checklist.
+      description: Requiere `checklists.manage` y una versión draft nunca publicada. Se rechazan campos adicionales.
       tags:
         - Checklists
       parameters:
@@ -2832,7 +2838,6 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /questions/{questionId}:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -2894,7 +2899,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/QuestionInput'
+              $ref: '#/components/schemas/QuestionUpdateInput'
       responses:
         '200':
           description: Pregunta actualizada.
@@ -2949,6 +2954,7 @@ paths:
                 crossTenantOperation:
                   $ref: '#/components/examples/CrossTenantRelation'
     patch:
+      x-status: planned
       summary: Activar/Desactivar Pregunta
       tags:
         - Checklists
@@ -3013,12 +3019,11 @@ paths:
   # ===================================================================
 
   /norms:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Normas
-      description: Obtiene el catálogo paginado de normas registradas en el sistema.
+      description: Obtiene el catálogo paginado de normas de la organización activa. Requiere `norms.view`.
       tags:
         - Norms
       parameters:
@@ -3132,11 +3137,11 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /norms/{normId}:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener Norma
+      description: Requiere `norms.view`; los identificadores inexistentes o ajenos responden 404.
       tags:
         - Norms
       parameters:
@@ -3260,6 +3265,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               required:
                 - status
               properties:
@@ -3309,12 +3315,11 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /norms/{normId}/requirements:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Requerimientos de una Norma
-      description: Retorna todos los artículos o cláusulas específicas pertenecientes a una norma.
+      description: Retorna los requisitos paginados de una norma de la organización activa. Requiere `norms.view`.
       tags:
         - Norms
       parameters:
@@ -3435,11 +3440,11 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /requirements/{requirementId}:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener Requerimiento de Norma
+      description: Requiere `norms.view`; se verifica la organización del requisito y su norma.
       tags:
         - Norms
       parameters:
@@ -3497,7 +3502,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/NormRequirementInput'
+              $ref: '#/components/schemas/NormRequirementUpdateInput'
       responses:
         '200':
           description: Requerimiento actualizado.
@@ -3553,7 +3558,6 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /questions/{questionId}/norm-requirements:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -3575,7 +3579,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/NormRequirement'
+                      $ref: '#/components/schemas/LinkedNormRequirement'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
         '400':
@@ -3623,6 +3627,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               required:
                 - norm_requirement_id
               properties:
@@ -3685,7 +3690,6 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /questions/{questionId}/norm-requirements/{linkId}:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     delete:
@@ -7233,6 +7237,7 @@ components:
 
     ChecklistInput:
       type: object
+      additionalProperties: false
       required:
         - name
       properties:
@@ -7243,13 +7248,22 @@ components:
         description:
           type: string
           nullable: true
+          description: Máximo 65535 bytes en UTF-8.
           example: "Revisión rutinaria de equipo de protección personal y extintores."
-        organization_id:
+
+    ChecklistUpdateInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
           type: string
-          format: uuid
+          maxLength: 150
+          example: "Inspección de EHS Semanal"
+        description:
+          type: string
           nullable: true
-          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
-          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+          description: Máximo 65535 bytes en UTF-8.
+          example: "Revisión rutinaria de equipo de protección personal y extintores."
 
     ChecklistVersion:
       type: object
@@ -7320,7 +7334,7 @@ components:
           example: "Validación de extintores y mangueras."
         display_order:
           type: integer
-          minimum: 0
+          minimum: 1
           example: 1
         status:
           type: boolean
@@ -7365,9 +7379,9 @@ components:
           example: "Verifique visualmente la etiqueta de inspección mensual."
         answer_type:
           type: string
-          enum: [boolean, text, number, multiple_choice, signature, date]
           description: |
-            Tipo de respuesta esperado:
+            Tipo de respuesta almacenado. Las lecturas pueden incluir valores
+            históricos distintos de los admitidos en escrituras nuevas:
             - `boolean`: Sí/No (se serializa como "true"/"false").
             - `text`: Respuesta abierta.
             - `number`: Mediciones numéricas (se serializa como string numérico).
@@ -7375,9 +7389,20 @@ components:
             - `signature`: Firma digital.
             - `date`: Fecha.
           example: "boolean"
+        options:
+          type: array
+          nullable: true
+          items:
+            type: object
+            required: [value, label]
+            properties:
+              value:
+                type: string
+              label:
+                type: string
         display_order:
           type: integer
-          minimum: 0
+          minimum: 1
           example: 1
         required:
           type: boolean
@@ -7399,25 +7424,43 @@ components:
 
     QuestionInput:
       type: object
+      additionalProperties: false
       required:
         - question_text
         - answer_type
       properties:
         question_text:
           type: string
-          maxLength: 65535
+          description: Máximo 65535 bytes en UTF-8.
           example: "¿Todos los extintores tienen carga vigente y marchamo de seguridad?"
         description:
           type: string
           nullable: true
+          description: Máximo 65535 bytes en UTF-8.
           example: "Verifique visualmente la etiqueta de inspección mensual."
         answer_type:
           type: string
           enum: [boolean, text, number, multiple_choice, signature, date]
           example: "boolean"
+        options:
+          type: array
+          nullable: true
+          description: Obligatorio para multiple_choice, con al menos dos opciones de valor único; debe ser null o ausente para los demás tipos.
+          items:
+            type: object
+            additionalProperties: false
+            required: [value, label]
+            properties:
+              value:
+                type: string
+                maxLength: 100
+              label:
+                type: string
+                maxLength: 150
         display_order:
           type: integer
-          minimum: 0
+          minimum: 1
+          maximum: 2147483647
           example: 1
         required:
           type: boolean
@@ -7425,12 +7468,50 @@ components:
         allows_evidence:
           type: boolean
           default: false
-        organization_id:
+
+    QuestionUpdateInput:
+      type: object
+      additionalProperties: false
+      properties:
+        question_text:
           type: string
-          format: uuid
+          description: Máximo 65535 bytes en UTF-8.
+          example: "¿Todos los extintores tienen carga vigente y marchamo de seguridad?"
+        description:
+          type: string
           nullable: true
-          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
-          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+          description: Máximo 65535 bytes en UTF-8.
+          example: "Verifique visualmente la etiqueta de inspección mensual."
+        answer_type:
+          type: string
+          enum: [boolean, text, number, multiple_choice, signature, date]
+          example: "boolean"
+        options:
+          type: array
+          nullable: true
+          description: Obligatorio para multiple_choice, con al menos dos opciones de valor único; debe ser null o ausente para los demás tipos.
+          items:
+            type: object
+            additionalProperties: false
+            required: [value, label]
+            properties:
+              value:
+                type: string
+                maxLength: 100
+              label:
+                type: string
+                maxLength: 150
+        display_order:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          example: 1
+        required:
+          type: boolean
+          default: true
+        allows_evidence:
+          type: boolean
+          default: false
 
     ChecklistFullTree:
       allOf:
@@ -7460,7 +7541,38 @@ components:
                 sections:
                   type: array
                   items:
-                    $ref: '#/components/schemas/ChecklistSection'
+                    $ref: '#/components/schemas/ChecklistTreeSection'
+
+    ChecklistTreeSection:
+      allOf:
+        - $ref: '#/components/schemas/ChecklistSection'
+        - type: object
+          properties:
+            questions:
+              type: array
+              items:
+                $ref: '#/components/schemas/ChecklistTreeQuestion'
+
+    ChecklistTreeQuestion:
+      allOf:
+        - $ref: '#/components/schemas/Question'
+        - type: object
+          properties:
+            norm_requirements:
+              type: array
+              items:
+                type: object
+                properties:
+                  link_id:
+                    type: string
+                    format: uuid
+                  id:
+                    type: string
+                    format: uuid
+                  code:
+                    type: string
+                  description:
+                    type: string
 
     # -------------------------------------------------------------------
     # Norms
@@ -7498,6 +7610,7 @@ components:
         version:
           type: string
           maxLength: 50
+          nullable: true
           example: "2008"
         effective_date:
           type: string
@@ -7518,6 +7631,7 @@ components:
 
     NormInput:
       type: object
+      additionalProperties: false
       required:
         - code
         - name
@@ -7530,15 +7644,10 @@ components:
           type: string
           maxLength: 150
           example: "Equipo de Protección Personal"
-        organization_id:
-          type: string
-          format: uuid
-          nullable: true
-          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
-          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
         description:
           type: string
           nullable: true
+          description: Máximo 65535 bytes en UTF-8.
           example: "Selección, uso y manejo en los centros de trabajo."
         issuing_body:
           type: string
@@ -7548,6 +7657,7 @@ components:
         version:
           type: string
           maxLength: 50
+          nullable: true
           example: "2008"
         effective_date:
           type: string
@@ -7595,6 +7705,7 @@ components:
 
     NormRequirementInput:
       type: object
+      additionalProperties: false
       required:
         - code
         - description
@@ -7610,28 +7721,52 @@ components:
           example: "Obligaciones del Patrón"
         description:
           type: string
-          maxLength: 65535
+          description: Máximo 65535 bytes en UTF-8.
           example: "Mostrar a la autoridad del trabajo los documentos que la presente Norma le obligue a elaborar."
-        organization_id:
+
+    NormRequirementUpdateInput:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          maxLength: 100
+          example: "ART-5.1"
+        section:
+          type: string
+          maxLength: 100
+          nullable: true
+          example: "Obligaciones del Patrón"
+        description:
+          type: string
+          description: Máximo 65535 bytes en UTF-8.
+          example: "Mostrar a la autoridad del trabajo los documentos que la presente Norma le obligue a elaborar."
+
+    LinkedNormRequirement:
+      type: object
+      properties:
+        link_id:
           type: string
           format: uuid
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        section:
+          type: string
           nullable: true
-          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
-          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        description:
+          type: string
 
     QuestionNormRequirement:
       type: object
       description: Vinculación entre una pregunta del checklist y un requerimiento normativo (tabla question_norm_requirement).
       properties:
-        id:
+        link_id:
           type: string
           format: uuid
           example: "018f6a7b-1111-7a8b-8000-abcdef123456"
-        organization_id:
-          type: string
-          format: uuid
-          description: ID de la organización a la que pertenece la vinculación.
-          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
         question_id:
           type: string
           format: uuid
@@ -7640,10 +7775,6 @@ components:
           type: string
           format: uuid
           example: "018f5f6a-1111-7a8b-8000-123456789abc"
-        created_at:
-          type: string
-          format: date-time
-          nullable: true
 
     # -------------------------------------------------------------------
     # Inspections
