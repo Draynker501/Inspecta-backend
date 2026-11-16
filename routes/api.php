@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\OrganizationController;
 use App\Http\Controllers\ChecklistController;
 use App\Http\Controllers\ChecklistSectionController;
 use App\Http\Controllers\ChecklistVersionController;
+use App\Http\Controllers\InspectionAnswerController;
 use App\Http\Controllers\InspectionController;
 use App\Http\Controllers\LocationHierarchyController;
 use App\Http\Controllers\NormController;
@@ -52,6 +53,10 @@ Route::get('locations/hierarchy', [LocationHierarchyController::class, 'index'])
 Route::get('inspections', [InspectionController::class, 'index'])->middleware('api.tenant');
 Route::post('inspections', [InspectionController::class, 'store'])->middleware('api.tenant');
 Route::get('inspections/{inspectionId}', [InspectionController::class, 'show'])->middleware('api.tenant');
+Route::get('inspections/{inspectionId}/checklist', [InspectionController::class, 'checklist'])->middleware('api.tenant');
+Route::get('inspections/{inspectionId}/answers', [InspectionAnswerController::class, 'index'])->middleware('api.tenant');
+Route::put('inspections/{inspectionId}/answers/{questionId}', [InspectionAnswerController::class, 'upsert'])->middleware('api.tenant');
+Route::delete('inspections/{inspectionId}/answers/{questionId}', [InspectionAnswerController::class, 'destroy'])->middleware('api.tenant');
 Route::get('checklists', [ChecklistController::class, 'index'])->middleware('api.tenant');
 Route::post('checklists', [ChecklistController::class, 'store'])->middleware('api.tenant');
 Route::get('checklists/{checklistId}', [ChecklistController::class, 'show'])->middleware('api.tenant');

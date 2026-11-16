@@ -26,6 +26,9 @@ La preparación técnica para integración no autoriza producción.
 | DEC-15 | Solo roles recién creados: Administrador execute y manage; Inspector execute; Supervisor manage; otros ninguno. Preservar roles existentes. |
 | DEC-16 | Nuevas migraciones de integridad SQL según las cuatro FK compuestas indicadas abajo. |
 | DEC-17 | La desactivación posterior de normativa no invalida por sí sola una versión legítimamente publicada. |
+| DEC-18 | INS-02 lee el árbol de checklist congelado en `inspections.checklist_version_id`; no resuelve la versión publicada actual ni exige `checklists.view` o `norms.view`. |
+| DEC-19 | Las respuestas solo las escribe el propietario de una inspección `draft` con `inspections.execute`, membresía y asignación vigentes; `inspections.manage` es solo lectura. |
+| DEC-20 | INS-02 conserva OpenAPI 2.3.0 sin publicación y no habilita consumidores ni sincronización offline. |
 
 ## HTTP y autorización
 
@@ -140,3 +143,46 @@ preflight MariaDB: faltan comprobaciones automáticas completas del esquema y
 dependencias, y una recuperación ensayada. Se conserva deliberadamente el
 rechazo antes de DDL; no desplegar en MariaDB. No se ha ejecutado una prueba
 MariaDB en esta preparación.
+
+
+## INS-02 — respuestas y checklist histórico
+
+El corte INS-02 implementa `GET /api/inspections/{inspectionId}/checklist`,
+`GET /api/inspections/{inspectionId}/answers`,
+`PUT /api/inspections/{inspectionId}/answers/{questionId}` y
+`DELETE /api/inspections/{inspectionId}/answers/{questionId}`. El checklist se
+resuelve por la versión congelada en la inspección; las respuestas se validan
+por tipo, solo se escriben en `draft` y la integridad se refuerza con tres FK
+compuestas. La migración rechaza datos incoherentes sin repararlos y se validó
+con `up/down/up` en SQLite y MariaDB 11.8.9.
+
+Documentación: [diseño](ins-02/01-diseno.md),
+[decisiones](ins-02/02-decisiones.md),
+[contrato HTTP](ins-02/03-contrato-http.md),
+[integridad](ins-02/04-integridad.md),
+[autorización](ins-02/05-autorizacion.md),
+[validación](ins-02/06-validacion.md),
+[concurrencia](ins-02/07-concurrencia.md),
+[matriz de pruebas](ins-02/08-matriz-pruebas.md),
+[riesgos residuales](ins-02/09-riesgos-residuales.md),
+[auditoría independiente S2](ins-02/s2-auditoria.md) y
+[consolidación y revisión focalizada S3](ins-02/s3-consolidacion.md).
+
+### Verificación de INS-01-DEC-18–20
+
+En el árbol consolidado de S3 se comprobó que las decisiones de continuidad se
+cumplen:
+
+- **INS-01-DEC-18**: el checklist se resuelve exclusivamente por
+  `inspections.checklist_version_id`; las pruebas cubren versión archivada,
+  checklist desactivado y versión nueva publicada, sin exigir
+  `checklists.view` ni `norms.view`.
+- **INS-01-DEC-19**: `PUT` y `DELETE` exigen propietario, `inspections.execute`,
+  membresía y asignación vigentes e inspección `draft`; `inspections.manage`
+  solo permite lectura.
+- **INS-01-DEC-20**: OpenAPI permanece en 2.3.0 sin publicar; no se habilitaron
+  consumidores ni sincronización offline.
+
+OpenAPI permanece en 2.3.0; las cuatro operaciones están implementadas y el
+resto sigue `planned`. La publicación contractual, la migración en entornos
+persistentes y cualquier cambio en consumidores requieren autorización separada.

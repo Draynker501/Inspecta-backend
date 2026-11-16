@@ -20,12 +20,16 @@ class InspectionAnswer extends Model
         'inspection_id',
         'question_id',
         'organization_id',
+        'checklist_version_id',
+        'checklist_section_id',
         'answer',
         'observation',
     ];
 
     protected $casts = [
         'organization_id' => 'string',
+        'checklist_version_id' => 'string',
+        'checklist_section_id' => 'string',
     ];
 
     /**
@@ -36,7 +40,19 @@ class InspectionAnswer extends Model
         return [
             'inspection_id' => Inspection::class,
             'question_id' => Question::class,
+            'checklist_version_id' => ChecklistVersion::class,
+            'checklist_section_id' => ChecklistSection::class,
         ];
+    }
+
+    public function checklistVersion(): BelongsTo
+    {
+        return $this->belongsTo(ChecklistVersion::class, 'checklist_version_id');
+    }
+
+    public function checklistSection(): BelongsTo
+    {
+        return $this->belongsTo(ChecklistSection::class, 'checklist_section_id');
     }
 
     public function organization(): BelongsTo

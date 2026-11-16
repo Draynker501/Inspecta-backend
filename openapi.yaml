@@ -3955,6 +3955,403 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
 
+  /inspections/{inspectionId}/checklist:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    get:
+      summary: Checklist histórico de la inspección
+      description: |
+        Devuelve el checklist **congelado** en
+        `inspections.checklist_version_id`: la versión usada al crear la
+        inspección, no la versión publicada actual.
+
+        - No depende del estado actual del checklist, de la versión, de las
+          normas ni de los requerimientos: una versión archivada, un checklist
+          desactivado o una norma inactiva siguen siendo legibles.
+        - Solo incluye preguntas con `status = true` de la versión original.
+          Las preguntas inactive se omiten; no se mezclan preguntas de otras
+          versiones.
+        - `supported` indica si el tipo puede escribirse mediante la API de
+          respuestas (INS-02): `boolean`, `text`, `number`, `date` y
+          `multiple_choice` son `true`; `signature` es `false` y permanece
+          visible solo como contenido histórico de lectura.
+        - No requiere `checklists.view` ni `norms.view`; la autorización es la
+          de la inspección (`inspections.execute` o `inspections.manage`,
+          membresía activa y asignación vigente a la planta o área).
+        - Las inspecciones ajenas solo son visibles con `inspections.manage`.
+          `locations.view_all` no sustituye la asignación.
+        - Autorización fallida sobre una inspección inexistente o de otra
+          organización responde 404; una inspección visible pero no autorizada
+          responde 403.
+
+        El DTO se ordena por `display_order` e `id` de secciones y preguntas, y
+        los requerimientos normativos por `code` e `id`. La operación es de
+        solo lectura y no modifica datos ni auditoría.
+      tags:
+        - Inspections
+      parameters:
+        - $ref: '#/components/parameters/inspectionIdParam'
+      responses:
+        '200':
+          description: Checklist histórico de la versión usada por la inspección.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: '#/components/schemas/InspectionChecklist'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /inspections/{inspectionId}/answers:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    get:
+      summary: Listar respuestas de la inspección
+      description: |
+        Lista paginada de respuestas de una inspección visible para el usuario.
+
+        - Lectura permitida al propietario con `inspections.execute` y a
+          cualquier usuario con `inspections.manage`; en ambos casos se exige
+          membresía activa y asignación vigente a la planta o área. Las
+          inspecciones ajenas sin `manage` responden 404. `locations.view_all`
+          no sustituye la asignación.
+        - No se exige `checklists.view` ni `norms.view`.
+        - Orden ascendente por `created_at` e `id`. `per_page` predeterminado
+          100 y máximo 100; `page` inicia en 1.
+        - Parámetros de consulta desconocidos, `page` inválido o `per_page`
+          fuera de rango responden 422 con `validation_failed`.
+        - La visibilidad del recurso se resuelve antes de validar la
+          paginación: una inspección no visible responde 404 con independencia
+          de los parámetros de consulta.
+        - La lectura no modifica datos ni auditoría y funciona en cualquier
+          estado de la inspección.
+        - Este contrato no implementa sincronización offline ni idempotencia de
+          red; la PWA anterior no es compatible con esta superficie.
+      tags:
+        - Inspections
+      parameters:
+        - $ref: '#/components/parameters/inspectionIdParam'
+        - $ref: '#/components/parameters/pageParam'
+        - $ref: '#/components/parameters/answersPerPageParam'
+      responses:
+        '200':
+          description: Respuestas de la inspección.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                additionalProperties: false
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InspectionAnswer'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          description: Parámetros de paginación inválidos o parámetros desconocidos (validation_failed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+
+  /inspections/{inspectionId}/answers/{questionId}:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+      - $ref: '#/components/parameters/inspectionIdParam'
+      - $ref: '#/components/parameters/questionIdParam'
+    put:
+      summary: Crear o reemplazar una respuesta
+      description: |
+        `PUT` es un reemplazo completo e idempotente de la respuesta editable de
+        la pregunta en la inspección. La identidad funcional es
+        `(inspection_id, question_id)`: no se crean duplicados.
+
+        **Autorización de escritura** — todas las condiciones son necesarias:
+
+        - membresía activa en la organización y asignación vigente a la planta o
+          área de la inspección;
+        - propietario de la inspección (`inspections.user_id`);
+        - `inspections.execute`. `inspections.manage` **nunca** concede
+          escritura de respuestas;
+        - inspección en estado `draft`. Estados `completed`, `confirmed` o
+          `rejected` responden 422 con clave `inspection`;
+        - pregunta existente, activa y perteneciente a la sección y versión
+          originales de la inspección.
+
+        **Campos derivados en el servidor** — el cuerpo está cerrado: solo
+        `answer` y `observation`. Cualquier otro campo (`id`, `organization_id`,
+        `inspection_id`, `question_id`, `checklist_version_id`,
+        `checklist_section_id`, `created_at`, `updated_at`, `status`) responde
+        422. La organización, la versión y la sección se derivan de la
+        inspección y de la pregunta; nunca se aceptan del cliente.
+
+        **Parámetros de consulta** — la escritura no admite parámetros de
+        consulta: cualquiera de ellos responde 422. El valor solo puede
+        provenir del cuerpo JSON; un parámetro de consulta no puede completar
+        ni eludir la validación del cuerpo.
+
+        **Validación por `answer_type`** (el tipo se lee de la pregunta, no del
+        cuerpo):
+
+        - `boolean`: `"true"` o `"false"` (minúsculas exactas).
+        - `text`: string no vacío de hasta 65535 bytes UTF-8. Se conservan los
+          espacios; no se recorta.
+        - `number`: decimal simple de hasta 64 caracteres con signo negativo
+          opcional (`-?\d+(\.\d+)?`). Se rechazan exponente, coma decimal,
+          `+`, `INF` y `NAN`.
+        - `date`: `YYYY-MM-DD` con fecha de calendario real.
+        - `multiple_choice`: exactamente uno de los `value` configurados en
+          `options`.
+        - `signature`: rechazado (422); no es escribible en INS-02.
+        - Se rechazan `null`, cadena vacía, arreglos, `__NA__` y observación
+          sin respuesta.
+
+        `observation` es opcional y nullable, máximo 65535 bytes UTF-8. Omitirla
+        equivale a `null` (reemplazo completo). Un `PUT` idéntico responde 200
+        sin modificar timestamps ni generar auditoría. La primera escritura crea
+        un UUIDv7 y audita `inspection.answer_created`; un cambio audita
+        `inspection.answer_updated` solo con identificadores, tipo y campos
+        modificados, nunca con valores. La transacción bloquea la inspección; la
+        política de concurrencia es last-write-wins sin control optimista ni
+        idempotencia de red.
+
+        **Límite de estado**: fuera de `draft` no se admiten escrituras. Las
+        respuestas se conservan al cambiar de estado, pero dejan de ser
+        editables. La respuesta 200 devuelve el DTO de la respuesta; no incluye
+        versión ni sección.
+      tags:
+        - Inspections
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InspectionAnswerInput'
+      responses:
+        '200':
+          description: Respuesta creada o reemplazada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: '#/components/schemas/InspectionAnswer'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Inspección visible pero no escribible: falta `inspections.execute`,
+            el usuario no es propietario, la membresía no está activa o falta la
+            asignación. `inspections.manage` no concede escritura.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
+        '404':
+          description: |
+            Inspección no visible o inexistente, o pregunta inexistente o fuera
+            de la versión original de la inspección.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  $ref: '#/components/examples/NotFound'
+        '422':
+          description: |
+            Cuerpo inválido o cerrado, respuesta inválida para el tipo, pregunta
+            inactiva o inspección fuera de `draft` (validation_failed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+    delete:
+      summary: Eliminar una respuesta
+      description: |
+        Elimina la respuesta de la pregunta en la inspección. La operación es
+        idempotente: si no existe una respuesta para una pregunta válida,
+        responde 204 sin auditoría.
+
+        **Autorización** — idéntica a `PUT`: membresía activa, asignación
+        vigente, propietario, `inspections.execute` e inspección en `draft`.
+        `inspections.manage` no concede borrado. Una inspección visible pero no
+        borrable responde 403; una inspección o pregunta inexistente, de otra
+        organización o fuera de la versión original responde 404.
+
+        **Evidencias**: si existen filas de `evidences` que referencian la
+        respuesta, la FK RESTRICT impide el borrado y la API responde 422 con
+        clave `answer`. Nunca se eliminan evidencias en cascada ni se modifica
+        su contenido. Si una evidencia se inserta concurrentemente entre la
+        comprobación y el `DELETE`, la restricción del motor se convierte en el
+        mismo 422. Solo esa violación de clave foránea se traduce a 422:
+        cualquier otro error de integridad se propaga y no se presenta como
+        un bloqueo por evidencias.
+
+        **Parámetros de consulta** — el borrado no admite parámetros de
+        consulta: cualquiera de ellos responde 422.
+
+        **Límite de estado**: solo inspecciones `draft`. Fuera de ese estado
+        responde 422 con clave `inspection`, incluso si no hay respuesta. Al
+        eliminar se audita `inspection.answer_deleted` con identificadores, tipo
+        y presencia de contenido; nunca con valores. Si no se elimina nada no se
+        genera auditoría.
+      tags:
+        - Inspections
+      responses:
+        '204':
+          description: Respuesta eliminada o inexistente para una pregunta válida.
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Inspección visible pero no borrable: falta `inspections.execute`, el
+            usuario no es propietario, la membresía no está activa o falta la
+            asignación.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
+        '404':
+          description: |
+            Inspección no visible o inexistente, o pregunta inexistente o fuera
+            de la versión original de la inspección.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  $ref: '#/components/examples/NotFound'
+        '422':
+          description: |
+            Inspección fuera de `draft`, pregunta inactiva o respuesta con
+            evidencias asociadas (validation_failed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+
   /inspections/{inspectionId}/status:
     x-status: planned
     parameters:
@@ -6021,6 +6418,19 @@ components:
         minimum: 1
         maximum: 100
         default: 15
+    answersPerPageParam:
+      in: query
+      name: per_page
+      required: false
+      description: |
+        Elementos por página. El listado de respuestas de una inspección
+        devuelve 100 elementos por página de forma predeterminada; el máximo
+        admisible es 100.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 100
 
   examples:
     Unauthenticated:
@@ -8086,6 +8496,259 @@ components:
           type: string
           maxLength: 65535
           nullable: true
+          example: "El extintor de la zona norte está caducado."
+
+    InspectionChecklist:
+      type: object
+      description: |
+        Contenido histórico del checklist congelado en la inspección. Se ordena
+        por `display_order` e `id`; no expone preguntas inactivas ni de otras
+        versiones.
+      additionalProperties: false
+      required: [inspection_id, checklist, checklist_version, sections]
+      properties:
+        inspection_id:
+          type: string
+          format: uuid
+          example: "018f6a7b-2222-7a8b-8000-abcdef123456"
+        checklist:
+          type: object
+          additionalProperties: false
+          required: [id, name, status]
+          properties:
+            id:
+              type: string
+              format: uuid
+              example: "018f3d4e-1234-7a8b-8000-abcdef123456"
+            name:
+              type: string
+              nullable: true
+              example: "Checklist de seguridad"
+            status:
+              type: boolean
+              nullable: true
+              description: Estado actual del checklist; no altera la lectura histórica.
+              example: false
+        checklist_version:
+          type: object
+          additionalProperties: false
+          required: [id, version, status, published_at]
+          properties:
+            id:
+              type: string
+              format: uuid
+              example: "018f3d5e-4321-7a8b-8000-aabbccddeeff"
+            version:
+              type: string
+              maxLength: 20
+              example: "1"
+            status:
+              type: string
+              example: "archived"
+            published_at:
+              type: string
+              format: date-time
+              nullable: true
+              example: "2026-10-10T14:30:00Z"
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/InspectionChecklistSection'
+
+    InspectionChecklistSection:
+      type: object
+      additionalProperties: false
+      required: [id, name, description, display_order, questions]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f3e5f-9999-7a8b-8000-112233445566"
+        name:
+          type: string
+          maxLength: 150
+          example: "1. Equipos de Emergencia"
+        description:
+          type: string
+          nullable: true
+          example: "Validación de extintores y mangueras."
+        display_order:
+          type: integer
+          minimum: 1
+          example: 1
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/InspectionChecklistQuestion'
+
+    InspectionChecklistQuestion:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - question_text
+        - description
+        - answer_type
+        - options
+        - required
+        - allows_evidence
+        - display_order
+        - supported
+        - norm_requirements
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "018f4e5f-5678-7a8b-8000-fedcba654321"
+        question_text:
+          type: string
+          maxLength: 65535
+          example: "¿Todos los extintores tienen carga vigente?"
+        description:
+          type: string
+          nullable: true
+          example: "Verifique visualmente la etiqueta de inspección mensual."
+        answer_type:
+          type: string
+          enum: [boolean, text, number, date, multiple_choice, signature]
+          description: |
+            Tipo almacenado en la pregunta. `signature` se conserva como lectura
+            histórica pero no puede escribirse mediante la API de respuestas.
+          example: "boolean"
+        options:
+          type: array
+          nullable: true
+          items:
+            type: object
+            additionalProperties: false
+            required: [value, label]
+            properties:
+              value:
+                type: string
+                example: "si"
+              label:
+                type: string
+                example: "Sí"
+        required:
+          type: boolean
+          example: true
+        allows_evidence:
+          type: boolean
+          example: true
+        display_order:
+          type: integer
+          minimum: 1
+          example: 1
+        supported:
+          type: boolean
+          description: |
+            `true` para `boolean`, `text`, `number`, `date` y
+            `multiple_choice`; `false` para `signature` y para tipos
+            desconocidos.
+          example: true
+        norm_requirements:
+          type: array
+          description: Requerimientos normativos enlazados, ordenados por code e id.
+          items:
+            $ref: '#/components/schemas/InspectionChecklistNormRequirement'
+
+    InspectionChecklistNormRequirement:
+      type: object
+      additionalProperties: false
+      required: [link_id, id, code, description]
+      properties:
+        link_id:
+          type: string
+          format: uuid
+          description: ID de la fila question_norm_requirement.
+          example: "018f6a7b-1111-7a8b-8000-abcdef123456"
+        id:
+          type: string
+          format: uuid
+          description: ID del requerimiento normativo.
+          example: "018f5f6a-1111-7a8b-8000-123456789abc"
+        code:
+          type: string
+          example: "REQ-1"
+        description:
+          type: string
+          nullable: true
+          example: "Requisito vinculado"
+
+    InspectionAnswer:
+      type: object
+      description: Respuesta editable de una pregunta dentro de una inspección.
+      additionalProperties: false
+      required: [id, inspection_id, question_id, answer, observation, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUIDv7 asignado por el servidor al crear la respuesta.
+          example: "018f6b8c-3333-7a8b-8000-ccddeeff1122"
+        inspection_id:
+          type: string
+          format: uuid
+          example: "018f6a7b-2222-7a8b-8000-abcdef123456"
+        question_id:
+          type: string
+          format: uuid
+          example: "018f4e5f-5678-7a8b-8000-fedcba654321"
+        answer:
+          type: string
+          maxLength: 65535
+          nullable: false
+          description: |
+            Valor almacenado como string. El formato depende del `answer_type`
+            de la pregunta y se revalida en cada escritura.
+          example: "true"
+        observation:
+          type: string
+          maxLength: 65535
+          nullable: true
+          example: "El extintor de la zona norte está caducado."
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    InspectionAnswerInput:
+      type: object
+      additionalProperties: false
+      required: [answer]
+      description: |
+        Cuerpo cerrado de escritura de respuestas. Organización, inspección,
+        pregunta, versión, sección, identificadores y timestamps se derivan en el
+        servidor. Omitir `observation` equivale a `null` porque el PUT es un
+        reemplazo completo.
+      properties:
+        answer:
+          type: string
+          minLength: 1
+          maxLength: 65535
+          description: |
+            Respuesta obligatoria. Debe ser válida para el `answer_type` de la
+            pregunta:
+            - `boolean`: `"true"` o `"false"`.
+            - `text`: hasta 65535 bytes UTF-8 sin recorte; no vacío ni
+              compuesto exclusivamente por espacios en blanco.
+            - `number`: decimal simple de hasta 64 caracteres, sin exponente ni
+              coma.
+            - `date`: `YYYY-MM-DD` con fecha real.
+            - `multiple_choice`: uno de los `value` configurados.
+            - `signature`: no admitido (422).
+            Se rechazan `null`, cadenas vacías, arreglos, `__NA__` y tipos no
+            soportados.
+          example: "true"
+        observation:
+          type: string
+          nullable: true
+          maxLength: 65535
+          description: Observación opcional de hasta 65535 bytes UTF-8.
           example: "El extintor de la zona norte está caducado."
 
     InspectionDetail:

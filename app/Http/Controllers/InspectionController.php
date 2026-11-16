@@ -12,6 +12,7 @@ use App\Models\Plant;
 use App\Models\ProductionLine;
 use App\Policies\InspectionPolicy;
 use App\Support\Audit\AuditLogger;
+use App\Support\Inspections\InspectionAnswerValidator;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -165,6 +166,84 @@ class InspectionController extends TenantController
         abort_unless(app(InspectionPolicy::class)->view($request->user(), $inspection), 404);
 
         return response()->json(['data' => $this->dto($inspection)]);
+    }
+
+    /**
+     * Contenido histórico de la versión usada por la inspección.
+     *
+     * Se resuelve exclusivamente por `inspections.checklist_version_id`; no
+     * consulta la versión publicada actual, el estado del checklist ni el
+     * estado de la versión. No se exige acceso general al catálogo EHS.
+     */
+    public function checklist(Request $request, string $inspectionId): JsonResponse
+    {
+        Gate::authorize('viewAny', Inspection::class);
+        $organizationId = app(TenantContext::class)->requireId();
+        $inspection = Inspection::query()->where('organization_id', $organizationId)
+            ->findOrFail($inspectionId);
+        abort_unless(app(InspectionPolicy::class)->view($request->user(), $inspection), 404);
+
+        $version = ChecklistVersion::query()
+            ->where('organization_id', $organizationId)
+            ->whereKey($inspection->checklist_version_id)
+            ->with([
+                'checklist' => fn ($query) => $query->where('organization_id', $organizationId),
+                'sections' => fn ($query) => $query->where('organization_id', $organizationId)
+                    ->orderBy('display_order')->orderBy('id'),
+                'sections.questions' => fn ($query) => $query->where('organization_id', $organizationId)
+                    ->where('status', true)->orderBy('display_order')->orderBy('id'),
+                'sections.questions.normRequirements' => fn ($query) => $query
+                    ->where('norm_requirements.organization_id', $organizationId)
+                    ->where('question_norm_requirement.organization_id', $organizationId)
+                    ->orderBy('norm_requirements.code')->orderBy('norm_requirements.id'),
+            ])
+            ->firstOrFail();
+
+        $sections = $version->sections->map(function ($section) {
+            $questions = $section->questions->map(function ($question) {
+                return [
+                    'id' => $question->id,
+                    'question_text' => $question->question_text,
+                    'description' => $question->description,
+                    'answer_type' => $question->answer_type,
+                    'options' => $question->options,
+                    'required' => $question->required,
+                    'allows_evidence' => $question->allows_evidence,
+                    'display_order' => $question->display_order,
+                    'supported' => InspectionAnswerValidator::supports($question->answer_type),
+                    'norm_requirements' => $question->normRequirements->map(static fn ($requirement) => [
+                        'link_id' => $requirement->pivot->id,
+                        'id' => $requirement->id,
+                        'code' => $requirement->code,
+                        'description' => $requirement->description,
+                    ])->values()->all(),
+                ];
+            })->values()->all();
+
+            return [
+                'id' => $section->id,
+                'name' => $section->name,
+                'description' => $section->description,
+                'display_order' => $section->display_order,
+                'questions' => $questions,
+            ];
+        })->values()->all();
+
+        return response()->json(['data' => [
+            'inspection_id' => $inspection->id,
+            'checklist' => [
+                'id' => $version->checklist_id,
+                'name' => $version->checklist?->name,
+                'status' => $version->checklist === null ? null : (bool) $version->checklist->status,
+            ],
+            'checklist_version' => [
+                'id' => $version->id,
+                'version' => $version->version,
+                'status' => $version->status,
+                'published_at' => $version->published_at?->toISOString(),
+            ],
+            'sections' => $sections,
+        ]]);
     }
 
     private function dto(Inspection $inspection): array

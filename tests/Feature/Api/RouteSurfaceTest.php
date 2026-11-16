@@ -107,6 +107,10 @@ class RouteSurfaceTest extends TestCase
             'GET api/inspections',
             'POST api/inspections',
             'GET api/inspections/{inspectionId}',
+            'GET api/inspections/{inspectionId}/checklist',
+            'GET api/inspections/{inspectionId}/answers',
+            'PUT api/inspections/{inspectionId}/answers/{questionId}',
+            'DELETE api/inspections/{inspectionId}/answers/{questionId}',
         ];
 
         foreach ($expected as $operation) {
@@ -172,6 +176,10 @@ class RouteSurfaceTest extends TestCase
             'GET api/inspections',
             'POST api/inspections',
             'GET api/inspections/{inspectionId}',
+            'GET api/inspections/{inspectionId}/checklist',
+            'GET api/inspections/{inspectionId}/answers',
+            'PUT api/inspections/{inspectionId}/answers/{questionId}',
+            'DELETE api/inspections/{inspectionId}/answers/{questionId}',
         ];
 
         $unexpected = array_values(array_diff($apiOperations, $allowed));
