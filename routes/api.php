@@ -17,6 +17,7 @@ use App\Http\Controllers\ProductionLineController;
 use App\Http\Controllers\ProductionLineStoreController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\QuestionNormRequirementController;
+use App\Http\Controllers\IncidentController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -92,3 +93,7 @@ Route::put('requirements/{requirementId}', [NormRequirementController::class, 'u
 Route::get('questions/{questionId}/norm-requirements', [QuestionNormRequirementController::class, 'index'])->middleware('api.tenant');
 Route::post('questions/{questionId}/norm-requirements', [QuestionNormRequirementController::class, 'store'])->middleware('api.tenant');
 Route::delete('questions/{questionId}/norm-requirements/{linkId}', [QuestionNormRequirementController::class, 'destroy'])->middleware('api.tenant');
+Route::get('incidents', [IncidentController::class, 'index'])->middleware('api.tenant');
+Route::post('incidents', [IncidentController::class, 'store'])->middleware('api.tenant');
+Route::get('incidents/{incidentId}', [IncidentController::class, 'show'])->middleware('api.tenant');
+Route::patch('incidents/{incidentId}', [IncidentController::class, 'updateStatus'])->middleware('api.tenant');

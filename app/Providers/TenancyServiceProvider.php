@@ -4,11 +4,13 @@ namespace App\Providers;
 
 use App\Models\Area;
 use App\Models\Plant;
+use App\Models\Incident;
 use App\Models\ProductionLine;
 use App\Policies\AreaPolicy;
 use App\Policies\PlantPolicy;
 use App\Policies\PlatformOperatorPolicy;
 use App\Policies\ProductionLinePolicy;
+use App\Policies\IncidentPolicy;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -25,6 +27,7 @@ class TenancyServiceProvider extends ServiceProvider
         Gate::policy(Plant::class, PlantPolicy::class);
         Gate::policy(Area::class, AreaPolicy::class);
         Gate::policy(ProductionLine::class, ProductionLinePolicy::class);
+        Gate::policy(Incident::class, IncidentPolicy::class);
 
         Gate::define('viewMemberships', [PlatformOperatorPolicy::class, 'viewMemberships']);
         Gate::define('manageMemberships', [PlatformOperatorPolicy::class, 'manageMemberships']);
