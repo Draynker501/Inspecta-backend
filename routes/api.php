@@ -18,6 +18,9 @@ use App\Http\Controllers\ProductionLineStoreController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\QuestionNormRequirementController;
 use App\Http\Controllers\IncidentController;
+use App\Http\Controllers\CorrectiveActionController;
+use App\Http\Controllers\CorrectiveActionUpdateController;
+use App\Http\Controllers\EvidenceController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -83,7 +86,7 @@ Route::put('checklists/{checklistId}/versions/{versionId}', [ChecklistVersionCon
 Route::put('sections/{sectionId}', [ChecklistSectionController::class, 'update'])->middleware('api.tenant');
 Route::get('sections/{sectionId}', [ChecklistSectionController::class, 'show'])->middleware('api.tenant');
 Route::put('questions/{questionId}', [QuestionController::class, 'update'])->middleware('api.tenant');
-Route::patch('questions/{questionId}',[QuestionController::class, 'updateStatus'])->middleware('api.tenant');
+Route::patch('questions/{questionId}', [QuestionController::class, 'updateStatus'])->middleware('api.tenant');
 Route::get('questions/{questionId}', [QuestionController::class, 'show'])->middleware('api.tenant');
 Route::post('norms', [NormController::class, 'store'])->middleware('api.tenant');
 Route::put('norms/{normId}', [NormController::class, 'update'])->middleware('api.tenant');
@@ -97,3 +100,17 @@ Route::get('incidents', [IncidentController::class, 'index'])->middleware('api.t
 Route::post('incidents', [IncidentController::class, 'store'])->middleware('api.tenant');
 Route::get('incidents/{incidentId}', [IncidentController::class, 'show'])->middleware('api.tenant');
 Route::patch('incidents/{incidentId}', [IncidentController::class, 'updateStatus'])->middleware('api.tenant');
+
+Route::get('corrective-actions', [CorrectiveActionController::class, 'index'])->middleware('api.tenant');
+Route::post('corrective-actions', [CorrectiveActionController::class, 'store'])->middleware('api.tenant');
+Route::get('corrective-actions/{actionId}', [CorrectiveActionController::class, 'show'])->middleware('api.tenant');
+Route::patch('corrective-actions/{actionId}', [CorrectiveActionController::class, 'update'])->middleware('api.tenant');
+
+Route::get('corrective-actions/{actionId}/updates', [CorrectiveActionUpdateController::class, 'index'])->middleware('api.tenant');
+Route::post('corrective-actions/{actionId}/updates', [CorrectiveActionUpdateController::class, 'store'])->middleware('api.tenant');
+
+Route::get('evidences', [EvidenceController::class, 'index'])->middleware('api.tenant');
+Route::post('evidences', [EvidenceController::class, 'store'])->middleware('api.tenant');
+Route::get('evidences/{evidenceId}', [EvidenceController::class, 'show'])->middleware('api.tenant');
+Route::get('evidences/{evidenceId}/download', [EvidenceController::class, 'download'])->middleware('api.tenant');
+Route::get('evidences/{evidenceId}/preview', [EvidenceController::class, 'preview'])->middleware('api.tenant');
