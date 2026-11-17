@@ -82,6 +82,7 @@ Route::put('checklists/{checklistId}/versions/{versionId}', [ChecklistVersionCon
 Route::put('sections/{sectionId}', [ChecklistSectionController::class, 'update'])->middleware('api.tenant');
 Route::get('sections/{sectionId}', [ChecklistSectionController::class, 'show'])->middleware('api.tenant');
 Route::put('questions/{questionId}', [QuestionController::class, 'update'])->middleware('api.tenant');
+Route::patch('questions/{questionId}',[QuestionController::class, 'updateStatus'])->middleware('api.tenant');
 Route::get('questions/{questionId}', [QuestionController::class, 'show'])->middleware('api.tenant');
 Route::post('norms', [NormController::class, 'store'])->middleware('api.tenant');
 Route::put('norms/{normId}', [NormController::class, 'update'])->middleware('api.tenant');

@@ -30,9 +30,9 @@ class QuestionController extends TenantController
         Gate::authorize('viewAny', Checklist::class);
         $organizationId = app(TenantContext::class)->requireId();
         $section = ChecklistSection::where('organization_id', $organizationId)
-            ->whereHas('checklistVersion', fn ($query) => $query
+            ->whereHas('checklistVersion', fn($query) => $query
                 ->where('organization_id', $organizationId)
-                ->whereHas('checklist', fn ($checklists) => $checklists->where('organization_id', $organizationId)))
+                ->whereHas('checklist', fn($checklists) => $checklists->where('organization_id', $organizationId)))
             ->findOrFail($sectionId);
         Gate::authorize('view', $section->checklistVersion->checklist);
 
@@ -44,10 +44,15 @@ class QuestionController extends TenantController
             ->orderBy('display_order')->orderBy('id')
             ->paginate($validated['per_page'] ?? 15, ['*'], 'page', $validated['page'] ?? 1);
 
-        return response()->json(['data' => $questions->items(), 'meta' => [
-            'current_page' => $questions->currentPage(), 'last_page' => $questions->lastPage(),
-            'per_page' => $questions->perPage(), 'total' => $questions->total(),
-        ]]);
+        return response()->json([
+            'data' => $questions->items(),
+            'meta' => [
+                'current_page' => $questions->currentPage(),
+                'last_page' => $questions->lastPage(),
+                'per_page' => $questions->perPage(),
+                'total' => $questions->total(),
+            ]
+        ]);
     }
 
     /**
@@ -69,8 +74,8 @@ class QuestionController extends TenantController
         $question = DB::transaction(function () use ($request, $sectionId, $organizationId): Question {
             Organization::query()->lockForUpdate()->findOrFail($organizationId);
             $candidate = ChecklistSection::where('organization_id', $organizationId)
-                ->whereHas('checklistVersion', fn ($query) => $query->where('organization_id', $organizationId)
-                    ->whereHas('checklist', fn ($parent) => $parent->where('organization_id', $organizationId)))
+                ->whereHas('checklistVersion', fn($query) => $query->where('organization_id', $organizationId)
+                    ->whereHas('checklist', fn($parent) => $parent->where('organization_id', $organizationId)))
                 ->findOrFail($sectionId);
             $candidateVersion = ChecklistVersion::where('organization_id', $organizationId)->findOrFail($candidate->checklist_version_id);
             $checklist = Checklist::where('organization_id', $organizationId)->lockForUpdate()->findOrFail($candidateVersion->checklist_id);
@@ -87,8 +92,10 @@ class QuestionController extends TenantController
             }
             $validated = $request->validate($this->questionRules(true));
             $options = $validated['options'] ?? null;
-            if (($validated['answer_type'] === 'multiple_choice' && ($options === null || count($options) < 2))
-                || ($validated['answer_type'] !== 'multiple_choice' && $options !== null)) {
+            if (
+                ($validated['answer_type'] === 'multiple_choice' && ($options === null || count($options) < 2))
+                || ($validated['answer_type'] !== 'multiple_choice' && $options !== null)
+            ) {
                 throw ValidationException::withMessages(['options' => 'Las opciones no corresponden al tipo de respuesta.']);
             }
             $max = (int) DB::table('questions')->where('checklist_section_id', $section->id)->max('display_order');
@@ -98,11 +105,17 @@ class QuestionController extends TenantController
             }
             try {
                 $question = Question::create([
-                    'id' => (string) Str::uuid7(), 'organization_id' => $organizationId,
-                    'checklist_section_id' => $section->id, 'question_text' => $validated['question_text'],
-                    'description' => $validated['description'] ?? null, 'answer_type' => $validated['answer_type'],
-                    'options' => $options, 'display_order' => $order, 'required' => $validated['required'] ?? true,
-                    'allows_evidence' => $validated['allows_evidence'] ?? false, 'status' => true,
+                    'id' => (string) Str::uuid7(),
+                    'organization_id' => $organizationId,
+                    'checklist_section_id' => $section->id,
+                    'question_text' => $validated['question_text'],
+                    'description' => $validated['description'] ?? null,
+                    'answer_type' => $validated['answer_type'],
+                    'options' => $options,
+                    'display_order' => $order,
+                    'required' => $validated['required'] ?? true,
+                    'allows_evidence' => $validated['allows_evidence'] ?? false,
+                    'status' => true,
                 ]);
             } catch (QueryException $exception) {
                 $info = $exception->errorInfo;
@@ -118,8 +131,10 @@ class QuestionController extends TenantController
                 throw $exception;
             }
             app(AuditLogger::class)->record('question.created', $question, [], [
-                'checklist_section_id' => $section->id, 'answer_type' => $question->answer_type,
-                'display_order' => $question->display_order, 'status' => $question->status,
+                'checklist_section_id' => $section->id,
+                'answer_type' => $question->answer_type,
+                'display_order' => $question->display_order,
+                'status' => $question->status,
             ]);
 
             return $question;
@@ -136,11 +151,11 @@ class QuestionController extends TenantController
         Gate::authorize('viewAny', Checklist::class);
         $organizationId = app(TenantContext::class)->requireId();
         $question = Question::where('organization_id', $organizationId)
-            ->whereHas('checklistSection', fn ($sections) => $sections
+            ->whereHas('checklistSection', fn($sections) => $sections
                 ->where('organization_id', $organizationId)
-                ->whereHas('checklistVersion', fn ($versions) => $versions
+                ->whereHas('checklistVersion', fn($versions) => $versions
                     ->where('organization_id', $organizationId)
-                    ->whereHas('checklist', fn ($checklists) => $checklists->where('organization_id', $organizationId))))
+                    ->whereHas('checklist', fn($checklists) => $checklists->where('organization_id', $organizationId))))
             ->findOrFail($questionId);
         Gate::authorize('view', $question->checklistSection->checklistVersion->checklist);
 
@@ -189,18 +204,25 @@ class QuestionController extends TenantController
             $options = array_key_exists('options', $validated) ? $validated['options'] : $question->options;
             // Como origin/api, al cambiar de tipo se eliminan las opciones previas;
             // las opciones enviadas explícitamente para otro tipo se rechazan.
-            if ($answerType !== 'multiple_choice' && ! array_key_exists('options', $validated)) {
+            if ($answerType !== 'multiple_choice' && !array_key_exists('options', $validated)) {
                 $options = null;
             }
             Validator::make(['options' => $options], array_intersect_key($this->questionRules(false), array_flip([
-                'options', 'options.*', 'options.*.value', 'options.*.label',
+                'options',
+                'options.*',
+                'options.*.value',
+                'options.*.label',
             ])))->validate();
-            if (($answerType === 'multiple_choice' && ($options === null || count($options) < 2))
-                || ($answerType !== 'multiple_choice' && $options !== null)) {
+            if (
+                ($answerType === 'multiple_choice' && ($options === null || count($options) < 2))
+                || ($answerType !== 'multiple_choice' && $options !== null)
+            ) {
                 throw ValidationException::withMessages(['options' => 'Las opciones no corresponden al tipo de respuesta.']);
             }
-            if (isset($validated['display_order']) && DB::table('questions')->where('checklist_section_id', $section->id)
-                ->where('id', '!=', $question->id)->where('display_order', $validated['display_order'])->exists()) {
+            if (
+                isset($validated['display_order']) && DB::table('questions')->where('checklist_section_id', $section->id)
+                    ->where('id', '!=', $question->id)->where('display_order', $validated['display_order'])->exists()
+            ) {
                 throw ValidationException::withMessages(['display_order' => 'El orden no está disponible.']);
             }
             if ($options !== $question->options || array_key_exists('options', $validated)) {
@@ -218,6 +240,106 @@ class QuestionController extends TenantController
 
         return response()->json(['data' => $question]);
     }
+
+    public function updateStatus(Request $request, string $questionId): JsonResponse
+    {
+        Gate::authorize('create', Checklist::class);
+
+        $organizationId = app(TenantContext::class)->requireId();
+
+        $question = DB::transaction(function () use ($request, $questionId, $organizationId): Question {
+            // Mantener el orden de bloqueos de master.
+            Organization::query()
+                ->lockForUpdate()
+                ->findOrFail($organizationId);
+
+            $candidate = Question::where('organization_id', $organizationId)
+                ->findOrFail($questionId);
+
+            $candidateSection = ChecklistSection::where(
+                'organization_id',
+                $organizationId
+            )->findOrFail($candidate->checklist_section_id);
+
+            $candidateVersion = ChecklistVersion::where(
+                'organization_id',
+                $organizationId
+            )->findOrFail($candidateSection->checklist_version_id);
+
+            $checklist = Checklist::where(
+                'organization_id',
+                $organizationId
+            )
+                ->lockForUpdate()
+                ->findOrFail($candidateVersion->checklist_id);
+
+            Gate::authorize('update', $checklist);
+
+            $version = ChecklistVersion::where(
+                'organization_id',
+                $organizationId
+            )
+                ->where('checklist_id', $checklist->id)
+                ->lockForUpdate()
+                ->findOrFail($candidateVersion->id);
+
+            $section = ChecklistSection::where(
+                'organization_id',
+                $organizationId
+            )
+                ->where('checklist_version_id', $version->id)
+                ->lockForUpdate()
+                ->findOrFail($candidateSection->id);
+
+            $question = Question::where(
+                'organization_id',
+                $organizationId
+            )
+                ->where('checklist_section_id', $section->id)
+                ->lockForUpdate()
+                ->findOrFail($questionId);
+
+            if (
+                $version->status !== 'draft' ||
+                $version->published_at !== null
+            ) {
+                throw ValidationException::withMessages([
+                    'version' => 'Solo se pueden modificar versiones en borrador nunca publicadas.',
+                ]);
+            }
+
+            if (array_diff(array_keys($request->all()), ['status']) !== []) {
+                throw ValidationException::withMessages([
+                    'fields' => 'La solicitud contiene campos no permitidos.',
+                ]);
+            }
+
+            $validated = $request->validate([
+                'status' => ['required', 'boolean'],
+            ]);
+
+            $oldStatus = $question->status;
+            $question->status = $validated['status'];
+
+            if ($question->isDirty()) {
+                $question->save();
+
+                app(AuditLogger::class)->record(
+                    'question.status_changed',
+                    $question,
+                    ['status' => $oldStatus],
+                    ['status' => $question->status]
+                );
+            }
+
+            return $question->refresh();
+        });
+
+        return response()->json([
+            'data' => $question,
+        ]);
+    }
+
 
     private function questionRules(bool $creating): array
     {
