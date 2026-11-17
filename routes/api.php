@@ -100,15 +100,12 @@ Route::get('incidents', [IncidentController::class, 'index'])->middleware('api.t
 Route::post('incidents', [IncidentController::class, 'store'])->middleware('api.tenant');
 Route::get('incidents/{incidentId}', [IncidentController::class, 'show'])->middleware('api.tenant');
 Route::patch('incidents/{incidentId}', [IncidentController::class, 'updateStatus'])->middleware('api.tenant');
-
 Route::get('corrective-actions', [CorrectiveActionController::class, 'index'])->middleware('api.tenant');
 Route::post('corrective-actions', [CorrectiveActionController::class, 'store'])->middleware('api.tenant');
 Route::get('corrective-actions/{actionId}', [CorrectiveActionController::class, 'show'])->middleware('api.tenant');
 Route::patch('corrective-actions/{actionId}', [CorrectiveActionController::class, 'update'])->middleware('api.tenant');
-
 Route::get('corrective-actions/{actionId}/updates', [CorrectiveActionUpdateController::class, 'index'])->middleware('api.tenant');
 Route::post('corrective-actions/{actionId}/updates', [CorrectiveActionUpdateController::class, 'store'])->middleware('api.tenant');
-
 Route::get('evidences', [EvidenceController::class, 'index'])->middleware('api.tenant');
 Route::post('evidences', [EvidenceController::class, 'store'])->middleware('api.tenant');
 Route::get('evidences/{evidenceId}', [EvidenceController::class, 'show'])->middleware('api.tenant');
