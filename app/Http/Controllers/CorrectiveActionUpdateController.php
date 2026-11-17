@@ -23,20 +23,20 @@ class CorrectiveActionUpdateController extends TenantController
 
     /**
      * GET /api/corrective-actions/{actionId}/updates
-     * Lista el historial de una acción correctiva.
+     * Lista el historial en orden cronológico ascendente.
      */
     public function index(Request $request,string $actionId): JsonResponse 
     {
         $validated = $request->validate([
             'page' => ['sometimes', 'integer', 'min:1'],
-            'per_page' => ['sometimes','integer','min:1','max:100',],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
 
         $action = CorrectiveAction::findOrFail($actionId);
 
         $updates = $action->updates()
-            ->orderBy('created_at')
-            ->orderBy('id')
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc')
             ->paginate($validated['per_page'] ?? 15);
 
         return response()->json([
@@ -106,7 +106,8 @@ class CorrectiveActionUpdateController extends TenantController
             $action->update($actionData);
 
             return CorrectiveActionUpdate::create([
-                'id' => (string) Str::uuid(),
+                // UUID v7: identificador ordenable temporalmente.
+                'id' => (string) Str::uuid7(),
                 'organization_id' => $organizationId,
                 'corrective_action_id' => $action->id,
                 'user_id' => $request->user()->id,
