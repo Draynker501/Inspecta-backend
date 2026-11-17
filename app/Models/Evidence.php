@@ -10,6 +10,8 @@ class Evidence extends Model
 {
     use BelongsToOrganization;
 
+    protected $table = 'evidences';
+
     public $incrementing = false;
 
     protected $keyType = 'string';

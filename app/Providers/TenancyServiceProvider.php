@@ -6,6 +6,7 @@ use App\Models\Area;
 use App\Models\Plant;
 use App\Models\Incident;
 use App\Models\CorrectiveAction;
+use App\Models\Evidence;
 
 use App\Models\ProductionLine;
 use App\Policies\AreaPolicy;
@@ -14,6 +15,7 @@ use App\Policies\PlatformOperatorPolicy;
 use App\Policies\ProductionLinePolicy;
 use App\Policies\IncidentPolicy;
 use App\Policies\CorrectiveActionPolicy;
+use App\Policies\EvidencePolicy;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -32,6 +34,7 @@ class TenancyServiceProvider extends ServiceProvider
         Gate::policy(ProductionLine::class, ProductionLinePolicy::class);
         Gate::policy(Incident::class, IncidentPolicy::class);
         Gate::policy(CorrectiveAction::class, CorrectiveActionPolicy::class);
+        Gate::policy(Evidence::class, EvidencePolicy::class);
 
         Gate::define('viewMemberships', [PlatformOperatorPolicy::class, 'viewMemberships']);
         Gate::define('manageMemberships', [PlatformOperatorPolicy::class, 'manageMemberships']);
