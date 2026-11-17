@@ -11,6 +11,7 @@ use App\Http\Controllers\NormRequirementController;
 use App\Http\Controllers\QuestionNormRequirementController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\CorrectiveActionController;
+use App\Http\Controllers\CorrectiveActionUpdateController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -107,4 +108,9 @@ Route::middleware('api.tenant')->group(function () {
 
     Route::get('corrective-actions/{actionId}', [CorrectiveActionController::class, 'show']);
     Route::patch('corrective-actions/{actionId}', [CorrectiveActionController::class, 'update']);
+});
+
+Route::middleware('api.tenant')->group(function () {
+    Route::get('corrective-actions/{actionId}/updates',[CorrectiveActionUpdateController::class, 'index']);
+    Route::post('corrective-actions/{actionId}/updates',[CorrectiveActionUpdateController::class, 'store']);
 });
