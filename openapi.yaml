@@ -4352,6 +4352,72 @@ paths:
                 validationFailed:
                   $ref: '#/components/examples/ValidationFailed'
 
+  /inspections/{inspectionId}/complete:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    post:
+      x-status: implemented
+      summary: Finalizar inspección
+      description: |
+        Solo el propietario con `inspections.execute`, membresía activa y
+        asignación vigente puede finalizar una inspección visible en `draft`.
+        `inspections.manage` no concede esta transición. Se comprueban las
+        respuestas de la versión histórica; el servidor establece `completed_at`.
+        Parámetros de consulta no permitidos; se exige el cuerpo JSON `{}`.
+        Una repetición devuelve 422; no se garantiza idempotencia de red.
+      tags:
+        - Inspections
+      parameters:
+        - $ref: '#/components/parameters/inspectionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              maxProperties: 0
+      responses:
+        '200':
+          description: Inspección finalizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/InspectionOnline'
+        '400':
+          description: Contexto de organización inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Inspección visible pero actor no autorizado para finalizar.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          description: Entrada inválida (`fields`), estado no draft (`inspection`) o respuestas incompletas o inválidas (`answers`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+
   /inspections/{inspectionId}/status:
     x-status: planned
     parameters:
