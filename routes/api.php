@@ -12,6 +12,7 @@ use App\Http\Controllers\QuestionNormRequirementController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\CorrectiveActionController;
 use App\Http\Controllers\CorrectiveActionUpdateController;
+use App\Http\Controllers\EvidenceController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -99,7 +100,7 @@ Route::middleware('api.tenant')->group(function () {
     Route::post('incidents', [IncidentController::class, 'store']);
 
     Route::get('incidents/{incidentId}', [IncidentController::class, 'show']);
-    Route::patch('incidents/{incidentId}/status',[IncidentController::class, 'updateStatus']);
+    Route::patch('incidents/{incidentId}/status', [IncidentController::class, 'updateStatus']);
 });
 
 Route::middleware('api.tenant')->group(function () {
@@ -111,6 +112,16 @@ Route::middleware('api.tenant')->group(function () {
 });
 
 Route::middleware('api.tenant')->group(function () {
-    Route::get('corrective-actions/{actionId}/updates',[CorrectiveActionUpdateController::class, 'index']);
-    Route::post('corrective-actions/{actionId}/updates',[CorrectiveActionUpdateController::class, 'store']);
+    Route::get('corrective-actions/{actionId}/updates', [CorrectiveActionUpdateController::class, 'index']);
+    Route::post('corrective-actions/{actionId}/updates', [CorrectiveActionUpdateController::class, 'store']);
+});
+
+Route::middleware('api.tenant')->group(function () {
+    Route::get('evidences', [EvidenceController::class, 'index']);
+    Route::post('evidences', [EvidenceController::class, 'store']);
+
+    Route::get('evidences/{evidenceId}', [EvidenceController::class, 'show']);
+
+    Route::get('evidences/{evidenceId}/download',[EvidenceController::class, 'download']);
+    Route::get('evidences/{evidenceId}/preview',[EvidenceController::class, 'preview']);
 });

@@ -10,6 +10,9 @@ class Evidence extends Model
 {
     use BelongsToOrganization;
 
+    protected $table = 'evidences';
+
+
     public $incrementing = false;
 
     protected $keyType = 'string';
@@ -34,8 +37,8 @@ class Evidence extends Model
 
     protected $casts = [
         'file_size' => 'integer',
-        'latitude' => 'decimal:10,7',
-        'longitude' => 'decimal:10,7',
+        'latitude' => 'decimal:6',
+        'longitude' => 'decimal:6',
         'captured_at' => 'datetime',
         'uploaded_at' => 'datetime',
         'organization_id' => 'string',
