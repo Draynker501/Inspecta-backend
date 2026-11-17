@@ -34,12 +34,14 @@ class CorrectiveActionPolicy extends TenantPolicy
 
     public function view(User $user, Model $model): bool
     {
-        if (! $model instanceof CorrectiveAction) {
+        if (!$model instanceof CorrectiveAction) {
             return false;
         }
 
-        if (! $this->ownsTenant($user, $model)
-            || ! $this->viewAny($user)) {
+        if (
+            !$this->ownsTenant($user, $model)
+            || !$this->viewAny($user)
+        ) {
             return false;
         }
 
@@ -75,5 +77,11 @@ class CorrectiveActionPolicy extends TenantPolicy
                 ->where('type', Organization::TYPE_CLIENT)
                 ->where('status', true)
                 ->exists();
+    }
+
+    public function recordUpdate(User $user, Model $model): bool
+    {
+        return $model instanceof CorrectiveAction
+            && $this->update($user, $model);
     }
 }
