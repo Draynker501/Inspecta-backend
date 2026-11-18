@@ -58,6 +58,7 @@ Route::get('inspections', [InspectionController::class, 'index'])->middleware('a
 Route::post('inspections', [InspectionController::class, 'store'])->middleware('api.tenant');
 Route::get('inspections/{inspectionId}', [InspectionController::class, 'show'])->middleware('api.tenant');
 Route::post('inspections/{inspectionId}/complete', [InspectionController::class, 'complete'])->middleware('api.tenant');
+Route::put('inspections/{inspectionId}/status', [InspectionController::class, 'review'])->middleware('api.tenant');
 Route::get('inspections/{inspectionId}/checklist', [InspectionController::class, 'checklist'])->middleware('api.tenant');
 Route::get('inspections/{inspectionId}/answers', [InspectionAnswerController::class, 'index'])->middleware('api.tenant');
 Route::put('inspections/{inspectionId}/answers/{questionId}', [InspectionAnswerController::class, 'upsert'])->middleware('api.tenant');

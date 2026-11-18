@@ -14,7 +14,7 @@ class InspectionCompletionOpenApiContractTest extends TestCase
         $operation = $spec['paths']['/inspections/{inspectionId}/complete']['post'];
         $this->assertSame('2.3.0', $spec['info']['version']);
         $this->assertSame('implemented', $operation['x-status']);
-        $this->assertSame('planned', $spec['paths']['/inspections/{inspectionId}/status']['x-status']);
+        $this->assertSame('implemented', $spec['paths']['/inspections/{inspectionId}/status']['x-status']);
         $this->assertTrue($operation['requestBody']['required']);
         $schema = $operation['requestBody']['content']['application/json']['schema'];
         $this->assertSame('object', $schema['type']);
