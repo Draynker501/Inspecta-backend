@@ -14,6 +14,7 @@ use App\Policies\InspectionPolicy;
 use App\Support\Audit\AuditLogger;
 use App\Support\Inspections\InspectionAnswerValidator;
 use App\Support\Inspections\InspectionCompletion;
+use App\Support\Inspections\InspectionReview;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -185,6 +186,24 @@ class InspectionController extends TenantController
         $completed = app(InspectionCompletion::class)->complete($request->user(), $inspection->id);
 
         return response()->json(['data' => $this->dto($completed)]);
+    }
+
+    public function review(Request $request, string $inspectionId): JsonResponse
+    {
+        $inspection = Inspection::query()->where('organization_id', app(TenantContext::class)->requireId())
+            ->findOrFail($inspectionId);
+        $policy = app(InspectionPolicy::class);
+        abort_unless($policy->view($request->user(), $inspection), 404);
+        abort_unless($policy->review($request->user(), $inspection), 403);
+
+        $body = json_decode($request->getContent());
+        if ($request->query() !== [] || ! $request->isJson() || ! is_object($body)) {
+            throw ValidationException::withMessages(['fields' => 'La solicitud requiere un objeto JSON y no admite parámetros de consulta.']);
+        }
+
+        $reviewed = app(InspectionReview::class)->review($request->user(), $inspection->id, get_object_vars($body));
+
+        return response()->json(['data' => $this->dto($reviewed)]);
     }
 
     /**

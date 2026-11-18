@@ -4418,12 +4418,15 @@ paths:
                   $ref: '#/components/examples/ValidationFailed'
 
   /inspections/{inspectionId}/status:
-    x-status: planned
+    x-status: implemented
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     put:
       summary: Evaluar Inspección (Supervisor)
-      description: Permite al supervisor confirmar o rechazar una inspección completada en campo, añadiendo observaciones. El `supervisor_id` se toma del usuario autenticado.
+      description: |
+        Permite a un revisor autorizado distinto del inspector confirmar o rechazar una inspección completada.
+        No admite parámetros de consulta. El `supervisor_id` identifica al autor autenticado de la evaluación.
+        La visibilidad precede a la autorización, la validación de entrada y la comprobación transaccional del estado.
       tags:
         - Inspections
       parameters:
@@ -4443,7 +4446,7 @@ paths:
                 type: object
                 properties:
                   data:
-                    $ref: '#/components/schemas/InspectionDetail'
+                    $ref: '#/components/schemas/InspectionOnline'
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -4477,7 +4480,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
+          description: Entrada inválida (`fields`) o estado o metadatos de revisión incompatibles (`inspection`).
           content:
             application/json:
               schema:
@@ -4485,8 +4488,6 @@ paths:
               examples:
                 validationFailed:
                   $ref: '#/components/examples/ValidationFailed'
-                crossTenantOperation:
-                  $ref: '#/components/examples/CrossTenantRelation'
 
   # ===================================================================
   # INCIDENTS
@@ -8366,6 +8367,7 @@ components:
           type: string
           format: uuid
           nullable: true
+          description: ID del autor de la evaluación (BD inspections.supervisor_id), no de un supervisor asignado.
         checklist_version_id:
           type: string
           format: uuid
@@ -8445,7 +8447,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: ID del supervisor asignado (BD inspections.supervisor_id).
+          description: ID del autor de la evaluación (BD inspections.supervisor_id), no de un supervisor asignado.
           example: "018f2b3c-4d5e-7f8a-8000-112233445566"
         checklist_version_id:
           type: string
@@ -8907,23 +8909,27 @@ components:
                     example: "El extintor de la zona norte está caducado."
 
     InspectionStatusInput:
-      type: object
-      required:
-        - action
-      properties:
-        action:
-          type: string
-          enum: [confirm, reject]
-          description: |
-            `confirm`: marca la inspección como `confirmed` y registra `supervisor_confirmed_at`.
-            `reject`: marca la inspección como `rejected` y registra `rejected_at`.
-            Solo inspecciones en estado `completed` pueden ser evaluadas.
-          example: "confirm"
-        supervisor_observations:
-          type: string
-          maxLength: 65535
-          nullable: true
-          example: "Revisado. Las medidas de seguridad son aceptables."
+      description: Solo inspecciones completadas; motivo original de rechazo con contenido no blanco y máximo 65535 bytes UTF-8.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [action]
+          properties:
+            action:
+              type: string
+              enum: [confirm]
+        - type: object
+          additionalProperties: false
+          required: [action, supervisor_observations]
+          properties:
+            action:
+              type: string
+              enum: [reject]
+            supervisor_observations:
+              type: string
+              minLength: 1
+              maxLength: 65535
+              description: Motivo no blanco, máximo 65535 bytes UTF-8.
 
     # -------------------------------------------------------------------
     # Incidents

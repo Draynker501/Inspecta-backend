@@ -72,6 +72,18 @@ class InspectionPolicy
         return $this->hasLocationAccess($user, $inspection->plant_id, $inspection->area_id);
     }
 
+    public function review(User $user, Inspection $inspection): bool
+    {
+        $organizationId = app(TenantContext::class)->id();
+
+        return $this->activeClient()
+            && $inspection->organization_id === $organizationId
+            && (bool) $user->status
+            && $inspection->user_id !== $user->id
+            && $user->hasPermission(Permission::InspectionsManage)
+            && $this->hasLocationAccess($user, $inspection->plant_id, $inspection->area_id);
+    }
+
     public function hasLocationAccess(User $user, string $plantId, string $areaId): bool
     {
         $organizationId = app(TenantContext::class)->id();
