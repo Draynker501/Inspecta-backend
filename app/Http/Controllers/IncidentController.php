@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Authorization\Permission;
 use App\Models\Area;
 use App\Models\Incident;
 use App\Models\Inspection;

@@ -3,7 +3,7 @@
 namespace Tests\Feature\Incidents;
 
 use App\Authorization\Permission;
-use App\Models\Organization;
+use App\Models\Incident;
 use App\Models\RolePermission;
 use App\Support\Audit\AuditLogger;
 use App\Support\Tenancy\TenantContext;
@@ -29,7 +29,7 @@ class IncidentIntegrationTest extends TestCase
         $organization = $this->organization($code);
         $user = $this->user($organization);
         app(TenantContext::class)->runAs($organization->id, function () use ($organization, $user, $permissions): void {
-            $role = $this->role($organization, 'inc-' . Str::random(12));
+            $role = $this->role($organization, 'inc-'.Str::random(12));
             $user->assignRole($role);
             foreach ($permissions as $permission) {
                 RolePermission::create([
@@ -40,8 +40,8 @@ class IncidentIntegrationTest extends TestCase
                 ]);
             }
         });
-        $plant = $this->plant($organization, $code . '-P');
-        $area = $this->area($plant, $code . '-A');
+        $plant = $this->plant($organization, $code.'-P');
+        $area = $this->area($plant, $code.'-A');
         DB::table('user_areas')->insert([
             'id' => (string) Str::uuid7(),
             'user_id' => $user->id,
@@ -120,7 +120,7 @@ class IncidentIntegrationTest extends TestCase
         $this->assertSame(
             4,
             DB::table('audit_logs')
-                ->where('auditable_type', \App\Models\Incident::class)
+                ->where('auditable_type', Incident::class)
                 ->where('auditable_id', $id)
                 ->count()
         );
@@ -133,7 +133,7 @@ class IncidentIntegrationTest extends TestCase
         $this->assertSame(
             4,
             DB::table('audit_logs')
-                ->where('auditable_type', \App\Models\Incident::class)
+                ->where('auditable_type', Incident::class)
                 ->where('auditable_id', $id)
                 ->count()
         );

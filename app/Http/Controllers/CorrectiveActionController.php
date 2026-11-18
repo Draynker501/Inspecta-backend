@@ -320,8 +320,7 @@ class CorrectiveActionController extends TenantController
             $organizationId
         ) === null) {
             throw ValidationException::withMessages([
-                'assigned_to' =>
-                    'El responsable no tiene una membresía activa en la organización.',
+                'assigned_to' => 'El responsable no tiene una membresía activa en la organización.',
             ]);
         }
     }

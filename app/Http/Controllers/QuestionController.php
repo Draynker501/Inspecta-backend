@@ -30,9 +30,9 @@ class QuestionController extends TenantController
         Gate::authorize('viewAny', Checklist::class);
         $organizationId = app(TenantContext::class)->requireId();
         $section = ChecklistSection::where('organization_id', $organizationId)
-            ->whereHas('checklistVersion', fn($query) => $query
+            ->whereHas('checklistVersion', fn ($query) => $query
                 ->where('organization_id', $organizationId)
-                ->whereHas('checklist', fn($checklists) => $checklists->where('organization_id', $organizationId)))
+                ->whereHas('checklist', fn ($checklists) => $checklists->where('organization_id', $organizationId)))
             ->findOrFail($sectionId);
         Gate::authorize('view', $section->checklistVersion->checklist);
 
@@ -51,7 +51,7 @@ class QuestionController extends TenantController
                 'last_page' => $questions->lastPage(),
                 'per_page' => $questions->perPage(),
                 'total' => $questions->total(),
-            ]
+            ],
         ]);
     }
 
@@ -74,8 +74,8 @@ class QuestionController extends TenantController
         $question = DB::transaction(function () use ($request, $sectionId, $organizationId): Question {
             Organization::query()->lockForUpdate()->findOrFail($organizationId);
             $candidate = ChecklistSection::where('organization_id', $organizationId)
-                ->whereHas('checklistVersion', fn($query) => $query->where('organization_id', $organizationId)
-                    ->whereHas('checklist', fn($parent) => $parent->where('organization_id', $organizationId)))
+                ->whereHas('checklistVersion', fn ($query) => $query->where('organization_id', $organizationId)
+                    ->whereHas('checklist', fn ($parent) => $parent->where('organization_id', $organizationId)))
                 ->findOrFail($sectionId);
             $candidateVersion = ChecklistVersion::where('organization_id', $organizationId)->findOrFail($candidate->checklist_version_id);
             $checklist = Checklist::where('organization_id', $organizationId)->lockForUpdate()->findOrFail($candidateVersion->checklist_id);
@@ -151,11 +151,11 @@ class QuestionController extends TenantController
         Gate::authorize('viewAny', Checklist::class);
         $organizationId = app(TenantContext::class)->requireId();
         $question = Question::where('organization_id', $organizationId)
-            ->whereHas('checklistSection', fn($sections) => $sections
+            ->whereHas('checklistSection', fn ($sections) => $sections
                 ->where('organization_id', $organizationId)
-                ->whereHas('checklistVersion', fn($versions) => $versions
+                ->whereHas('checklistVersion', fn ($versions) => $versions
                     ->where('organization_id', $organizationId)
-                    ->whereHas('checklist', fn($checklists) => $checklists->where('organization_id', $organizationId))))
+                    ->whereHas('checklist', fn ($checklists) => $checklists->where('organization_id', $organizationId))))
             ->findOrFail($questionId);
         Gate::authorize('view', $question->checklistSection->checklistVersion->checklist);
 
@@ -204,7 +204,7 @@ class QuestionController extends TenantController
             $options = array_key_exists('options', $validated) ? $validated['options'] : $question->options;
             // Como origin/api, al cambiar de tipo se eliminan las opciones previas;
             // las opciones enviadas explícitamente para otro tipo se rechazan.
-            if ($answerType !== 'multiple_choice' && !array_key_exists('options', $validated)) {
+            if ($answerType !== 'multiple_choice' && ! array_key_exists('options', $validated)) {
                 $options = null;
             }
             Validator::make(['options' => $options], array_intersect_key($this->questionRules(false), array_flip([
@@ -339,7 +339,6 @@ class QuestionController extends TenantController
             'data' => $question,
         ]);
     }
-
 
     private function questionRules(bool $creating): array
     {

@@ -190,8 +190,7 @@ class CorrectiveActionUpdateController extends TenantController
                 $oldValues,
                 [
                     'status' => $after,
-                    'completed_at' =>
-                        $action->completed_at?->toISOString(),
+                    'completed_at' => $action->completed_at?->toISOString(),
                     'update_id' => $update->id,
                 ]
             );
@@ -213,8 +212,7 @@ class CorrectiveActionUpdateController extends TenantController
             || (self::TRANSITIONS[$current] ?? null) !== $requested
         ) {
             throw ValidationException::withMessages([
-                'status' =>
-                    "Transición no permitida: {$current} → {$requested}.",
+                'status' => "Transición no permitida: {$current} → {$requested}.",
             ]);
         }
     }
@@ -229,8 +227,7 @@ class CorrectiveActionUpdateController extends TenantController
             || ! is_object(json_decode($request->getContent()))
         ) {
             throw ValidationException::withMessages([
-                'fields' =>
-                    'Se requiere un objeto JSON sin parámetros de consulta.',
+                'fields' => 'Se requiere un objeto JSON sin parámetros de consulta.',
             ]);
         }
 
@@ -251,8 +248,7 @@ class CorrectiveActionUpdateController extends TenantController
             ) !== []
         ) {
             throw ValidationException::withMessages([
-                'fields' =>
-                    'La solicitud contiene campos no permitidos.',
+                'fields' => 'La solicitud contiene campos no permitidos.',
             ]);
         }
     }
@@ -263,8 +259,7 @@ class CorrectiveActionUpdateController extends TenantController
         return [
             'id' => $update->id,
             'organization_id' => $update->organization_id,
-            'corrective_action_id' =>
-                $update->corrective_action_id,
+            'corrective_action_id' => $update->corrective_action_id,
             'user_id' => $update->user_id,
             'status' => $update->status,
             'comment' => $update->comment,

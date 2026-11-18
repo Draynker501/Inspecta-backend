@@ -4,7 +4,6 @@ namespace Tests\Feature\CorrectiveActions;
 
 use App\Authorization\Permission;
 use App\Models\CorrectiveAction;
-use App\Models\CorrectiveActionUpdate;
 use App\Models\RolePermission;
 use App\Support\Audit\AuditLogger;
 use App\Support\Tenancy\TenantContext;

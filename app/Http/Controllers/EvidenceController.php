@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Authorization\Permission;
 use App\Models\Evidence;
 use App\Models\Incident;
 use App\Models\Inspection;
@@ -61,7 +62,7 @@ class EvidenceController extends TenantController
                 $query->where('organization_id', $org);
 
                 if (! $user->hasPermission(
-                    \App\Authorization\Permission::InspectionsManage
+                    Permission::InspectionsManage
                 )) {
                     $query->where('user_id', $user->id);
                 }
@@ -166,8 +167,7 @@ class EvidenceController extends TenantController
             isset($data['latitude']) !== isset($data['longitude'])
         ) {
             throw ValidationException::withMessages([
-                'coordinates' =>
-                    'Las coordenadas deben proporcionarse juntas.',
+                'coordinates' => 'Las coordenadas deben proporcionarse juntas.',
             ]);
         }
 
@@ -235,8 +235,7 @@ class EvidenceController extends TenantController
                     'id' => $id,
                     'organization_id' => $org,
                     'inspection_id' => $inspection->id,
-                    'inspection_answer_id' =>
-                        $data['inspection_answer_id'] ?? null,
+                    'inspection_answer_id' => $data['inspection_answer_id'] ?? null,
                     'incident_id' => $data['incident_id'] ?? null,
                     'uploaded_by' => $user->id,
                     'file_name' => Str::limit(
@@ -260,8 +259,7 @@ class EvidenceController extends TenantController
                     [],
                     [
                         'inspection_id' => $evidence->inspection_id,
-                        'inspection_answer_id' =>
-                            $evidence->inspection_answer_id,
+                        'inspection_answer_id' => $evidence->inspection_answer_id,
                         'incident_id' => $evidence->incident_id,
                         'mime_type' => $evidence->mime_type,
                         'file_size' => $evidence->file_size,
@@ -318,8 +316,7 @@ class EvidenceController extends TenantController
             $disk->path($evidence->storage_path),
             $evidence->file_name,
             [
-                'Content-Type' =>
-                    $evidence->mime_type ?? 'application/octet-stream',
+                'Content-Type' => $evidence->mime_type ?? 'application/octet-stream',
                 'Cache-Control' => 'private, no-store',
                 'X-Content-Type-Options' => 'nosniff',
             ]
@@ -359,8 +356,7 @@ class EvidenceController extends TenantController
                 'Content-Disposition' => 'inline',
                 'Cache-Control' => 'private, no-store',
                 'X-Content-Type-Options' => 'nosniff',
-                'Content-Security-Policy' =>
-                    "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+                'Content-Security-Policy' => "default-src 'none'; style-src 'unsafe-inline'; sandbox",
             ]
         );
     }
@@ -401,8 +397,7 @@ class EvidenceController extends TenantController
 
             if ($answer === null) {
                 throw ValidationException::withMessages([
-                    'inspection_answer_id' =>
-                        'La respuesta no pertenece a la inspección.',
+                    'inspection_answer_id' => 'La respuesta no pertenece a la inspección.',
                 ]);
             }
         }
@@ -415,8 +410,7 @@ class EvidenceController extends TenantController
 
             if ($incident === null) {
                 throw ValidationException::withMessages([
-                    'incident_id' =>
-                        'El incidente no pertenece a la inspección.',
+                    'incident_id' => 'El incidente no pertenece a la inspección.',
                 ]);
             }
         }
@@ -428,8 +422,7 @@ class EvidenceController extends TenantController
     ): void {
         if (array_diff(array_keys($data), $allowed) !== []) {
             throw ValidationException::withMessages([
-                'fields' =>
-                    'La solicitud contiene campos no permitidos.',
+                'fields' => 'La solicitud contiene campos no permitidos.',
             ]);
         }
     }
@@ -440,8 +433,7 @@ class EvidenceController extends TenantController
             'id' => $evidence->id,
             'organization_id' => $evidence->organization_id,
             'inspection_id' => $evidence->inspection_id,
-            'inspection_answer_id' =>
-                $evidence->inspection_answer_id,
+            'inspection_answer_id' => $evidence->inspection_answer_id,
             'incident_id' => $evidence->incident_id,
             'uploaded_by' => $evidence->uploaded_by,
             'file_name' => $evidence->file_name,

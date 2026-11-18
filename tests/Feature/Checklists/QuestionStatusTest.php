@@ -16,9 +16,9 @@ use Tests\TestCase;
 
 class QuestionStatusTest extends TestCase
 {
+    use ColleagueChecklistFixtures;
     use RefreshDatabase;
     use TenantFixtures;
-    use ColleagueChecklistFixtures;
 
     private function prepareQuestion(): array
     {
@@ -47,7 +47,7 @@ class QuestionStatusTest extends TestCase
         $this->patchJson($this->url($id), [
             'status' => false,
         ])->assertOk()
-          ->assertJsonPath('data.status', false);
+            ->assertJsonPath('data.status', false);
 
         $this->assertDatabaseHas('questions', [
             'id' => $id,
@@ -57,7 +57,7 @@ class QuestionStatusTest extends TestCase
         $this->patchJson($this->url($id), [
             'status' => true,
         ])->assertOk()
-          ->assertJsonPath('data.status', true);
+            ->assertJsonPath('data.status', true);
 
         $this->assertDatabaseHas('questions', [
             'id' => $id,

@@ -34,13 +34,13 @@ class CorrectiveActionPolicy extends TenantPolicy
 
     public function view(User $user, Model $model): bool
     {
-        if (!$model instanceof CorrectiveAction) {
+        if (! $model instanceof CorrectiveAction) {
             return false;
         }
 
         if (
-            !$this->ownsTenant($user, $model)
-            || !$this->viewAny($user)
+            ! $this->ownsTenant($user, $model)
+            || ! $this->viewAny($user)
         ) {
             return false;
         }
