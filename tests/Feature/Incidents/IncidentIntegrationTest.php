@@ -28,9 +28,11 @@ class IncidentIntegrationTest extends TestCase
     ): array {
         $organization = $this->organization($code);
         $user = $this->user($organization);
+
         app(TenantContext::class)->runAs($organization->id, function () use ($organization, $user, $permissions): void {
             $role = $this->role($organization, 'inc-'.Str::random(12));
             $user->assignRole($role);
+
             foreach ($permissions as $permission) {
                 RolePermission::create([
                     'id' => (string) Str::uuid7(),
@@ -40,8 +42,10 @@ class IncidentIntegrationTest extends TestCase
                 ]);
             }
         });
+
         $plant = $this->plant($organization, $code.'-P');
         $area = $this->area($plant, $code.'-A');
+
         DB::table('user_areas')->insert([
             'id' => (string) Str::uuid7(),
             'user_id' => $user->id,
@@ -50,6 +54,7 @@ class IncidentIntegrationTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
         $this->actingAsApiInOrganization($user, $organization);
 
         return compact('organization', 'user', 'plant', 'area');
@@ -70,7 +75,8 @@ class IncidentIntegrationTest extends TestCase
     private function createIncident(array $env): string
     {
         return $this->postJson('/api/incidents', $this->payload($env))
-            ->assertCreated()->json('data.id');
+            ->assertCreated()
+            ->json('data.id');
     }
 
     public function test_registra_incidente_y_auditoria(): void
@@ -84,6 +90,7 @@ class IncidentIntegrationTest extends TestCase
             'reported_by' => $env['user']->id,
             'status' => 'open',
         ]);
+
         $this->assertDatabaseHas('audit_logs', [
             'organization_id' => $env['organization']->id,
             'auditable_id' => $id,
@@ -97,9 +104,12 @@ class IncidentIntegrationTest extends TestCase
         $id = $this->createIncident($env);
 
         $this->getJson("/api/incidents/{$id}")
-            ->assertOk()->assertJsonPath('data.id', $id);
+            ->assertOk()
+            ->assertJsonPath('data.id', $id);
+
         $this->getJson('/api/incidents?risk_level=high&per_page=10')
-            ->assertOk()->assertJsonPath('meta.total', 1)
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('data.0.id', $id);
     }
 
@@ -109,7 +119,7 @@ class IncidentIntegrationTest extends TestCase
         $id = $this->createIncident($env);
 
         foreach (['in_progress', 'resolved', 'closed'] as $status) {
-            $this->patchJson("/api/incidents/{$id}", [
+            $this->patchJson("/api/incidents/{$id}/status", [
                 'status' => $status,
             ])
                 ->assertOk()
@@ -126,7 +136,7 @@ class IncidentIntegrationTest extends TestCase
         );
 
         // Repetir el mismo estado no debe generar otra auditoría.
-        $this->patchJson("/api/incidents/{$id}", [
+        $this->patchJson("/api/incidents/{$id}/status", [
             'status' => 'closed',
         ])->assertOk();
 
@@ -139,7 +149,7 @@ class IncidentIntegrationTest extends TestCase
         );
 
         // No se permite regresar a un estado anterior.
-        $this->patchJson("/api/incidents/{$id}", [
+        $this->patchJson("/api/incidents/{$id}/status", [
             'status' => 'open',
         ])
             ->assertUnprocessable()
@@ -148,69 +158,116 @@ class IncidentIntegrationTest extends TestCase
 
     public function test_registrador_no_puede_cambiar_estado_sin_permiso_de_cierre(): void
     {
-        $env = $this->environment('INC-A', [Permission::FindingsRegister]);
+        $env = $this->environment('INC-A', [
+            Permission::FindingsRegister,
+        ]);
+
         $id = $this->createIncident($env);
-        $this->patchJson("/api/incidents/{$id}", ['status' => 'in_progress'])
-            ->assertForbidden();
-        $this->assertDatabaseHas('incidents', ['id' => $id, 'status' => 'open']);
+
+        $this->patchJson("/api/incidents/{$id}/status", [
+            'status' => 'in_progress',
+        ])->assertForbidden();
+
+        $this->assertDatabaseHas('incidents', [
+            'id' => $id,
+            'status' => 'open',
+        ]);
     }
 
     public function test_sin_permiso_no_puede_registrar(): void
     {
         $env = $this->environment('INC-A', []);
-        $this->postJson('/api/incidents', $this->payload($env))->assertForbidden();
+
+        $this->postJson('/api/incidents', $this->payload($env))
+            ->assertForbidden();
     }
 
     public function test_organizacion_ajena_no_puede_ver_o_modificar(): void
     {
         $envA = $this->environment('INC-A');
         $id = $this->createIncident($envA);
+
         $this->environment('INC-B');
 
-        $this->getJson("/api/incidents/{$id}")->assertNotFound();
-        $this->patchJson("/api/incidents/{$id}", ['status' => 'in_progress'])
+        $this->getJson("/api/incidents/{$id}")
             ->assertNotFound();
+
+        $this->patchJson("/api/incidents/{$id}/status", [
+            'status' => 'in_progress',
+        ])->assertNotFound();
     }
 
     public function test_sin_asignacion_a_ubicacion_no_puede_ver_incidente(): void
     {
         $env = $this->environment();
         $id = $this->createIncident($env);
-        DB::table('user_areas')->where('user_id', $env['user']->id)->delete();
-        $this->getJson("/api/incidents/{$id}")->assertNotFound();
-        $this->getJson('/api/incidents')->assertOk()->assertJsonPath('meta.total', 0);
+
+        DB::table('user_areas')
+            ->where('user_id', $env['user']->id)
+            ->delete();
+
+        $this->getJson("/api/incidents/{$id}")
+            ->assertNotFound();
+
+        $this->getJson('/api/incidents')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 0);
     }
 
     public function test_rechaza_ubicacion_incoherente_y_campos_protegidos(): void
     {
         $env = $this->environment();
-        $secondPlant = $this->plant($env['organization'], 'INC-OTRA');
-        $this->postJson('/api/incidents', array_merge($this->payload($env), [
-            'plant_id' => $secondPlant->id,
-        ]))->assertNotFound();
-        $this->postJson('/api/incidents', array_merge($this->payload($env), [
-            'reported_by' => $env['user']->id,
-        ]))->assertUnprocessable()->assertJsonValidationErrors('fields');
+
+        $secondPlant = $this->plant(
+            $env['organization'],
+            'INC-OTRA'
+        );
+
+        $this->postJson('/api/incidents', array_merge(
+            $this->payload($env),
+            ['plant_id' => $secondPlant->id]
+        ))->assertNotFound();
+
+        $this->postJson('/api/incidents', array_merge(
+            $this->payload($env),
+            ['reported_by' => $env['user']->id]
+        ))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('fields');
     }
 
     public function test_rechaza_riesgo_invalido_y_estado_desconocido(): void
     {
         $env = $this->environment();
-        $this->postJson('/api/incidents', array_merge($this->payload($env), [
-            'risk_level' => 'extreme',
-        ]))->assertUnprocessable()->assertJsonValidationErrors('risk_level');
+
+        $this->postJson('/api/incidents', array_merge(
+            $this->payload($env),
+            ['risk_level' => 'extreme']
+        ))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('risk_level');
+
         $id = $this->createIncident($env);
-        $this->patchJson("/api/incidents/{$id}", ['status' => 'cancelled'])
-            ->assertUnprocessable()->assertJsonValidationErrors('status');
+
+        $this->patchJson("/api/incidents/{$id}/status", [
+            'status' => 'cancelled',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('status');
     }
 
     public function test_error_de_auditoria_revierte_creacion(): void
     {
         $env = $this->environment();
+
         $this->mock(AuditLogger::class)
-            ->shouldReceive('record')->once()->andThrow(new RuntimeException('Auditoría fallida'));
+            ->shouldReceive('record')
+            ->once()
+            ->andThrow(new RuntimeException('Auditoría fallida'));
+
         $this->postJson('/api/incidents', $this->payload($env))
             ->assertInternalServerError();
+
         $this->assertDatabaseCount('incidents', 0);
     }
 }

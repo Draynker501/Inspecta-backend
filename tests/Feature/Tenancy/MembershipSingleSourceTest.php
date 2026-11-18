@@ -28,7 +28,8 @@ class MembershipSingleSourceTest extends TestCase
         $violations = [];
 
         foreach (glob(base_path('app/**/*.php'), GLOB_BRACE) as $file) {
-            $relative = str_replace(base_path().'/', '', $file);
+            $relative = str_replace('\\', '/', $file);
+            $relative = substr($relative, strlen(str_replace('\\', '/', base_path())) + 1);
 
             if (in_array($relative, $allowed, true)) {
                 continue;
@@ -41,6 +42,6 @@ class MembershipSingleSourceTest extends TestCase
             }
         }
 
-        $this->assertSame([], $violations, 'Consultas inline de membresía activa fuera del punto central: '.implode(', ', $violations));
+        $this->assertSame([], $violations, 'Consultas inline de membresía activa fuera del punto central: ' . implode(', ', $violations));
     }
 }

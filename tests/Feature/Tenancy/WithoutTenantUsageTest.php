@@ -18,7 +18,8 @@ class WithoutTenantUsageTest extends TestCase
         $violations = [];
 
         foreach ($files as $file) {
-            $relative = str_replace(base_path().'/', '', $file);
+            $relative = str_replace('\\', '/', $file);
+            $relative = substr($relative, strlen(str_replace('\\', '/', base_path())) + 1);
 
             if (in_array($relative, $allowed, true)) {
                 continue;
@@ -31,7 +32,7 @@ class WithoutTenantUsageTest extends TestCase
             }
         }
 
-        $this->assertSame([], $violations, 'Uso no permitido de withoutTenant(): '.implode(', ', $violations));
+        $this->assertSame([], $violations, 'Uso no permitido de withoutTenant(): ' . implode(', ', $violations));
     }
 
     public function test_sin_withouttenant_en_controladores(): void
@@ -41,7 +42,9 @@ class WithoutTenantUsageTest extends TestCase
         $violations = [];
 
         foreach ($files as $file) {
-            $relative = str_replace(base_path().'/', '', $file);
+            $relative = str_replace('\\', '/', $file);
+            $relative = substr($relative, strlen(str_replace('\\', '/', base_path())) + 1);
+
             $contents = file_get_contents($file);
 
             if (str_contains($contents, '->withoutTenant(')) {
@@ -49,7 +52,7 @@ class WithoutTenantUsageTest extends TestCase
             }
         }
 
-        $this->assertSame([], $violations, 'withoutTenant() no está permitido en controladores: '.implode(', ', $violations));
+        $this->assertSame([], $violations, 'withoutTenant() no está permitido en controladores: ' . implode(', ', $violations));
     }
 
     public function test_sin_bypass_de_scope_en_app(): void
@@ -61,7 +64,8 @@ class WithoutTenantUsageTest extends TestCase
         $violations = [];
 
         foreach ($files as $file) {
-            $relative = str_replace(base_path().'/', '', $file);
+            $relative = str_replace('\\', '/', $file);
+            $relative = substr($relative, strlen(str_replace('\\', '/', base_path())) + 1);
 
             if (in_array($relative, $allowed, true)) {
                 continue;
@@ -78,7 +82,7 @@ class WithoutTenantUsageTest extends TestCase
             }
         }
 
-        $this->assertSame([], $violations, 'Bypass de scope no permitido: '.implode(', ', $violations));
+        $this->assertSame([], $violations, 'Bypass de scope no permitido: ' . implode(', ', $violations));
     }
 
     /**
@@ -88,7 +92,7 @@ class WithoutTenantUsageTest extends TestCase
     {
         $path = base_path($directory);
 
-        if (! is_dir($path)) {
+        if (!is_dir($path)) {
             return [];
         }
 

@@ -99,7 +99,7 @@ Route::delete('questions/{questionId}/norm-requirements/{linkId}', [QuestionNorm
 Route::get('incidents', [IncidentController::class, 'index'])->middleware('api.tenant');
 Route::post('incidents', [IncidentController::class, 'store'])->middleware('api.tenant');
 Route::get('incidents/{incidentId}', [IncidentController::class, 'show'])->middleware('api.tenant');
-Route::patch('incidents/{incidentId}', [IncidentController::class, 'updateStatus'])->middleware('api.tenant');
+Route::patch('incidents/{incidentId}/status', [IncidentController::class, 'updateStatus'])->middleware('api.tenant');
 Route::get('corrective-actions', [CorrectiveActionController::class, 'index'])->middleware('api.tenant');
 Route::post('corrective-actions', [CorrectiveActionController::class, 'store'])->middleware('api.tenant');
 Route::get('corrective-actions/{actionId}', [CorrectiveActionController::class, 'show'])->middleware('api.tenant');
