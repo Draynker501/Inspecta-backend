@@ -44,7 +44,7 @@ class RouteSurfaceTest extends TestCase
         );
     }
 
-    public function test_las_ocho_operaciones_api_esperadas_estan_registradas(): void
+    public function test_las_operaciones_api_esperadas_estan_registradas(): void
     {
         $operations = [];
 
@@ -112,6 +112,22 @@ class RouteSurfaceTest extends TestCase
             'GET api/inspections/{inspectionId}/answers',
             'PUT api/inspections/{inspectionId}/answers/{questionId}',
             'DELETE api/inspections/{inspectionId}/answers/{questionId}',
+            'PATCH api/questions/{questionId}',
+            'GET api/incidents',
+            'POST api/incidents',
+            'GET api/incidents/{incidentId}',
+            'PATCH api/incidents/{incidentId}/status',
+            'GET api/corrective-actions',
+            'POST api/corrective-actions',
+            'GET api/corrective-actions/{actionId}',
+            'PATCH api/corrective-actions/{actionId}',
+            'GET api/corrective-actions/{actionId}/updates',
+            'POST api/corrective-actions/{actionId}/updates',
+            'GET api/evidences',
+            'POST api/evidences',
+            'GET api/evidences/{evidenceId}',
+            'GET api/evidences/{evidenceId}/download',
+            'GET api/evidences/{evidenceId}/preview',
         ];
 
         foreach ($expected as $operation) {
@@ -182,6 +198,22 @@ class RouteSurfaceTest extends TestCase
             'GET api/inspections/{inspectionId}/answers',
             'PUT api/inspections/{inspectionId}/answers/{questionId}',
             'DELETE api/inspections/{inspectionId}/answers/{questionId}',
+            'PATCH api/questions/{questionId}',
+            'GET api/incidents',
+            'POST api/incidents',
+            'GET api/incidents/{incidentId}',
+            'PATCH api/incidents/{incidentId}/status',
+            'GET api/corrective-actions',
+            'POST api/corrective-actions',
+            'GET api/corrective-actions/{actionId}',
+            'PATCH api/corrective-actions/{actionId}',
+            'GET api/corrective-actions/{actionId}/updates',
+            'POST api/corrective-actions/{actionId}/updates',
+            'GET api/evidences',
+            'POST api/evidences',
+            'GET api/evidences/{evidenceId}',
+            'GET api/evidences/{evidenceId}/download',
+            'GET api/evidences/{evidenceId}/preview',
         ];
 
         $unexpected = array_values(array_diff($apiOperations, $allowed));

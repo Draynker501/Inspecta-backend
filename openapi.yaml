@@ -2954,7 +2954,6 @@ paths:
                 crossTenantOperation:
                   $ref: '#/components/examples/CrossTenantRelation'
     patch:
-      x-status: planned
       summary: Activar/Desactivar Pregunta
       tags:
         - Checklists
@@ -4494,7 +4493,6 @@ paths:
   # ===================================================================
 
   /incidents:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -4655,7 +4653,6 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /incidents/{incidentId}:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -4708,7 +4705,6 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   /incidents/{incidentId}/status:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     patch:
@@ -4783,7 +4779,6 @@ paths:
   # ===================================================================
 
   /evidences:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -4920,7 +4915,6 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /evidences/{evidenceId}:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -4980,12 +4974,77 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
 
+  /evidences/{evidenceId}/download:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+      - in: path
+        name: evidenceId
+        required: true
+        description: UUID de la evidencia.
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Descargar archivo de evidencia
+      description: Descarga el archivo original de una evidencia autorizada como archivo adjunto.
+      tags:
+        - Evidences
+      responses:
+        '200':
+          description: Archivo de evidencia descargado correctamente.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Contexto de organización inválido.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /evidences/{evidenceId}/preview:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+      - in: path
+        name: evidenceId
+        required: true
+        description: UUID de la evidencia.
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Previsualizar archivo de evidencia
+      description: Devuelve el archivo de una evidencia autorizada para visualizarlo directamente en el navegador, cuando su tipo MIME está permitido.
+      tags:
+        - Evidences
+      responses:
+        '200':
+          description: Archivo de evidencia disponible para visualización.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Contexto de organización inválido.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '415':
+          description: El tipo MIME del archivo no permite su previsualización.
+
   # ===================================================================
   # CORRECTIVE ACTIONS
   # ===================================================================
 
   /corrective-actions:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -5121,7 +5180,6 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /corrective-actions/{actionId}:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
@@ -5241,7 +5299,6 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /corrective-actions/{actionId}/updates:
-    x-status: planned
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:

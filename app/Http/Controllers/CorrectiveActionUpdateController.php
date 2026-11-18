@@ -2,64 +2,268 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CorrectiveAction;
 use App\Models\CorrectiveActionUpdate;
+use App\Models\Organization;
+use App\Policies\CorrectiveActionPolicy;
+use App\Support\Audit\AuditLogger;
+use App\Support\Tenancy\TenantContext;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class CorrectiveActionUpdateController extends TenantController
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
-    {
-        //
+    private const STATUSES = [
+        'pending',
+        'in_progress',
+        'completed',
+        'verified',
+    ];
+
+    private const TRANSITIONS = [
+        'pending' => 'in_progress',
+        'in_progress' => 'completed',
+        'completed' => 'verified',
+    ];
+
+    public function index(
+        Request $request,
+        string $actionId
+    ): JsonResponse {
+        Gate::authorize('viewAny', CorrectiveAction::class);
+
+        $this->rejectUnknownFields(
+            $request->query(),
+            ['page', 'per_page']
+        );
+
+        $data = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => [
+                'sometimes', 'integer', 'min:1', 'max:100',
+            ],
+        ]);
+
+        $org = app(TenantContext::class)->requireId();
+
+        $action = CorrectiveAction::query()
+            ->where('organization_id', $org)
+            ->findOrFail($actionId);
+
+        abort_unless(
+            app(CorrectiveActionPolicy::class)
+                ->view($request->user(), $action),
+            404
+        );
+
+        $page = CorrectiveActionUpdate::query()
+            ->where('organization_id', $org)
+            ->where('corrective_action_id', $action->id)
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->paginate(
+                $data['per_page'] ?? 15,
+                ['*'],
+                'page',
+                $data['page'] ?? 1
+            );
+
+        return response()->json([
+            'data' => array_map(
+                $this->dto(...),
+                $page->items()
+            ),
+            'meta' => [
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+            ],
+        ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
+    public function store(
+        Request $request,
+        string $actionId
+    ): JsonResponse {
+        Gate::authorize('viewAny', CorrectiveAction::class);
+
+        $org = app(TenantContext::class)->requireId();
+        $user = $request->user();
+        $policy = app(CorrectiveActionPolicy::class);
+
+        $candidate = CorrectiveAction::query()
+            ->where('organization_id', $org)
+            ->findOrFail($actionId);
+
+        abort_unless(
+            $policy->view($user, $candidate),
+            404
+        );
+
+        Gate::authorize('recordUpdate', $candidate);
+
+        $this->requireJsonObject(
+            $request,
+            ['status', 'comment']
+        );
+
+        $data = $request->validate([
+            'status' => [
+                'required',
+                Rule::in([
+                    'in_progress',
+                    'completed',
+                    'verified',
+                ]),
+            ],
+            'comment' => [
+                'sometimes', 'nullable', 'string', 'max:65535',
+            ],
+        ]);
+
+        $update = DB::transaction(function () use (
+            $org,
+            $user,
+            $policy,
+            $actionId,
+            $data
+        ): CorrectiveActionUpdate {
+            Organization::query()
+                ->whereKey($org)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            app(TenantContext::class)
+                ->flushPermissionCache($user->id, $org);
+
+            $action = CorrectiveAction::query()
+                ->where('organization_id', $org)
+                ->lockForUpdate()
+                ->findOrFail($actionId);
+
+            abort_unless(
+                $policy->view($user, $action),
+                404
+            );
+
+            Gate::authorize('recordUpdate', $action);
+
+            $before = $action->status;
+            $after = $data['status'];
+
+            $this->validateStatusTransition(
+                $before,
+                $after
+            );
+
+            $changes = ['status' => $after];
+
+            if ($after === 'completed') {
+                $changes['completed_at'] = now();
+            }
+
+            $oldValues = [
+                'status' => $before,
+                'completed_at' => $action->completed_at?->toISOString(),
+            ];
+
+            $action->update($changes);
+
+            $update = CorrectiveActionUpdate::create([
+                'id' => (string) Str::uuid7(),
+                'organization_id' => $org,
+                'corrective_action_id' => $action->id,
+                'user_id' => $user->id,
+                'status' => $after,
+                'comment' => $data['comment'] ?? null,
+            ]);
+
+            app(AuditLogger::class)->record(
+                'corrective_action.status_changed',
+                $action,
+                $oldValues,
+                [
+                    'status' => $after,
+                    'completed_at' => $action->completed_at?->toISOString(),
+                    'update_id' => $update->id,
+                ]
+            );
+
+            return $update;
+        });
+
+        return response()->json([
+            'data' => $this->dto($update),
+        ], 201);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
+    private function validateStatusTransition(
+        string $current,
+        string $requested
+    ): void {
+        if (
+            ! in_array($current, self::STATUSES, true)
+            || (self::TRANSITIONS[$current] ?? null) !== $requested
+        ) {
+            throw ValidationException::withMessages([
+                'status' => "Transición no permitida: {$current} → {$requested}.",
+            ]);
+        }
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(CorrectiveActionUpdate $correctiveActionUpdate)
-    {
-        //
+    private function requireJsonObject(
+        Request $request,
+        array $allowedFields
+    ): void {
+        if (
+            $request->query() !== []
+            || ! $request->isJson()
+            || ! is_object(json_decode($request->getContent()))
+        ) {
+            throw ValidationException::withMessages([
+                'fields' => 'Se requiere un objeto JSON sin parámetros de consulta.',
+            ]);
+        }
+
+        $this->rejectUnknownFields(
+            $request->all(),
+            $allowedFields
+        );
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(CorrectiveActionUpdate $correctiveActionUpdate)
-    {
-        //
+    private function rejectUnknownFields(
+        array $data,
+        array $allowedFields
+    ): void {
+        if (
+            array_diff(
+                array_keys($data),
+                $allowedFields
+            ) !== []
+        ) {
+            throw ValidationException::withMessages([
+                'fields' => 'La solicitud contiene campos no permitidos.',
+            ]);
+        }
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, CorrectiveActionUpdate $correctiveActionUpdate)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(CorrectiveActionUpdate $correctiveActionUpdate)
-    {
-        //
+    private function dto(
+        CorrectiveActionUpdate $update
+    ): array {
+        return [
+            'id' => $update->id,
+            'organization_id' => $update->organization_id,
+            'corrective_action_id' => $update->corrective_action_id,
+            'user_id' => $update->user_id,
+            'status' => $update->status,
+            'comment' => $update->comment,
+            'created_at' => $update->created_at,
+        ];
     }
 }

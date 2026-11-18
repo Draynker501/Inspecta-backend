@@ -4,8 +4,7 @@ use Illuminate\Database\Connection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
-return new class extends Migration
-{
+return new class extends Migration {
     public $withinTransaction = false;
 
     public function up(): void
@@ -56,9 +55,17 @@ return new class extends Migration
                     ? 'constraint "prod_lines_area_org_fk" foreign key("area_id", "organization_id") references "areas"("id", "organization_id") on delete restrict on update restrict'
                     : 'foreign key("area_id") references "areas"("id") on delete restrict on update cascade';
 
-                $sql = str_ireplace($old, $new, $sql, $replacements);
-                if ($replacements !== 1) {
-                    throw new RuntimeException('La definición de FK de production_lines no coincide con el esquema esperado.');
+                // Permitir identificadores entrecomillados o sin comillas en SQLite.
+                $pattern = $up
+                    ? '/foreign\s+key\s*\(\s*"area_id"\s*\)\s+references\s+"?areas"?\s*\(\s*"id"\s*\)\s+on\s+delete\s+restrict\s+on\s+update\s+cascade/i'
+                    : '/constraint\s+"prod_lines_area_org_fk"\s+foreign\s+key\s*\(\s*"area_id"\s*,\s*"organization_id"\s*\)\s+references\s+"?areas"?\s*\(\s*"id"\s*,\s*"organization_id"\s*\)\s+on\s+delete\s+restrict\s+on\s+update\s+restrict/i';
+
+                $sql = preg_replace($pattern, $new, $sql, 1, $replacements);
+
+                if ($sql === null || $replacements !== 1) {
+                    throw new RuntimeException(
+                        'La definición de FK de production_lines no coincide con el esquema esperado.'
+                    );
                 }
 
                 $sql = preg_replace('/^create table\s+"production_lines"\s*\(/i', 'create table "cat03_lines_rebuild" (', $sql, 1, $renamed);
@@ -96,8 +103,10 @@ return new class extends Migration
         }
 
         $server = $db->selectOne('SELECT VERSION() AS version, DATABASE() AS schema_name, @@SESSION.foreign_key_checks AS fk_checks', [], false);
-        if (! $server || ! preg_match('/^(?:5\.5\.5-)?11\.8\.\d+.*MariaDB/i', $server->version)
-            || ! $server->schema_name || (int) $server->fk_checks !== 1) {
+        if (
+            !$server || !preg_match('/^(?:5\.5\.5-)?11\.8\.\d+.*MariaDB/i', $server->version)
+            || !$server->schema_name || (int) $server->fk_checks !== 1
+        ) {
             throw new RuntimeException('CAT-03 requiere MariaDB 11.8, base seleccionada y foreign_key_checks activo.');
         }
 
@@ -115,7 +124,7 @@ return new class extends Migration
         $columns = $db->select("SELECT TABLE_NAME AS table_name, COLUMN_NAME AS name, COLUMN_TYPE AS column_type, IS_NULLABLE AS nullable, CHARACTER_SET_NAME AS charset, COLLATION_NAME AS collation_name, EXTRA AS extra FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND ((TABLE_NAME = 'production_lines' AND COLUMN_NAME IN ('id', 'area_id', 'organization_id')) OR (TABLE_NAME = 'areas' AND COLUMN_NAME IN ('id', 'organization_id')) OR (TABLE_NAME = 'organizations' AND COLUMN_NAME = 'id'))", [$schema], false);
         $keys = [];
         foreach ($columns as $column) {
-            $keys[$column->table_name.'.'.$column->name] = $column;
+            $keys[$column->table_name . '.' . $column->name] = $column;
         }
         $pairs = [
             ['production_lines.area_id', 'areas.id'],
@@ -123,12 +132,14 @@ return new class extends Migration
             ['production_lines.organization_id', 'organizations.id'],
         ];
         foreach ($pairs as [$child, $parent]) {
-            if (! isset($keys[$child], $keys[$parent])) {
+            if (!isset($keys[$child], $keys[$parent])) {
                 throw new RuntimeException('Faltan columnas de clave requeridas para CAT-03.');
             }
             foreach ([$keys[$child], $keys[$parent]] as $column) {
-                if (strtolower($column->column_type) !== 'char(36)' || $column->nullable !== 'NO'
-                    || ! $column->charset || ! $column->collation_name || stripos($column->extra, 'GENERATED') !== false) {
+                if (
+                    strtolower($column->column_type) !== 'char(36)' || $column->nullable !== 'NO'
+                    || !$column->charset || !$column->collation_name || stripos($column->extra, 'GENERATED') !== false
+                ) {
                     throw new RuntimeException('Las columnas de clave CAT-03 no tienen la definición esperada.');
                 }
             }
@@ -152,7 +163,7 @@ return new class extends Migration
         if ($up && isset($indexes['production_lines']['prod_lines_area_org_idx'])) {
             throw new RuntimeException('Ya existe el índice CAT-03.');
         }
-        if (! $up) {
+        if (!$up) {
             $required[] = ['production_lines', 'prod_lines_area_org_idx', ['area_id', 'organization_id'], 1];
         }
         foreach ($required as [$table, $name, $expectedColumns, $nonUnique]) {
@@ -161,8 +172,10 @@ return new class extends Migration
                 throw new RuntimeException('Falta un índice requerido o su definición es inesperada.');
             }
             foreach ($index as $position => $part) {
-                if ($part->column_name !== $expectedColumns[$position] || (int) $part->sequence_number !== $position + 1
-                    || (int) $part->non_unique !== $nonUnique || $part->sub_part !== null || strtoupper($part->index_type) !== 'BTREE') {
+                if (
+                    $part->column_name !== $expectedColumns[$position] || (int) $part->sequence_number !== $position + 1
+                    || (int) $part->non_unique !== $nonUnique || $part->sub_part !== null || strtoupper($part->index_type) !== 'BTREE'
+                ) {
                     throw new RuntimeException('Definición de índice CAT-03 inesperada.');
                 }
             }
@@ -213,21 +226,21 @@ return new class extends Migration
         }
 
         $columns = $db->select('PRAGMA table_xinfo("production_lines")');
-        $names = array_map(fn ($column) => $column->name, $columns);
+        $names = array_map(fn($column) => $column->name, $columns);
         $expected = ['id', 'area_id', 'name', 'code', 'description', 'status', 'created_at', 'updated_at', 'organization_id', 'deleted_at'];
-        if ($names !== $expected || array_filter($columns, fn ($column) => $column->hidden !== 0)) {
+        if ($names !== $expected || array_filter($columns, fn($column) => $column->hidden !== 0)) {
             throw new RuntimeException('Las columnas de production_lines no coinciden con el esquema esperado.');
         }
 
         $table = $db->selectOne("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'production_lines'");
-        if (! $table || ! $table->sql) {
+        if (!$table || !$table->sql) {
             throw new RuntimeException('No se encontró el DDL de production_lines.');
         }
 
         $indexes = $db->select("SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'production_lines' AND sql IS NOT NULL ORDER BY name");
-        $actual = array_map(fn ($index) => $index->name, $indexes);
+        $actual = array_map(fn($index) => $index->name, $indexes);
         $expectedIndexes = ['prod_lines_area_code_unique', 'production_lines_organization_idx'];
-        if (! $up) {
+        if (!$up) {
             $expectedIndexes[] = 'prod_lines_area_org_idx';
             sort($expectedIndexes);
         }
@@ -244,11 +257,13 @@ return new class extends Migration
             $indexList[$index->name] = $index;
         }
         foreach ($indexes as $index) {
-            $info = $db->select('PRAGMA index_info("'.$index->name.'")');
+            $info = $db->select('PRAGMA index_info("' . $index->name . '")');
             $unique = in_array($index->name, ['prod_lines_area_code_unique'], true);
-            if (array_map(fn ($column) => $column->name, $info) !== $definitions[$index->name]
+            if (
+                array_map(fn($column) => $column->name, $info) !== $definitions[$index->name]
                 || (int) $indexList[$index->name]->unique !== (int) $unique
-                || (int) $indexList[$index->name]->partial !== 0) {
+                || (int) $indexList[$index->name]->partial !== 0
+            ) {
                 throw new RuntimeException('Definición de índice de production_lines inesperada.');
             }
         }
@@ -257,10 +272,10 @@ return new class extends Migration
         foreach ($db->select('PRAGMA index_list("areas")') as $index) {
             if ($index->name === 'areas_id_org_unique' && (int) $index->unique === 1 && (int) $index->partial === 0) {
                 $info = $db->select('PRAGMA index_info("areas_id_org_unique")');
-                $parentIndex = array_map(fn ($column) => $column->name, $info) === ['id', 'organization_id'];
+                $parentIndex = array_map(fn($column) => $column->name, $info) === ['id', 'organization_id'];
             }
         }
-        if (! $parentIndex) {
+        if (!$parentIndex) {
             throw new RuntimeException('Falta el índice único esperado de areas.');
         }
 
@@ -276,8 +291,8 @@ return new class extends Migration
         $expectedForeignKeys = [
             [['organization_id', 'organizations', 'id', 'CASCADE', 'RESTRICT']],
             $up
-                ? [['area_id', 'areas', 'id', 'CASCADE', 'RESTRICT']]
-                : [['area_id', 'areas', 'id', 'RESTRICT', 'RESTRICT'], ['organization_id', 'areas', 'organization_id', 'RESTRICT', 'RESTRICT']],
+            ? [['area_id', 'areas', 'id', 'CASCADE', 'RESTRICT']]
+            : [['area_id', 'areas', 'id', 'RESTRICT', 'RESTRICT'], ['organization_id', 'areas', 'organization_id', 'RESTRICT', 'RESTRICT']],
         ];
         $actualForeignKeys = array_values($groups);
         sort($actualForeignKeys);

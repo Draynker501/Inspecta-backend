@@ -18,7 +18,8 @@ class WithoutTenantUsageTest extends TestCase
         $violations = [];
 
         foreach ($files as $file) {
-            $relative = str_replace(base_path().'/', '', $file);
+            $relative = str_replace('\\', '/', $file);
+            $relative = substr($relative, strlen(str_replace('\\', '/', base_path())) + 1);
 
             if (in_array($relative, $allowed, true)) {
                 continue;
@@ -41,7 +42,9 @@ class WithoutTenantUsageTest extends TestCase
         $violations = [];
 
         foreach ($files as $file) {
-            $relative = str_replace(base_path().'/', '', $file);
+            $relative = str_replace('\\', '/', $file);
+            $relative = substr($relative, strlen(str_replace('\\', '/', base_path())) + 1);
+
             $contents = file_get_contents($file);
 
             if (str_contains($contents, '->withoutTenant(')) {
@@ -61,7 +64,8 @@ class WithoutTenantUsageTest extends TestCase
         $violations = [];
 
         foreach ($files as $file) {
-            $relative = str_replace(base_path().'/', '', $file);
+            $relative = str_replace('\\', '/', $file);
+            $relative = substr($relative, strlen(str_replace('\\', '/', base_path())) + 1);
 
             if (in_array($relative, $allowed, true)) {
                 continue;

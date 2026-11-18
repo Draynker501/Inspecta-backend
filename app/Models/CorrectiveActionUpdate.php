@@ -10,6 +10,8 @@ class CorrectiveActionUpdate extends Model
 {
     use BelongsToOrganization;
 
+    public const UPDATED_AT = null;
+
     public $incrementing = false;
 
     protected $keyType = 'string';
