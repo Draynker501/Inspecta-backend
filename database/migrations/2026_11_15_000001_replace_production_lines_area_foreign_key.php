@@ -58,7 +58,7 @@ return new class extends Migration {
                 // Permitir identificadores entrecomillados o sin comillas en SQLite.
                 $pattern = $up
                     ? '/foreign\s+key\s*\(\s*"area_id"\s*\)\s+references\s+"?areas"?\s*\(\s*"id"\s*\)\s+on\s+delete\s+restrict\s+on\s+update\s+cascade/i'
-                    : '/constraint\s+"lines_area_org_fk"\s+foreign\s+key\s*\(\s*"area_id"\s*,\s*"organization_id"\s*\)\s+references\s+"?areas"?\s*\(\s*"id"\s*,\s*"organization_id"\s*\)\s+on\s+delete\s+restrict\s+on\s+update\s+restrict/i';
+                    : '/constraint\s+"prod_lines_area_org_fk"\s+foreign\s+key\s*\(\s*"area_id"\s*,\s*"organization_id"\s*\)\s+references\s+"?areas"?\s*\(\s*"id"\s*,\s*"organization_id"\s*\)\s+on\s+delete\s+restrict\s+on\s+update\s+restrict/i';
 
                 $sql = preg_replace($pattern, $new, $sql, 1, $replacements);
 
