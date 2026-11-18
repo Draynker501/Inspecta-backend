@@ -42,6 +42,6 @@ class MembershipSingleSourceTest extends TestCase
             }
         }
 
-        $this->assertSame([], $violations, 'Consultas inline de membresía activa fuera del punto central: ' . implode(', ', $violations));
+        $this->assertSame([], $violations, 'Consultas inline de membresía activa fuera del punto central: '.implode(', ', $violations));
     }
 }

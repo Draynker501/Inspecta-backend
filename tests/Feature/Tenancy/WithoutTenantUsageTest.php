@@ -32,7 +32,7 @@ class WithoutTenantUsageTest extends TestCase
             }
         }
 
-        $this->assertSame([], $violations, 'Uso no permitido de withoutTenant(): ' . implode(', ', $violations));
+        $this->assertSame([], $violations, 'Uso no permitido de withoutTenant(): '.implode(', ', $violations));
     }
 
     public function test_sin_withouttenant_en_controladores(): void
@@ -52,7 +52,7 @@ class WithoutTenantUsageTest extends TestCase
             }
         }
 
-        $this->assertSame([], $violations, 'withoutTenant() no está permitido en controladores: ' . implode(', ', $violations));
+        $this->assertSame([], $violations, 'withoutTenant() no está permitido en controladores: '.implode(', ', $violations));
     }
 
     public function test_sin_bypass_de_scope_en_app(): void
@@ -82,7 +82,7 @@ class WithoutTenantUsageTest extends TestCase
             }
         }
 
-        $this->assertSame([], $violations, 'Bypass de scope no permitido: ' . implode(', ', $violations));
+        $this->assertSame([], $violations, 'Bypass de scope no permitido: '.implode(', ', $violations));
     }
 
     /**
@@ -92,7 +92,7 @@ class WithoutTenantUsageTest extends TestCase
     {
         $path = base_path($directory);
 
-        if (!is_dir($path)) {
+        if (! is_dir($path)) {
             return [];
         }
 
