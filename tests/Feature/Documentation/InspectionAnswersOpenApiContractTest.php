@@ -7,7 +7,7 @@ use Tests\TestCase;
 
 class InspectionAnswersOpenApiContractTest extends TestCase
 {
-    public function test_las_cuatro_operaciones_estan_implementadas_y_el_resto_sigue_planeado(): void
+    public function test_las_cuatro_operaciones_y_la_revision_estan_implementadas(): void
     {
         $spec = Yaml::parseFile(base_path('openapi.yaml'));
 
@@ -23,7 +23,7 @@ class InspectionAnswersOpenApiContractTest extends TestCase
             $this->assertArrayNotHasKey('x-status', $spec['paths'][$path][$method], $path.' '.$method);
         }
 
-        $this->assertSame('planned', $spec['paths']['/inspections/{inspectionId}/status']['x-status']);
+        $this->assertSame('implemented', $spec['paths']['/inspections/{inspectionId}/status']['x-status']);
     }
 
     public function test_el_checklist_documenta_el_dto_historico_y_los_tipos_soportados(): void
