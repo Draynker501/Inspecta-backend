@@ -30,7 +30,7 @@ class InspectionController extends TenantController
     {
         Gate::authorize('create', Inspection::class);
         if (
-            !$request->isJson() || !is_object(json_decode($request->getContent()))
+            ! $request->isJson() || ! is_object(json_decode($request->getContent()))
             || array_diff(array_keys($request->all()), [
                 'checklist_version_id',
                 'plant_id',
@@ -47,11 +47,11 @@ class InspectionController extends TenantController
         $coordinate = static function (float $max): \Closure {
             return static function (string $attribute, mixed $value, \Closure $fail) use ($max): void {
                 if (
-                    (!is_int($value) && !is_float($value) && !is_string($value))
-                    || !is_numeric($value) || !is_finite((float) $value)
+                    (! is_int($value) && ! is_float($value) && ! is_string($value))
+                    || ! is_numeric($value) || ! is_finite((float) $value)
                     || abs((float) $value) > $max
                     || (float) $value !== round((float) $value, 7)
-                    || (is_string($value) && !preg_match('/^-?\d+(?:\.\d{1,7})?$/D', $value))
+                    || (is_string($value) && ! preg_match('/^-?\d+(?:\.\d{1,7})?$/D', $value))
                 ) {
                     $fail('La coordenada no es válida.');
                 }
@@ -73,7 +73,7 @@ class InspectionController extends TenantController
                     if (is_string($value) && strlen($value) > 65535) {
                         $fail('Las observaciones superan 65535 bytes.');
                     }
-                }
+                },
             ],
         ]);
         if (isset($data['latitude']) !== isset($data['longitude'])) {
@@ -110,8 +110,8 @@ class InspectionController extends TenantController
                 ->where('s.organization_id', $org)->where('q.organization_id', $org)
                 ->where('s.checklist_version_id', $version->id)->where('q.status', true)->exists();
             if (
-                !$checklist->status || $version->status !== 'published' || !$hasQuestion
-                || !$plant->status || !$area->status || ($line !== null && !$line->status)
+                ! $checklist->status || $version->status !== 'published' || ! $hasQuestion
+                || ! $plant->status || ! $area->status || ($line !== null && ! $line->status)
             ) {
                 throw ValidationException::withMessages(['resources' => 'Los recursos no están disponibles para una nueva inspección.']);
             }
@@ -165,7 +165,7 @@ class InspectionController extends TenantController
         $user = $request->user();
         $org = app(TenantContext::class)->requireId();
         $query = Inspection::query()->where('organization_id', $org);
-        if (!$user->hasPermission(Permission::InspectionsManage)) {
+        if (! $user->hasPermission(Permission::InspectionsManage)) {
             $query->where('user_id', $user->id);
         }
         $query->where(function ($query) use ($org, $user): void {
@@ -213,7 +213,7 @@ class InspectionController extends TenantController
         abort_unless($policy->answer($request->user(), $inspection), 403);
 
         $body = json_decode($request->getContent());
-        if ($request->query() !== [] || !$request->isJson() || !is_object($body) || get_object_vars($body) !== []) {
+        if ($request->query() !== [] || ! $request->isJson() || ! is_object($body) || get_object_vars($body) !== []) {
             throw ValidationException::withMessages(['fields' => 'La solicitud requiere un objeto JSON vacío y no admite parámetros de consulta.']);
         }
 
@@ -231,7 +231,7 @@ class InspectionController extends TenantController
         abort_unless($policy->review($request->user(), $inspection), 403);
 
         $body = json_decode($request->getContent());
-        if ($request->query() !== [] || !$request->isJson() || !is_object($body)) {
+        if ($request->query() !== [] || ! $request->isJson() || ! is_object($body)) {
             throw ValidationException::withMessages(['fields' => 'La solicitud requiere un objeto JSON y no admite parámetros de consulta.']);
         }
 
@@ -262,14 +262,14 @@ class InspectionController extends TenantController
         $canViewNorms = $request->user()->hasPermission(Permission::NormsView);
 
         $with = [
-            'checklist' => fn($query) => $query->where('organization_id', $organizationId),
-            'sections' => fn($query) => $query->where('organization_id', $organizationId)
+            'checklist' => fn ($query) => $query->where('organization_id', $organizationId),
+            'sections' => fn ($query) => $query->where('organization_id', $organizationId)
                 ->orderBy('display_order')->orderBy('id'),
-            'sections.questions' => fn($query) => $query->where('organization_id', $organizationId)
+            'sections.questions' => fn ($query) => $query->where('organization_id', $organizationId)
                 ->where('status', true)->orderBy('display_order')->orderBy('id'),
         ];
         if ($canViewNorms) {
-            $with['sections.questions.normRequirements'] = fn($query) => $query
+            $with['sections.questions.normRequirements'] = fn ($query) => $query
                 ->where('norm_requirements.organization_id', $organizationId)
                 ->where('question_norm_requirement.organization_id', $organizationId)
                 ->orderBy('norm_requirements.code')->orderBy('norm_requirements.id');
@@ -294,7 +294,7 @@ class InspectionController extends TenantController
                     'display_order' => $question->display_order,
                     'supported' => InspectionAnswerValidator::supports($question->answer_type),
                     'norm_requirements' => $canViewNorms
-                        ? $question->normRequirements->map(static fn($requirement) => [
+                        ? $question->normRequirements->map(static fn ($requirement) => [
                             'link_id' => $requirement->pivot->id,
                             'id' => $requirement->id,
                             'code' => $requirement->code,
@@ -328,7 +328,7 @@ class InspectionController extends TenantController
                     'published_at' => $version->published_at?->toISOString(),
                 ],
                 'sections' => $sections,
-            ]
+            ],
         ]);
     }
 
