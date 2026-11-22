@@ -29,20 +29,30 @@ class InspectionController extends TenantController
     public function store(Request $request): JsonResponse
     {
         Gate::authorize('create', Inspection::class);
-        if (! $request->isJson() || ! is_object(json_decode($request->getContent()))
+        if (
+            !$request->isJson() || !is_object(json_decode($request->getContent()))
             || array_diff(array_keys($request->all()), [
-                'checklist_version_id', 'plant_id', 'area_id', 'production_line_id',
-                'latitude', 'longitude', 'location_description', 'observations',
-            ]) !== []) {
+                'checklist_version_id',
+                'plant_id',
+                'area_id',
+                'production_line_id',
+                'latitude',
+                'longitude',
+                'location_description',
+                'observations',
+            ]) !== []
+        ) {
             throw ValidationException::withMessages(['fields' => 'La solicitud contiene campos no permitidos o no es un objeto JSON.']);
         }
         $coordinate = static function (float $max): \Closure {
             return static function (string $attribute, mixed $value, \Closure $fail) use ($max): void {
-                if ((! is_int($value) && ! is_float($value) && ! is_string($value))
-                    || ! is_numeric($value) || ! is_finite((float) $value)
+                if (
+                    (!is_int($value) && !is_float($value) && !is_string($value))
+                    || !is_numeric($value) || !is_finite((float) $value)
                     || abs((float) $value) > $max
                     || (float) $value !== round((float) $value, 7)
-                    || (is_string($value) && ! preg_match('/^-?\d+(?:\.\d{1,7})?$/D', $value))) {
+                    || (is_string($value) && !preg_match('/^-?\d+(?:\.\d{1,7})?$/D', $value))
+                ) {
                     $fail('La coordenada no es válida.');
                 }
             };
@@ -55,11 +65,16 @@ class InspectionController extends TenantController
             'latitude' => ['sometimes', 'nullable', $coordinate(90)],
             'longitude' => ['sometimes', 'nullable', $coordinate(180)],
             'location_description' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'observations' => ['sometimes', 'nullable', 'string', static function (string $attribute, mixed $value, \Closure $fail): void {
-                if (is_string($value) && strlen($value) > 65535) {
-                    $fail('Las observaciones superan 65535 bytes.');
+            'observations' => [
+                'sometimes',
+                'nullable',
+                'string',
+                static function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (is_string($value) && strlen($value) > 65535) {
+                        $fail('Las observaciones superan 65535 bytes.');
+                    }
                 }
-            }],
+            ],
         ]);
         if (isset($data['latitude']) !== isset($data['longitude'])) {
             throw ValidationException::withMessages(['coordinates' => 'Las coordenadas deben proporcionarse juntas.']);
@@ -94,21 +109,38 @@ class InspectionController extends TenantController
                 ->join('checklist_sections as s', 's.id', '=', 'q.checklist_section_id')
                 ->where('s.organization_id', $org)->where('q.organization_id', $org)
                 ->where('s.checklist_version_id', $version->id)->where('q.status', true)->exists();
-            if (! $checklist->status || $version->status !== 'published' || ! $hasQuestion
-                || ! $plant->status || ! $area->status || ($line !== null && ! $line->status)) {
+            if (
+                !$checklist->status || $version->status !== 'published' || !$hasQuestion
+                || !$plant->status || !$area->status || ($line !== null && !$line->status)
+            ) {
                 throw ValidationException::withMessages(['resources' => 'Los recursos no están disponibles para una nueva inspección.']);
             }
             $inspection = Inspection::create([
-                'id' => (string) Str::uuid7(), 'organization_id' => $org, 'user_id' => $user->id,
-                'supervisor_id' => null, 'checklist_version_id' => $version->id,
-                'plant_id' => $plant->id, 'area_id' => $area->id, 'production_line_id' => $line?->id,
-                'status' => 'draft', 'started_at' => now(), 'completed_at' => null,
-                'supervisor_confirmed_at' => null, 'rejected_at' => null, 'supervisor_observations' => null,
-                'latitude' => $data['latitude'] ?? null, 'longitude' => $data['longitude'] ?? null,
-                'location_description' => $data['location_description'] ?? null, 'observations' => $data['observations'] ?? null,
+                'id' => (string) Str::uuid7(),
+                'organization_id' => $org,
+                'user_id' => $user->id,
+                'supervisor_id' => null,
+                'checklist_version_id' => $version->id,
+                'plant_id' => $plant->id,
+                'area_id' => $area->id,
+                'production_line_id' => $line?->id,
+                'status' => 'draft',
+                'started_at' => now(),
+                'completed_at' => null,
+                'supervisor_confirmed_at' => null,
+                'rejected_at' => null,
+                'supervisor_observations' => null,
+                'latitude' => $data['latitude'] ?? null,
+                'longitude' => $data['longitude'] ?? null,
+                'location_description' => $data['location_description'] ?? null,
+                'observations' => $data['observations'] ?? null,
             ]);
             app(AuditLogger::class)->record('inspection.created', $inspection, [], $inspection->only([
-                'checklist_version_id', 'plant_id', 'area_id', 'production_line_id', 'status',
+                'checklist_version_id',
+                'plant_id',
+                'area_id',
+                'production_line_id',
+                'status',
             ]));
 
             return $inspection;
@@ -133,7 +165,7 @@ class InspectionController extends TenantController
         $user = $request->user();
         $org = app(TenantContext::class)->requireId();
         $query = Inspection::query()->where('organization_id', $org);
-        if (! $user->hasPermission(Permission::InspectionsManage)) {
+        if (!$user->hasPermission(Permission::InspectionsManage)) {
             $query->where('user_id', $user->id);
         }
         $query->where(function ($query) use ($org, $user): void {
@@ -154,8 +186,10 @@ class InspectionController extends TenantController
         return response()->json([
             'data' => array_map($this->dto(...), $page->items()),
             'meta' => [
-                'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(),
-                'per_page' => $page->perPage(), 'total' => $page->total(),
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
             ],
         ]);
     }
@@ -179,7 +213,7 @@ class InspectionController extends TenantController
         abort_unless($policy->answer($request->user(), $inspection), 403);
 
         $body = json_decode($request->getContent());
-        if ($request->query() !== [] || ! $request->isJson() || ! is_object($body) || get_object_vars($body) !== []) {
+        if ($request->query() !== [] || !$request->isJson() || !is_object($body) || get_object_vars($body) !== []) {
             throw ValidationException::withMessages(['fields' => 'La solicitud requiere un objeto JSON vacío y no admite parámetros de consulta.']);
         }
 
@@ -197,7 +231,7 @@ class InspectionController extends TenantController
         abort_unless($policy->review($request->user(), $inspection), 403);
 
         $body = json_decode($request->getContent());
-        if ($request->query() !== [] || ! $request->isJson() || ! is_object($body)) {
+        if ($request->query() !== [] || !$request->isJson() || !is_object($body)) {
             throw ValidationException::withMessages(['fields' => 'La solicitud requiere un objeto JSON y no admite parámetros de consulta.']);
         }
 
@@ -228,14 +262,14 @@ class InspectionController extends TenantController
         $canViewNorms = $request->user()->hasPermission(Permission::NormsView);
 
         $with = [
-            'checklist' => fn ($query) => $query->where('organization_id', $organizationId),
-            'sections' => fn ($query) => $query->where('organization_id', $organizationId)
+            'checklist' => fn($query) => $query->where('organization_id', $organizationId),
+            'sections' => fn($query) => $query->where('organization_id', $organizationId)
                 ->orderBy('display_order')->orderBy('id'),
-            'sections.questions' => fn ($query) => $query->where('organization_id', $organizationId)
+            'sections.questions' => fn($query) => $query->where('organization_id', $organizationId)
                 ->where('status', true)->orderBy('display_order')->orderBy('id'),
         ];
         if ($canViewNorms) {
-            $with['sections.questions.normRequirements'] = fn ($query) => $query
+            $with['sections.questions.normRequirements'] = fn($query) => $query
                 ->where('norm_requirements.organization_id', $organizationId)
                 ->where('question_norm_requirement.organization_id', $organizationId)
                 ->orderBy('norm_requirements.code')->orderBy('norm_requirements.id');
@@ -260,7 +294,7 @@ class InspectionController extends TenantController
                     'display_order' => $question->display_order,
                     'supported' => InspectionAnswerValidator::supports($question->answer_type),
                     'norm_requirements' => $canViewNorms
-                        ? $question->normRequirements->map(static fn ($requirement) => [
+                        ? $question->normRequirements->map(static fn($requirement) => [
                             'link_id' => $requirement->pivot->id,
                             'id' => $requirement->id,
                             'code' => $requirement->code,
@@ -279,30 +313,46 @@ class InspectionController extends TenantController
             ];
         })->values()->all();
 
-        return response()->json(['data' => [
-            'inspection_id' => $inspection->id,
-            'checklist' => [
-                'id' => $version->checklist_id,
-                'name' => $version->checklist?->name,
-                'status' => $version->checklist === null ? null : (bool) $version->checklist->status,
-            ],
-            'checklist_version' => [
-                'id' => $version->id,
-                'version' => $version->version,
-                'status' => $version->status,
-                'published_at' => $version->published_at?->toISOString(),
-            ],
-            'sections' => $sections,
-        ]]);
+        return response()->json([
+            'data' => [
+                'inspection_id' => $inspection->id,
+                'checklist' => [
+                    'id' => $version->checklist_id,
+                    'name' => $version->checklist?->name,
+                    'status' => $version->checklist === null ? null : (bool) $version->checklist->status,
+                ],
+                'checklist_version' => [
+                    'id' => $version->id,
+                    'version' => $version->version,
+                    'status' => $version->status,
+                    'published_at' => $version->published_at?->toISOString(),
+                ],
+                'sections' => $sections,
+            ]
+        ]);
     }
 
     private function dto(Inspection $inspection): array
     {
         $data = $inspection->only([
-            'id', 'organization_id', 'user_id', 'supervisor_id', 'checklist_version_id',
-            'plant_id', 'area_id', 'production_line_id', 'status', 'started_at',
-            'completed_at', 'supervisor_confirmed_at', 'rejected_at', 'supervisor_observations',
-            'location_description', 'observations', 'created_at', 'updated_at',
+            'id',
+            'organization_id',
+            'user_id',
+            'supervisor_id',
+            'checklist_version_id',
+            'plant_id',
+            'area_id',
+            'production_line_id',
+            'status',
+            'started_at',
+            'completed_at',
+            'supervisor_confirmed_at',
+            'rejected_at',
+            'supervisor_observations',
+            'location_description',
+            'observations',
+            'created_at',
+            'updated_at',
         ]);
         // El cast histórico decimal:10,7 no es válido en Eloquent: evitarlo sin
         // cambiar el modelo fuera del alcance de este corte HTTP.
@@ -310,6 +360,10 @@ class InspectionController extends TenantController
             $raw = $inspection->getRawOriginal($field);
             $data[$field] = $raw === null ? null : number_format((float) $raw, 7, '.', '');
         }
+
+        $data['inspector_name'] = DB::table('users')
+            ->where('id', $inspection->user_id)
+            ->value('name');
 
         return $data;
     }
