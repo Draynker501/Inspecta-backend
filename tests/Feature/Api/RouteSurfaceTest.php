@@ -149,6 +149,7 @@ class RouteSurfaceTest extends TestCase
             'POST api/auth/login',
             'POST api/auth/logout',
             'GET api/auth/me',
+            'GET api/auth/capabilities',
             'GET api/auth/organizations',
             'GET api/plants',
             'POST api/plants',
