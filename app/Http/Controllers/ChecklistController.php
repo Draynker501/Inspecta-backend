@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Authorization\Permission;
 use App\Models\Checklist;
 use App\Support\Audit\AuditLogger;
 use App\Support\Tenancy\TenantContext;
@@ -160,25 +161,37 @@ class ChecklistController extends TenantController
         $organizationId = app(TenantContext::class)->requireId();
         $checklist = Checklist::where('organization_id', $organizationId)->where('status', true)->findOrFail($checklistId);
         Gate::authorize('view', $checklist);
+
+        // Opción B (PWA-FUNC-01.3.1): la normativa embebida exige `norms.view`.
+        // Sin el permiso, `norm_requirements` se devuelve vacío y no se carga
+        // la relación para mantener el DTO estable y evitar consultas extra.
+        $canViewNorms = request()->user()->hasPermission(Permission::NormsView);
+
+        $with = [
+            'sections' => fn ($q) => $q->where('organization_id', $organizationId)->orderBy('display_order')->orderBy('id'),
+            'sections.questions' => fn ($q) => $q->where('organization_id', $organizationId)->where('status', true)->orderBy('display_order')->orderBy('id'),
+        ];
+        if ($canViewNorms) {
+            $with['sections.questions.normRequirements'] = fn ($q) => $q->where('norm_requirements.organization_id', $organizationId)
+                ->where('question_norm_requirement.organization_id', $organizationId)->orderBy('norm_requirements.code')->orderBy('norm_requirements.id');
+        }
+
         $version = $checklist->checklistVersions()->where('organization_id', $organizationId)
-            ->where('status', 'published')->with([
-                'sections' => fn ($q) => $q->where('organization_id', $organizationId)->orderBy('display_order')->orderBy('id'),
-                'sections.questions' => fn ($q) => $q->where('organization_id', $organizationId)->where('status', true)->orderBy('display_order')->orderBy('id'),
-                'sections.questions.normRequirements' => fn ($q) => $q->where('norm_requirements.organization_id', $organizationId)
-                    ->where('question_norm_requirement.organization_id', $organizationId)->orderBy('norm_requirements.code')->orderBy('norm_requirements.id'),
-            ])->orderBy('id')->firstOrFail();
-        $sections = $version->sections->map(function ($section) {
+            ->where('status', 'published')->with($with)->orderBy('id')->firstOrFail();
+        $sections = $version->sections->map(function ($section) use ($canViewNorms) {
             $data = $section->toArray();
-            $data['questions'] = $section->questions->map(function ($question) {
+            $data['questions'] = $section->questions->map(function ($question) use ($canViewNorms) {
                 $data = $question->toArray();
-                $data['norm_requirements'] = $question->normRequirements->map(function ($requirement) {
-                    return [
-                        'link_id' => $requirement->pivot->id,
-                        'id' => $requirement->id,
-                        'code' => $requirement->code,
-                        'description' => $requirement->description,
-                    ];
-                })->values()->all();
+                $data['norm_requirements'] = $canViewNorms
+                    ? $question->normRequirements->map(function ($requirement) {
+                        return [
+                            'link_id' => $requirement->pivot->id,
+                            'id' => $requirement->id,
+                            'code' => $requirement->code,
+                            'description' => $requirement->description,
+                        ];
+                    })->values()->all()
+                    : [];
 
                 return $data;
             })->values()->all();

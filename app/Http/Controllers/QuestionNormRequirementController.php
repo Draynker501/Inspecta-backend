@@ -24,6 +24,10 @@ class QuestionNormRequirementController extends TenantController
     public function index(Request $request, string $questionId): JsonResponse
     {
         Gate::authorize('viewAny', Checklist::class);
+        // Opción B (PWA-FUNC-01.3.1): este endpoint expone contenido normativo
+        // directo, por lo que exige `norms.view` de forma independiente al
+        // permiso operativo de checklist.
+        Gate::authorize('viewAny', Norm::class);
         $org = app(TenantContext::class)->requireId();
         [$question, $checklist] = $this->resolveQuestion($org, $questionId);
         Gate::authorize('view', $checklist);
