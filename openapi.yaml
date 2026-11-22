@@ -5280,6 +5280,8 @@ paths:
         Permite editar parcialmente descripción, prioridad, fecha límite,
         responsable o incidencia. Debe enviarse al menos un campo. No cambia
         `status` ni `completed_at`; los avances se registran en /updates.
+        Cambiar `assigned_to` cuando la acción está `completed` o `verified`
+        responde 422.
       tags:
         - Corrective Actions
       parameters:
@@ -5405,7 +5407,11 @@ paths:
         Registra un avance y un comentario. `user_id` se toma del autenticado.
         Solo se permite el siguiente estado de la secuencia
         pending→in_progress→completed→verified; no se acepta pending, saltos,
-        repetición ni retroceso.
+        repetición ni retroceso. La transición a `verified` exige
+        `corrective_actions.verify`, un rol activo con `system_key` admin o
+        supervisor, acceso a la ubicación y que el verificador sea distinto del
+        usuario del avance `completed` y de `assigned_to`. Sin avance
+        `completed` confiable se deniega (403).
       tags:
         - Corrective Actions
       parameters:
@@ -6993,6 +6999,7 @@ components:
             - create
             - update
             - record_update
+            - verify
           properties:
             view:
               type: boolean
@@ -7006,6 +7013,13 @@ components:
             record_update:
               type: boolean
               description: Puede registrar avances (autorización general).
+            verify:
+              type: boolean
+              description: |
+                Puede verificar acciones completadas. Requiere
+                `corrective_actions.verify` y un rol activo con
+                `system_key` admin o supervisor; la separación
+                ejecutor/responsable/verificador se comprueba por recurso.
 
     LogoutResponse:
       type: object
@@ -9509,6 +9523,8 @@ components:
           description: |
             Nuevo estado de la acción. Desde pending solo in_progress; desde
             in_progress solo completed; desde completed solo verified.
+            `verified` requiere `corrective_actions.verify` y separación entre
+            ejecutor/responsable y verificador.
           example: "completed"
         comment:
           type: string

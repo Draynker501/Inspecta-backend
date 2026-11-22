@@ -6,6 +6,7 @@ use App\Models\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use LogicException;
 
 class Role extends Model
 {
@@ -25,8 +26,20 @@ class Role extends Model
 
     protected $casts = [
         'status' => 'boolean',
+        'system_key' => 'string',
         'organization_id' => 'string',
     ];
+
+    protected static function booted(): void
+    {
+        static::updating(function (Role $role): void {
+            if ($role->isDirty('system_key')) {
+                throw new LogicException(
+                    'system_key no puede modificarse mediante operaciones ordinarias.'
+                );
+            }
+        });
+    }
 
     public function organization(): BelongsTo
     {

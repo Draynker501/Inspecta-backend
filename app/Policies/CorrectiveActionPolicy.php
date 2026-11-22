@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Authorization\Permission;
 use App\Models\CorrectiveAction;
+use App\Models\CorrectiveActionUpdate;
 use App\Models\Incident;
 use App\Models\Organization;
 use App\Models\User;
@@ -83,6 +84,54 @@ class CorrectiveActionPolicy extends TenantPolicy
                 $user,
                 Permission::CorrectiveActionsManage
             );
+    }
+
+    /**
+     * Capacidad general de verificación. No autoriza una acción concreta;
+     * verify() comprueba además organización, ubicación, estado y separación
+     * entre ejecutor/responsable y verificador.
+     */
+    public function verifyAny(User $user): bool
+    {
+        return $this->activeClient()
+            && $this->hasPermission(
+                $user,
+                Permission::CorrectiveActionsVerify
+            )
+            && $user->hasEligibleVerifierRole();
+    }
+
+    /**
+     * Verificación independiente de una acción completada.
+     *
+     * El ejecutor se toma del avance append-only con status=completed, nunca
+     * de assigned_to (que puede cambiar). Sin avance completed se deniega.
+     */
+    public function verify(User $user, Model $model): bool
+    {
+        if (! $model instanceof CorrectiveAction) {
+            return false;
+        }
+
+        if (
+            ! $this->verifyAny($user)
+            || ! $this->view($user, $model)
+            || $model->status !== 'completed'
+        ) {
+            return false;
+        }
+
+        $completion = CorrectiveActionUpdate::query()
+            ->where('organization_id', app(TenantContext::class)->id())
+            ->where('corrective_action_id', $model->id)
+            ->where('status', 'completed')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first();
+
+        return $completion !== null
+            && $completion->user_id !== $user->id
+            && $model->assigned_to !== $user->id;
     }
 
     private function activeClient(): bool

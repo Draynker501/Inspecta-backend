@@ -30,6 +30,7 @@ enum Permission: string
     case FindingsRegister = 'findings.register';
     case FindingsClose = 'findings.close';
     case CorrectiveActionsManage = 'corrective_actions.manage';
+    case CorrectiveActionsVerify = 'corrective_actions.verify';
     case ReportsView = 'reports.view';
     case ReportsViewOwn = 'reports.view_own';
 

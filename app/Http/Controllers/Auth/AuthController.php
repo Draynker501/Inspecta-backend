@@ -83,6 +83,7 @@ class AuthController extends Controller
                 'create' => $gate->allows('create', CorrectiveAction::class),
                 'update' => $gate->allows('updateAny', CorrectiveAction::class),
                 'record_update' => $gate->allows('recordUpdateAny', CorrectiveAction::class),
+                'verify' => $gate->allows('verifyAny', CorrectiveAction::class),
             ],
         ]);
     }

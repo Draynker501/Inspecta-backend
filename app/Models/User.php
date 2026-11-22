@@ -175,6 +175,29 @@ class User extends Authenticatable
     }
 
     /**
+     * Indica si el usuario tiene un rol base elegible para verificar
+     * acciones correctivas en la organización activa.
+     *
+     * system_key es un identificador técnico estable; nunca se infiere por
+     * el nombre visible del rol. Un rol personalizado (NULL) no es elegible.
+     */
+    public function hasEligibleVerifierRole(): bool
+    {
+        $organizationId = app(TenantContext::class)->id();
+
+        if ($organizationId === null) {
+            return false;
+        }
+
+        return $this->roles()
+            ->wherePivot('organization_id', $organizationId)
+            ->where('roles.organization_id', $organizationId)
+            ->where('roles.status', true)
+            ->whereIn('roles.system_key', ['admin', 'supervisor'])
+            ->exists();
+    }
+
+    /**
      * Indica si el usuario tiene el permiso indicado en la organización activa.
      *
      * Único punto de evaluación de permisos (D-20, D-40). Opera a nivel de
