@@ -29,6 +29,15 @@ class OpenApiContractTest extends TestCase
         $this->assertStringContainsString('/auth/organizations:', $this->spec());
     }
 
+    public function test_documenta_auth_capabilities_y_su_esquema(): void
+    {
+        $spec = $this->spec();
+
+        $this->assertStringContainsString('/auth/capabilities:', $spec);
+        $this->assertStringContainsString('CapabilitiesResponse:', $spec);
+        $this->assertStringContainsString('record_update:', $spec);
+    }
+
     public function test_el_schema_organization_incluye_type(): void
     {
         $spec = $this->spec();
