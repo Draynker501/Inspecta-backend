@@ -42,11 +42,11 @@ class EhsRoleProvisioningTest extends TestCase
         $supervisor = Role::where('organization_id', $second->id)->where('name', 'Supervisor')->firstOrFail();
 
         $this->assertEqualsCanonicalizing(
-            [Permission::ChecklistsView->value, Permission::ChecklistsManage->value, Permission::InspectionsExecute->value, Permission::InspectionsManage->value],
+            [Permission::ChecklistsView->value, Permission::ChecklistsManage->value, Permission::InspectionsExecute->value, Permission::InspectionsManage->value, Permission::PlantsView->value],
             $this->permissions($admin),
         );
-        $this->assertEqualsCanonicalizing([Permission::ChecklistsView->value, Permission::InspectionsExecute->value], $this->permissions($inspector));
-        $this->assertEqualsCanonicalizing([Permission::ChecklistsView->value, Permission::InspectionsManage->value], $this->permissions($supervisor));
+        $this->assertEqualsCanonicalizing([Permission::ChecklistsView->value, Permission::InspectionsExecute->value, Permission::PlantsView->value], $this->permissions($inspector));
+        $this->assertEqualsCanonicalizing([Permission::ChecklistsView->value, Permission::InspectionsManage->value, Permission::PlantsView->value], $this->permissions($supervisor));
         $this->assertSame([Permission::NormsManage->value], $this->permissions($existing));
         $this->assertSame([], $this->permissions($custom));
         $this->assertSame([], $this->permissions($platform));
@@ -57,8 +57,8 @@ class EhsRoleProvisioningTest extends TestCase
             ->where('permission', Permission::ChecklistsManage->value)->delete();
         $this->seed(RoleSeeder::class);
 
-        $this->assertEqualsCanonicalizing([Permission::ChecklistsView->value, Permission::InspectionsExecute->value, Permission::InspectionsManage->value], $this->permissions($admin));
-        $this->assertEqualsCanonicalizing([Permission::ChecklistsView->value, Permission::InspectionsExecute->value], $this->permissions($inspector));
+        $this->assertEqualsCanonicalizing([Permission::ChecklistsView->value, Permission::InspectionsExecute->value, Permission::InspectionsManage->value, Permission::PlantsView->value], $this->permissions($admin));
+        $this->assertEqualsCanonicalizing([Permission::ChecklistsView->value, Permission::InspectionsExecute->value, Permission::PlantsView->value], $this->permissions($inspector));
         $this->assertSame([Permission::NormsManage->value], $this->permissions($existing));
         $this->assertSame('personalizado', $existing->fresh()->description);
         $this->assertFalse($existing->fresh()->status);

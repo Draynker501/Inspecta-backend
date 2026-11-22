@@ -66,9 +66,9 @@ class RoleSeeder extends Seeder
                 // una plantilla inicial; jamás rellenar permisos de roles existentes.
                 if ($createdRole->wasRecentlyCreated) {
                     $permissions = match ($role['name']) {
-                        'Administrador' => [Permission::ChecklistsView, Permission::ChecklistsManage, Permission::InspectionsExecute, Permission::InspectionsManage],
-                        'Supervisor' => [Permission::ChecklistsView, Permission::InspectionsManage],
-                        'Inspector' => [Permission::ChecklistsView, Permission::InspectionsExecute],
+                        'Administrador' => [Permission::ChecklistsView, Permission::ChecklistsManage, Permission::InspectionsExecute, Permission::InspectionsManage, Permission::PlantsView],
+                        'Supervisor' => [Permission::ChecklistsView, Permission::InspectionsManage, Permission::PlantsView],
+                        'Inspector' => [Permission::ChecklistsView, Permission::InspectionsExecute, Permission::PlantsView],
                         default => [],
                     };
 
