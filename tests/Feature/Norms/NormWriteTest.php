@@ -90,7 +90,7 @@ class NormWriteTest extends TestCase
         $id = $this->postJson($url, ['norm_requirement_id' => $requirement->id])->assertCreated()->json('data.link_id');
         RolePermission::where('organization_id', $org->id)->where('permission', Permission::NormsView->value)->delete();
         $this->postJson($url, ['norm_requirement_id' => $requirement->id])->assertForbidden();
-        $this->getJson($url)->assertOk();
+        $this->getJson($url)->assertForbidden();
         $this->deleteJson("$url/$id")->assertNoContent();
         RolePermission::where('organization_id', $org->id)->where('permission', Permission::ChecklistsView->value)->delete();
         $this->getJson($url)->assertForbidden();

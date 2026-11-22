@@ -198,6 +198,18 @@ class InspectionAnswerHttpTest extends TestCase
     {
         $f = $this->fixture();
 
+        // El inspector requiere `norms.view` para ver el fundamento normativo
+        // histórico (opción B). El resto del checklist no depende de permisos
+        // de catálogo.
+        $normRole = $this->role($f['org'], 'r-'.Str::uuid7());
+        app(TenantContext::class)->runAs($f['org']->id, fn () => $f['owner']->assignRole($normRole));
+        RolePermission::create([
+            'id' => (string) Str::uuid7(),
+            'organization_id' => $f['org']->id,
+            'role_id' => $normRole->id,
+            'permission' => Permission::NormsView->value,
+        ]);
+
         // La versión se archiva, el checklist se desactiva y la normativa se
         // desactiva después de crear la inspección. Además se publica otra
         // versión y se desactiva una pregunta.
@@ -231,7 +243,7 @@ class InspectionAnswerHttpTest extends TestCase
         ]);
 
         $this->assertSame([], DB::table('role_permissions')
-            ->whereIn('permission', [Permission::ChecklistsView->value, Permission::NormsView->value])
+            ->where('permission', Permission::ChecklistsView->value)
             ->pluck('permission')->all());
 
         $response = $this->actingAsApiInOrganization($f['owner'], $f['org'])
@@ -689,6 +701,12 @@ class InspectionAnswerHttpTest extends TestCase
             'organization_id' => $f['org']->id,
             'role_id' => $role->id,
             'permission' => Permission::NormsManage->value,
+        ]);
+        RolePermission::create([
+            'id' => (string) Str::uuid7(),
+            'organization_id' => $f['org']->id,
+            'role_id' => $role->id,
+            'permission' => Permission::NormsView->value,
         ]);
 
         $this->actingAsApiInOrganization($f['owner'], $f['org']);

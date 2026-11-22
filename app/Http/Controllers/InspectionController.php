@@ -221,24 +221,34 @@ class InspectionController extends TenantController
             ->findOrFail($inspectionId);
         abort_unless(app(InspectionPolicy::class)->view($request->user(), $inspection), 404);
 
+        // Opción B (PWA-FUNC-01.3.1): toda información normativa, incluso la
+        // embebida en el checklist, exige `norms.view`. Sin el permiso el DTO
+        // se mantiene estable con `norm_requirements: []` y no se carga la
+        // relación para evitar consultas innecesarias.
+        $canViewNorms = $request->user()->hasPermission(Permission::NormsView);
+
+        $with = [
+            'checklist' => fn ($query) => $query->where('organization_id', $organizationId),
+            'sections' => fn ($query) => $query->where('organization_id', $organizationId)
+                ->orderBy('display_order')->orderBy('id'),
+            'sections.questions' => fn ($query) => $query->where('organization_id', $organizationId)
+                ->where('status', true)->orderBy('display_order')->orderBy('id'),
+        ];
+        if ($canViewNorms) {
+            $with['sections.questions.normRequirements'] = fn ($query) => $query
+                ->where('norm_requirements.organization_id', $organizationId)
+                ->where('question_norm_requirement.organization_id', $organizationId)
+                ->orderBy('norm_requirements.code')->orderBy('norm_requirements.id');
+        }
+
         $version = ChecklistVersion::query()
             ->where('organization_id', $organizationId)
             ->whereKey($inspection->checklist_version_id)
-            ->with([
-                'checklist' => fn ($query) => $query->where('organization_id', $organizationId),
-                'sections' => fn ($query) => $query->where('organization_id', $organizationId)
-                    ->orderBy('display_order')->orderBy('id'),
-                'sections.questions' => fn ($query) => $query->where('organization_id', $organizationId)
-                    ->where('status', true)->orderBy('display_order')->orderBy('id'),
-                'sections.questions.normRequirements' => fn ($query) => $query
-                    ->where('norm_requirements.organization_id', $organizationId)
-                    ->where('question_norm_requirement.organization_id', $organizationId)
-                    ->orderBy('norm_requirements.code')->orderBy('norm_requirements.id'),
-            ])
+            ->with($with)
             ->firstOrFail();
 
-        $sections = $version->sections->map(function ($section) {
-            $questions = $section->questions->map(function ($question) {
+        $sections = $version->sections->map(function ($section) use ($canViewNorms) {
+            $questions = $section->questions->map(function ($question) use ($canViewNorms) {
                 return [
                     'id' => $question->id,
                     'question_text' => $question->question_text,
@@ -249,12 +259,14 @@ class InspectionController extends TenantController
                     'allows_evidence' => $question->allows_evidence,
                     'display_order' => $question->display_order,
                     'supported' => InspectionAnswerValidator::supports($question->answer_type),
-                    'norm_requirements' => $question->normRequirements->map(static fn ($requirement) => [
-                        'link_id' => $requirement->pivot->id,
-                        'id' => $requirement->id,
-                        'code' => $requirement->code,
-                        'description' => $requirement->description,
-                    ])->values()->all(),
+                    'norm_requirements' => $canViewNorms
+                        ? $question->normRequirements->map(static fn ($requirement) => [
+                            'link_id' => $requirement->pivot->id,
+                            'id' => $requirement->id,
+                            'code' => $requirement->code,
+                            'description' => $requirement->description,
+                        ])->values()->all()
+                        : [],
                 ];
             })->values()->all();
 

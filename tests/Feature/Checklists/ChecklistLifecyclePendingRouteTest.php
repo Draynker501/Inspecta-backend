@@ -141,10 +141,14 @@ class ChecklistLifecyclePendingRouteTest extends TestCase
             $this->getJson($url)->assertForbidden();
             RolePermission::create(['id' => (string) Str::uuid7(), 'role_id' => $role->id, 'organization_id' => $org->id, 'permission' => Permission::ChecklistsView->value]);
             $response = $this->getJson($url)->assertOk()->assertJsonPath('data.active_version.sections.0.questions.0.question_text', 'Q');
+            // Opción B: sin `norms.view` la normativa embebida no se expone.
+            $this->assertSame([], $response->json('data.active_version.sections.0.questions.0.norm_requirements'));
+            $this->getJson('/api/norms')->assertForbidden();
+            // Con `norms.view` solo se exponen los vínculos de la organización.
+            RolePermission::create(['id' => (string) Str::uuid7(), 'role_id' => $role->id, 'organization_id' => $org->id, 'permission' => Permission::NormsView->value]);
             $this->assertSame([[
                 'link_id' => $link, 'id' => $requirement, 'code' => 'R', 'description' => 'Requisito',
-            ]], $response->json('data.active_version.sections.0.questions.0.norm_requirements'));
-            $this->getJson('/api/norms')->assertForbidden();
+            ]], $this->getJson($url)->assertOk()->json('data.active_version.sections.0.questions.0.norm_requirements'));
             $foreignChecklist = Checklist::create(['id' => (string) Str::uuid7(), 'organization_id' => $other->id, 'name' => 'Ajeno', 'status' => true]);
             $this->getJson("/api/checklists/{$foreignChecklist->id}/active-version")->assertNotFound();
         } finally {
