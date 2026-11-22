@@ -158,6 +158,48 @@ paths:
         '403':
           $ref: '#/components/responses/InactiveUserError'
 
+  /auth/capabilities:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    get:
+      summary: Obtener capacidades generales de la organización activa
+      description: |
+        Devuelve capacidades generales de la sección de acciones correctivas
+        para el usuario autenticado en la organización indicada por
+        X-Organization-Id. No sustituye la autorización por recurso: las
+        policies siguen decidiendo sobre cada acción concreta y su ubicación.
+        No se infieren capacidades por el nombre del rol. `verify` no se
+        incluye en esta versión.
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Capacidades de la organización activa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilitiesResponse'
+        '400':
+          description: |
+            Falta la cabecera X-Organization-Id o no es un UUID válido
+            (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: membresía revocada, organización ajena/inactiva u
+            organización operadora (organization_not_tenant).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /auth/organizations:
     get:
       summary: Listar organizaciones del usuario autenticado
@@ -5168,8 +5210,10 @@ paths:
                   $ref: '#/components/examples/OrganizationNotTenant'
                 forbiddenPolicy:
                   $ref: '#/components/examples/ForbiddenPolicy'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
         '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
+          description: Datos inválidos.
           content:
             application/json:
               schema:
@@ -5177,8 +5221,6 @@ paths:
               examples:
                 validationFailed:
                   $ref: '#/components/examples/ValidationFailed'
-                crossTenantOperation:
-                  $ref: '#/components/examples/CrossTenantRelation'
 
   /corrective-actions/{actionId}:
     parameters:
@@ -5234,7 +5276,10 @@ paths:
           $ref: '#/components/responses/NotFoundError'
     patch:
       summary: Actualizar Acción Correctiva
-      description: Permite editar la descripción, prioridad, fecha límite o reasignar la tarea.
+      description: |
+        Permite editar parcialmente descripción, prioridad, fecha límite,
+        responsable o incidencia. Debe enviarse al menos un campo. No cambia
+        `status` ni `completed_at`; los avances se registran en /updates.
       tags:
         - Corrective Actions
       parameters:
@@ -5244,7 +5289,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CorrectiveActionInput'
+              $ref: '#/components/schemas/CorrectiveActionPatchInput'
       responses:
         '200':
           description: Acción actualizada.
@@ -5288,7 +5333,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
+          description: Datos inválidos.
           content:
             application/json:
               schema:
@@ -5296,8 +5341,6 @@ paths:
               examples:
                 validationFailed:
                   $ref: '#/components/examples/ValidationFailed'
-                crossTenantOperation:
-                  $ref: '#/components/examples/CrossTenantRelation'
 
   /corrective-actions/{actionId}/updates:
     parameters:
@@ -5358,7 +5401,11 @@ paths:
           $ref: '#/components/responses/NotFoundError'
     post:
       summary: Registrar Actualización / Avance
-      description: Permite al responsable agregar un comentario sobre la tarea y avanzar su estado (ej. de pendiente a completada). El `user_id` se toma del usuario autenticado.
+      description: |
+        Registra un avance y un comentario. `user_id` se toma del autenticado.
+        Solo se permite el siguiente estado de la secuencia
+        pending→in_progress→completed→verified; no se acepta pending, saltos,
+        repetición ni retroceso.
       tags:
         - Corrective Actions
       parameters:
@@ -5412,7 +5459,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
+          description: Datos inválidos.
           content:
             application/json:
               schema:
@@ -5420,8 +5467,6 @@ paths:
               examples:
                 validationFailed:
                   $ref: '#/components/examples/ValidationFailed'
-                crossTenantOperation:
-                  $ref: '#/components/examples/CrossTenantRelation'
 
   # ===================================================================
   # AUDIT LOGS
@@ -6925,6 +6970,42 @@ components:
           example: "Usuario autenticado."
         data:
           $ref: '#/components/schemas/AuthUser'
+
+    CapabilitiesResponse:
+      type: object
+      description: |
+        Capacidades generales de la sección de acciones correctivas en la
+        organización activa. No son autorizaciones sobre un recurso concreto:
+        cada acción y su historial se siguen autorizando con las policies.
+      required:
+        - organization_id
+        - corrective_actions
+      properties:
+        organization_id:
+          type: string
+          format: uuid
+          description: Organización activa seleccionada mediante X-Organization-Id.
+          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        corrective_actions:
+          type: object
+          required:
+            - view
+            - create
+            - update
+            - record_update
+          properties:
+            view:
+              type: boolean
+              description: Puede acceder al listado y detalle según las policies por recurso.
+            create:
+              type: boolean
+              description: Puede crear acciones correctivas (autorización general).
+            update:
+              type: boolean
+              description: Puede editar acciones correctivas (autorización general).
+            record_update:
+              type: boolean
+              description: Puede registrar avances (autorización general).
 
     LogoutResponse:
       type: object
@@ -9309,17 +9390,15 @@ components:
 
     CorrectiveActionInput:
       type: object
+      description: |
+        Creación de una acción correctiva. La organización activa se toma de
+        X-Organization-Id y de una membresía activa; no se envía en el cuerpo.
+        El estado inicial siempre es `pending`.
       required:
         - incident_id
         - assigned_to
         - description
       properties:
-        organization_id:
-          type: string
-          format: uuid
-          nullable: true
-          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
-          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
         incident_id:
           type: string
           format: uuid
@@ -9348,6 +9427,35 @@ components:
           nullable: true
           description: "Instrucciones adicionales opcionales."
           example: "Asegurarse de usar mascarilla contra vapores."
+
+    CorrectiveActionPatchInput:
+      type: object
+      description: |
+        Actualización parcial de una acción correctiva. Debe enviarse al menos
+        un campo. No modifica el estado ni completed_at; para avances use el
+        endpoint /updates. La organización no se envía en el cuerpo.
+      minProperties: 1
+      properties:
+        incident_id:
+          type: string
+          format: uuid
+        assigned_to:
+          type: string
+          format: uuid
+        description:
+          type: string
+          maxLength: 65535
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+        due_date:
+          type: string
+          format: date
+          nullable: true
+        observations:
+          type: string
+          maxLength: 65535
+          nullable: true
 
     CorrectiveActionUpdate:
       type: object
@@ -9387,25 +9495,58 @@ components:
 
     CorrectiveActionUpdateInput:
       type: object
+      description: |
+        Registro de avance. Solo se permite el siguiente estado de la secuencia
+        pending→in_progress→completed→verified; no se acepta pending, saltos,
+        repetición ni retroceso. La organización y el usuario se toman de la
+        sesión activa; no se envían en el cuerpo.
       required:
         - status
       properties:
-        organization_id:
-          type: string
-          format: uuid
-          nullable: true
-          description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
-          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
         status:
           type: string
           enum: [in_progress, completed, verified]
-          description: Nuevo estado de la acción. No puede retroceder a `pending`.
+          description: |
+            Nuevo estado de la acción. Desde pending solo in_progress; desde
+            in_progress solo completed; desde completed solo verified.
           example: "completed"
         comment:
           type: string
           maxLength: 65535
           nullable: true
           example: "Se limpió el área y se confinó el material absorbente en los contenedores rojos."
+
+    CorrectiveActionEmbeddedUpdate:
+      type: object
+      description: |
+        Avance embebido en el detalle de una acción. Este DTO no incluye
+        organization_id; la autorización de la acción principal ya fue
+        verificada y el historial paginado usa CorrectiveActionUpdate.
+      properties:
+        id:
+          type: string
+          format: uuid
+        corrective_action_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [in_progress, completed, verified]
+        comment:
+          type: string
+          maxLength: 65535
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
 
     CorrectiveActionDetail:
       allOf:
@@ -9414,9 +9555,12 @@ components:
           properties:
             updates:
               type: array
-              description: "Historial cronológico de la tarea."
+              description: |
+                Historial cronológico embebido. Sus elementos no incluyen
+                organization_id; para el historial paginado autorizado use
+                /corrective-actions/{id}/updates.
               items:
-                $ref: '#/components/schemas/CorrectiveActionUpdate'
+                $ref: '#/components/schemas/CorrectiveActionEmbeddedUpdate'
 
     # -------------------------------------------------------------------
     # Audit Logs

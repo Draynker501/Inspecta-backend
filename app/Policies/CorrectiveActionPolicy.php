@@ -32,6 +32,24 @@ class CorrectiveActionPolicy extends TenantPolicy
             );
     }
 
+    /**
+     * Capacidad general de edición. La autorización efectiva sobre una
+     * acción concreta la sigue resolviendo update() con su recurso.
+     */
+    public function updateAny(User $user): bool
+    {
+        return $this->create($user);
+    }
+
+    /**
+     * Capacidad general de registrar avances. La autorización efectiva
+     * sobre una acción concreta la sigue resolviendo recordUpdate().
+     */
+    public function recordUpdateAny(User $user): bool
+    {
+        return $this->create($user);
+    }
+
     public function view(User $user, Model $model): bool
     {
         if (! $model instanceof CorrectiveAction) {

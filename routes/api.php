@@ -40,6 +40,9 @@ Route::prefix('auth')->group(function () {
     Route::post('logout', [AuthController::class, 'logout'])->middleware('api.auth');
     // Identidad global: no requiere contexto organizacional.
     Route::get('me', [AuthController::class, 'me'])->middleware('api.auth');
+    // Capacidades generales de la organización activa; exige membresía activa.
+    Route::get('capabilities', [AuthController::class, 'capabilities'])
+        ->middleware(['api.tenant', 'tenant.require']);
     // Listado de organizaciones del usuario autenticado: no requiere tenant.
     Route::get('organizations', [OrganizationController::class, 'index'])->middleware('api.auth');
 });

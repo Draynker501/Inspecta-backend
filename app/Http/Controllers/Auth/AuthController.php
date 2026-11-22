@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\CorrectiveAction;
 use App\Support\Api\ApiErrorCode;
 use App\Support\Api\ApiErrorResponse;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
@@ -57,6 +60,30 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Usuario autenticado.',
             'data' => $user->only(['id', 'name', 'email', 'organization_id']),
+        ]);
+    }
+
+    /**
+     * Capacidades generales del usuario en la organización activa.
+     *
+     * Son capacidades de sección/operación, no autorizaciones sobre un
+     * recurso concreto: viewAny/create/updateAny/recordUpdateAny siguen
+     * delegando en CorrectiveActionPolicy y cada recurso se autoriza después
+     * con sus propias comprobaciones de organización y ubicación.
+     */
+    public function capabilities(Request $request)
+    {
+        $organizationId = app(TenantContext::class)->requireId();
+        $gate = Gate::forUser($request->user());
+
+        return response()->json([
+            'organization_id' => $organizationId,
+            'corrective_actions' => [
+                'view' => $gate->allows('viewAny', CorrectiveAction::class),
+                'create' => $gate->allows('create', CorrectiveAction::class),
+                'update' => $gate->allows('updateAny', CorrectiveAction::class),
+                'record_update' => $gate->allows('recordUpdateAny', CorrectiveAction::class),
+            ],
         ]);
     }
 
