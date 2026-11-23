@@ -51,20 +51,58 @@ class RoleSeeder extends Seeder
 
         foreach ($clients as $organization) {
             foreach ($clientRoles as $role) {
-                $createdRole = Role::firstOrCreate(
-                    ['organization_id' => $organization->id, 'name' => $role['name']],
-                    [
-                        'id' => $this->deterministicId($organization->id, $role['name']),
+                $systemKey = match ($role['name']) {
+                    'Administrador' => 'admin',
+                    'Supervisor' => 'supervisor',
+                    'Inspector' => 'inspector',
+                    default => null,
+                };
+                $deterministicId = $this->deterministicId(
+                    $organization->id,
+                    $role['name']
+                );
+
+                // Identificar la plantilla por su ID técnico original. Solo si
+                // no existe se acepta el nombre como compatibilidad histórica,
+                // sin apropiarse de un rol personalizado con ese nombre.
+                $createdRole = Role::query()
+                    ->where('organization_id', $organization->id)
+                    ->where('id', $deterministicId)
+                    ->first();
+
+                if (! $createdRole) {
+                    $createdRole = Role::query()
+                        ->where('organization_id', $organization->id)
+                        ->where('name', $role['name'])
+                        ->first();
+                }
+
+                $wasCreated = false;
+                if (! $createdRole) {
+                    $createdRole = Role::create([
+                        'id' => $deterministicId,
                         'organization_id' => $organization->id,
                         'name' => $role['name'],
                         'description' => $role['description'],
                         'status' => true,
-                    ]
-                );
+                    ]);
+                    $wasCreated = true;
+                }
+
+                // Solo la plantilla con ID determinista recibe system_key.
+                // Un rol personalizado que reutilice el nombre no se toca.
+                if ($systemKey !== null
+                    && $createdRole->system_key === null
+                    && $createdRole->id === $deterministicId) {
+                    DB::table('roles')
+                        ->where('id', $createdRole->id)
+                        ->whereNull('system_key')
+                        ->update(['system_key' => $systemKey]);
+                }
 
                 // Solo una creación en esta transacción identifica sin ambigüedad
                 // una plantilla inicial; jamás rellenar permisos de roles existentes.
-                if ($createdRole->wasRecentlyCreated) {
+                if ($wasCreated) {
                     $permissions = match ($role['name']) {
                         'Administrador' => [Permission::ChecklistsView, Permission::ChecklistsManage, Permission::InspectionsExecute, Permission::InspectionsManage, Permission::PlantsView],
                         'Supervisor' => [Permission::ChecklistsView, Permission::InspectionsManage, Permission::PlantsView],

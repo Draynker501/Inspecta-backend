@@ -50,6 +50,12 @@ class EhsRoleProvisioningTest extends TestCase
         $this->assertSame([Permission::NormsManage->value], $this->permissions($existing));
         $this->assertSame([], $this->permissions($custom));
         $this->assertSame([], $this->permissions($platform));
+        $this->assertSame('admin', $admin->system_key);
+        $this->assertSame('inspector', $inspector->system_key);
+        $this->assertSame('supervisor', $supervisor->system_key);
+        $this->assertNull($existing->fresh()->system_key);
+        $this->assertNull($custom->fresh()->system_key);
+        $this->assertNull($platform->system_key);
         $this->assertSame('personalizado', $existing->fresh()->description);
         $this->assertFalse($existing->fresh()->status);
 
@@ -62,6 +68,9 @@ class EhsRoleProvisioningTest extends TestCase
         $this->assertSame([Permission::NormsManage->value], $this->permissions($existing));
         $this->assertSame('personalizado', $existing->fresh()->description);
         $this->assertFalse($existing->fresh()->status);
+        $this->assertSame('admin', $admin->fresh()->system_key);
+        $this->assertSame('inspector', $inspector->fresh()->system_key);
+        $this->assertNull($existing->fresh()->system_key);
         $this->assertNull(app(TenantContext::class)->id());
     }
 

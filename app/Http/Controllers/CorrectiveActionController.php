@@ -268,6 +268,14 @@ class CorrectiveActionController extends TenantController
             abort_unless($policy->view($user, $action), 404);
             Gate::authorize('update', $action);
 
+            if (isset($data['assigned_to'])
+                && $data['assigned_to'] !== $action->assigned_to
+                && in_array($action->status, ['completed', 'verified'], true)) {
+                throw ValidationException::withMessages([
+                    'assigned_to' => 'No se puede reasignar una acción completada o verificada.',
+                ]);
+            }
+
             $incidentId = $data['incident_id'] ?? $action->incident_id;
 
             $incident = Incident::query()

@@ -106,8 +106,6 @@ class CorrectiveActionUpdateController extends TenantController
             404
         );
 
-        Gate::authorize('recordUpdate', $candidate);
-
         $this->requireJsonObject(
             $request,
             ['status', 'comment']
@@ -127,12 +125,19 @@ class CorrectiveActionUpdateController extends TenantController
             ],
         ]);
 
+        $isVerification = $data['status'] === 'verified';
+
+        if (! $isVerification) {
+            Gate::authorize('recordUpdate', $candidate);
+        }
+
         $update = DB::transaction(function () use (
             $org,
             $user,
             $policy,
             $actionId,
-            $data
+            $data,
+            $isVerification
         ): CorrectiveActionUpdate {
             Organization::query()
                 ->whereKey($org)
@@ -152,15 +157,26 @@ class CorrectiveActionUpdateController extends TenantController
                 404
             );
 
-            Gate::authorize('recordUpdate', $action);
-
             $before = $action->status;
             $after = $data['status'];
 
-            $this->validateStatusTransition(
-                $before,
-                $after
-            );
+            if ($isVerification) {
+                // Una transición inválida o repetida se informa como 422;
+                // después se exige la autorización independiente de verificación.
+                $this->validateStatusTransition(
+                    $before,
+                    $after
+                );
+
+                Gate::authorize('verify', $action);
+            } else {
+                Gate::authorize('recordUpdate', $action);
+
+                $this->validateStatusTransition(
+                    $before,
+                    $after
+                );
+            }
 
             $changes = ['status' => $after];
 
@@ -184,15 +200,30 @@ class CorrectiveActionUpdateController extends TenantController
                 'comment' => $data['comment'] ?? null,
             ]);
 
+            $auditValues = [
+                'status' => $after,
+                'completed_at' => $action->completed_at?->toISOString(),
+                'update_id' => $update->id,
+            ];
+
+            if ($isVerification) {
+                $completion = CorrectiveActionUpdate::query()
+                    ->where('organization_id', $org)
+                    ->where('corrective_action_id', $action->id)
+                    ->where('status', 'completed')
+                    ->orderByDesc('created_at')
+                    ->orderByDesc('id')
+                    ->first();
+
+                $auditValues['completed_by'] = $completion?->user_id;
+                $auditValues['verified_by'] = $user->id;
+            }
+
             app(AuditLogger::class)->record(
                 'corrective_action.status_changed',
                 $action,
                 $oldValues,
-                [
-                    'status' => $after,
-                    'completed_at' => $action->completed_at?->toISOString(),
-                    'update_id' => $update->id,
-                ]
+                $auditValues
             );
 
             return $update;

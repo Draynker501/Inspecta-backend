@@ -49,6 +49,36 @@ class CorrectiveActionUpdateIntegrationTest extends TestCase
             }
         );
 
+        $verifier = $this->user($organization);
+
+        app(TenantContext::class)->runAs(
+            $organization->id,
+            function () use ($organization, $verifier): void {
+                $role = $this->role(
+                    $organization,
+                    'cau-verify-'.Str::random(12)
+                );
+
+                $verifier->assignRole($role);
+
+                foreach ([
+                    Permission::FindingsRegister,
+                    Permission::CorrectiveActionsVerify,
+                ] as $permission) {
+                    RolePermission::create([
+                        'id' => (string) Str::uuid7(),
+                        'role_id' => $role->id,
+                        'organization_id' => $organization->id,
+                        'permission' => $permission->value,
+                    ]);
+                }
+
+                DB::table('roles')
+                    ->where('id', $role->id)
+                    ->update(['system_key' => 'supervisor']);
+            }
+        );
+
         $plant = $this->plant(
             $organization,
             $code.'-P'
@@ -59,14 +89,16 @@ class CorrectiveActionUpdateIntegrationTest extends TestCase
             $code.'-A'
         );
 
-        DB::table('user_areas')->insert([
-            'id' => (string) Str::uuid7(),
-            'organization_id' => $organization->id,
-            'user_id' => $user->id,
-            'area_id' => $area->id,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        foreach ([$user, $verifier] as $member) {
+            DB::table('user_areas')->insert([
+                'id' => (string) Str::uuid7(),
+                'organization_id' => $organization->id,
+                'user_id' => $member->id,
+                'area_id' => $area->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
 
         $this->actingAsApiInOrganization(
             $user,
@@ -76,6 +108,7 @@ class CorrectiveActionUpdateIntegrationTest extends TestCase
         return compact(
             'organization',
             'user',
+            'verifier',
             'plant',
             'area'
         );
@@ -168,6 +201,11 @@ class CorrectiveActionUpdateIntegrationTest extends TestCase
 
         $completedAt = $action->completed_at->toISOString();
 
+        $this->actingAsApiInOrganization(
+            $env['verifier'],
+            $env['organization']
+        );
+
         $this->advance($id, 'verified');
 
         $action->refresh();
@@ -246,13 +284,19 @@ class CorrectiveActionUpdateIntegrationTest extends TestCase
         $env = $this->environment();
         $id = $this->createAction($env);
 
-        foreach ([
-            'in_progress',
-            'completed',
-            'verified',
-        ] as $status) {
-            $this->advance($id, $status);
-        }
+        $this->advance($id, 'in_progress');
+        $this->advance($id, 'completed');
+
+        $this->actingAsApiInOrganization(
+            $env['verifier'],
+            $env['organization']
+        );
+        $this->advance($id, 'verified');
+
+        $this->actingAsApiInOrganization(
+            $env['user'],
+            $env['organization']
+        );
 
         $this->postJson(
             "/api/corrective-actions/{$id}/updates",

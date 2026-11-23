@@ -9,6 +9,7 @@ use App\Models\RolePermission;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Support\TenantFixtures;
 use Tests\TestCase;
@@ -36,9 +37,13 @@ class CapabilitiesTest extends TestCase
         $this->user = $this->user($this->orgA);
     }
 
-    private function grant(User $user, Organization $organization, array $permissions): void
-    {
-        app(TenantContext::class)->runAs($organization->id, function () use ($user, $organization, $permissions): void {
+    private function grant(
+        User $user,
+        Organization $organization,
+        array $permissions,
+        ?string $systemKey = null
+    ): void {
+        app(TenantContext::class)->runAs($organization->id, function () use ($user, $organization, $permissions, $systemKey): void {
             $role = $this->role($organization, 'Cap-'.Str::random(10));
             $user->assignRole($role);
 
@@ -51,6 +56,10 @@ class CapabilitiesTest extends TestCase
                     ],
                     ['id' => (string) Str::uuid7()]
                 );
+            }
+
+            if ($systemKey !== null) {
+                DB::table('roles')->where('id', $role->id)->update(['system_key' => $systemKey]);
             }
         });
     }
@@ -131,6 +140,7 @@ class CapabilitiesTest extends TestCase
             ->assertJsonPath('corrective_actions.create', false)
             ->assertJsonPath('corrective_actions.update', false)
             ->assertJsonPath('corrective_actions.record_update', false)
+            ->assertJsonPath('corrective_actions.verify', false)
             ->assertJsonMissingPath('permissions')
             ->assertJsonMissingPath('roles');
     }
@@ -144,7 +154,8 @@ class CapabilitiesTest extends TestCase
             ->assertJsonPath('corrective_actions.view', true)
             ->assertJsonPath('corrective_actions.create', false)
             ->assertJsonPath('corrective_actions.update', false)
-            ->assertJsonPath('corrective_actions.record_update', false);
+            ->assertJsonPath('corrective_actions.record_update', false)
+            ->assertJsonPath('corrective_actions.verify', false);
     }
 
     public function test_findings_close_solo_habilita_lectura(): void
@@ -156,7 +167,8 @@ class CapabilitiesTest extends TestCase
             ->assertJsonPath('corrective_actions.view', true)
             ->assertJsonPath('corrective_actions.create', false)
             ->assertJsonPath('corrective_actions.update', false)
-            ->assertJsonPath('corrective_actions.record_update', false);
+            ->assertJsonPath('corrective_actions.record_update', false)
+            ->assertJsonPath('corrective_actions.verify', false);
     }
 
     public function test_manage_habilita_lectura_y_operaciones_generales_de_escritura(): void
@@ -169,8 +181,47 @@ class CapabilitiesTest extends TestCase
             ->assertJsonPath('corrective_actions.create', true)
             ->assertJsonPath('corrective_actions.update', true)
             ->assertJsonPath('corrective_actions.record_update', true)
+            ->assertJsonPath('corrective_actions.verify', false)
             ->assertJsonMissingPath('permissions')
             ->assertJsonMissingPath('roles');
+    }
+
+    public function test_verify_es_independiente_de_manage_y_habilita_solo_verificacion(): void
+    {
+        $this->grant($this->user, $this->orgA, [
+            Permission::FindingsRegister,
+            Permission::CorrectiveActionsVerify,
+        ], 'supervisor');
+
+        $this->capabilities($this->user, $this->orgA)
+            ->assertOk()
+            ->assertJsonPath('corrective_actions.view', true)
+            ->assertJsonPath('corrective_actions.create', false)
+            ->assertJsonPath('corrective_actions.update', false)
+            ->assertJsonPath('corrective_actions.record_update', false)
+            ->assertJsonPath('corrective_actions.verify', true);
+    }
+
+    public function test_verify_requiere_rol_base_elegible(): void
+    {
+        $this->grant($this->user, $this->orgA, [
+            Permission::FindingsRegister,
+            Permission::CorrectiveActionsVerify,
+        ]);
+
+        $this->capabilities($this->user, $this->orgA)
+            ->assertOk()
+            ->assertJsonPath('corrective_actions.verify', false);
+
+        $this->grant($this->user, $this->orgA, [], 'inspector');
+        $this->capabilities($this->user, $this->orgA)
+            ->assertOk()
+            ->assertJsonPath('corrective_actions.verify', false);
+
+        $this->grant($this->user, $this->orgA, [], 'supervisor');
+        $this->capabilities($this->user, $this->orgA)
+            ->assertOk()
+            ->assertJsonPath('corrective_actions.verify', true);
     }
 
     public function test_cambio_de_tenant_recalcula_capacidades_sin_filtrar_la_otra_org(): void
@@ -197,7 +248,8 @@ class CapabilitiesTest extends TestCase
             ->assertJsonPath('corrective_actions.view', true)
             ->assertJsonPath('corrective_actions.create', false)
             ->assertJsonPath('corrective_actions.update', false)
-            ->assertJsonPath('corrective_actions.record_update', false);
+            ->assertJsonPath('corrective_actions.record_update', false)
+            ->assertJsonPath('corrective_actions.verify', false);
 
         $this->assertStringNotContainsString($this->orgA->id, $response->getContent());
     }
