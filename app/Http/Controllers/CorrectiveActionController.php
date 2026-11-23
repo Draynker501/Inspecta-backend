@@ -21,11 +21,17 @@ use Illuminate\Validation\ValidationException;
 class CorrectiveActionController extends TenantController
 {
     private const PRIORITIES = [
-        'low', 'medium', 'high', 'critical',
+        'low',
+        'medium',
+        'high',
+        'critical',
     ];
 
     private const STATUSES = [
-        'pending', 'in_progress', 'completed', 'verified',
+        'pending',
+        'in_progress',
+        'completed',
+        'verified',
     ];
 
     public function index(Request $request): JsonResponse
@@ -33,8 +39,11 @@ class CorrectiveActionController extends TenantController
         Gate::authorize('viewAny', CorrectiveAction::class);
 
         $this->rejectUnknownFields($request->query(), [
-            'page', 'per_page', 'assigned_to',
-            'incident_id', 'status',
+            'page',
+            'per_page',
+            'assigned_to',
+            'incident_id',
+            'status',
         ]);
 
         $data = $request->validate([
@@ -100,8 +109,12 @@ class CorrectiveActionController extends TenantController
         Gate::authorize('create', CorrectiveAction::class);
 
         $this->requireJsonObject($request, [
-            'incident_id', 'assigned_to', 'description',
-            'priority', 'due_date', 'observations',
+            'incident_id',
+            'assigned_to',
+            'description',
+            'priority',
+            'due_date',
+            'observations',
         ]);
 
         $data = $request->validate([
@@ -196,7 +209,7 @@ class CorrectiveActionController extends TenantController
         $result = $this->dto($action);
 
         $result['updates'] = $action->updates
-            ->map(fn ($update) => [
+            ->map(fn($update) => [
                 'id' => $update->id,
                 'corrective_action_id' => $update->corrective_action_id,
                 'user_id' => $update->user_id,
@@ -230,8 +243,12 @@ class CorrectiveActionController extends TenantController
         Gate::authorize('update', $candidate);
 
         $this->requireJsonObject($request, [
-            'incident_id', 'assigned_to', 'description',
-            'priority', 'due_date', 'observations',
+            'incident_id',
+            'assigned_to',
+            'description',
+            'priority',
+            'due_date',
+            'observations',
         ]);
 
         $data = $request->validate([
@@ -249,9 +266,7 @@ class CorrectiveActionController extends TenantController
             ]);
         }
 
-        $action = DB::transaction(function () use (
-            $data, $org, $user, $policy, $actionId
-        ) {
+        $action = DB::transaction(function () use ($data, $org, $user, $policy, $actionId) {
             Organization::query()
                 ->whereKey($org)
                 ->lockForUpdate()
@@ -268,9 +283,11 @@ class CorrectiveActionController extends TenantController
             abort_unless($policy->view($user, $action), 404);
             Gate::authorize('update', $action);
 
-            if (isset($data['assigned_to'])
+            if (
+                isset($data['assigned_to'])
                 && $data['assigned_to'] !== $action->assigned_to
-                && in_array($action->status, ['completed', 'verified'], true)) {
+                && in_array($action->status, ['completed', 'verified'], true)
+            ) {
                 throw ValidationException::withMessages([
                     'assigned_to' => 'No se puede reasignar una acción completada o verificada.',
                 ]);
@@ -323,10 +340,12 @@ class CorrectiveActionController extends TenantController
         string $userId,
         string $organizationId
     ): void {
-        if (OrganizationMembership::findActive(
-            $userId,
-            $organizationId
-        ) === null) {
+        if (
+            OrganizationMembership::findActive(
+                $userId,
+                $organizationId
+            ) === null
+        ) {
             throw ValidationException::withMessages([
                 'assigned_to' => 'El responsable no tiene una membresía activa en la organización.',
             ]);
@@ -339,8 +358,8 @@ class CorrectiveActionController extends TenantController
     ): void {
         if (
             $request->query() !== []
-            || ! $request->isJson()
-            || ! is_object(json_decode($request->getContent()))
+            || !$request->isJson()
+            || !is_object(json_decode($request->getContent()))
         ) {
             throw ValidationException::withMessages([
                 'fields' => 'Se requiere un objeto JSON sin parámetros de consulta.',
@@ -382,6 +401,9 @@ class CorrectiveActionController extends TenantController
             'organization_id' => $action->organization_id,
             'incident_id' => $action->incident_id,
             'assigned_to' => $action->assigned_to,
+            'assignee_name' => DB::table('users')
+                ->where('id', $action->assigned_to)
+                ->value('name'),
             'description' => $action->description,
             'priority' => $action->priority,
             'due_date' => $action->due_date?->format('Y-m-d'),
