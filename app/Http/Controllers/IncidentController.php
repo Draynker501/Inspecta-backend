@@ -40,8 +40,15 @@ class IncidentController extends TenantController
     {
         Gate::authorize('viewAny', Incident::class);
         $this->rejectUnknownFields($request->query(), [
-            'page', 'per_page', 'status', 'risk_level', 'plant_id', 'area_id',
-            'reported_by', 'date_from', 'date_to',
+            'page',
+            'per_page',
+            'status',
+            'risk_level',
+            'plant_id',
+            'area_id',
+            'reported_by',
+            'date_from',
+            'date_to',
         ]);
         $data = $request->validate([
             'page' => ['sometimes', 'integer', 'min:1'],
@@ -101,17 +108,28 @@ class IncidentController extends TenantController
     {
         Gate::authorize('create', Incident::class);
         $this->requireJsonObject($request, [
-            'inspection_id', 'question_id', 'plant_id', 'area_id', 'production_line_id',
-            'type', 'title', 'description', 'risk_level', 'latitude', 'longitude',
+            'inspection_id',
+            'question_id',
+            'plant_id',
+            'area_id',
+            'production_line_id',
+            'type',
+            'title',
+            'description',
+            'risk_level',
+            'latitude',
+            'longitude',
             'location_description',
         ]);
         $coordinate = static function (float $max): \Closure {
             return static function (string $attribute, mixed $value, \Closure $fail) use ($max): void {
-                if ((! is_int($value) && ! is_float($value) && ! is_string($value))
-                    || ! is_numeric($value) || ! is_finite((float) $value)
+                if (
+                    (!is_int($value) && !is_float($value) && !is_string($value))
+                    || !is_numeric($value) || !is_finite((float) $value)
                     || abs((float) $value) > $max
                     || (float) $value !== round((float) $value, 7)
-                    || (is_string($value) && ! preg_match('/^-?\d+(?:\.\d{1,7})?$/D', $value))) {
+                    || (is_string($value) && !preg_match('/^-?\d+(?:\.\d{1,7})?$/D', $value))
+                ) {
                     $fail('La coordenada no es válida.');
                 }
             };
@@ -124,11 +142,15 @@ class IncidentController extends TenantController
             'production_line_id' => ['sometimes', 'nullable', 'uuid'],
             'type' => ['sometimes', 'nullable', Rule::in(self::TYPES)],
             'title' => ['required', 'string', 'max:200'],
-            'description' => ['required', 'string', function (string $attribute, mixed $value, \Closure $fail): void {
-                if (is_string($value) && strlen($value) > 65535) {
-                    $fail('La descripción supera 65535 bytes.');
+            'description' => [
+                'required',
+                'string',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (is_string($value) && strlen($value) > 65535) {
+                        $fail('La descripción supera 65535 bytes.');
+                    }
                 }
-            }],
+            ],
             'risk_level' => ['required', Rule::in(self::RISK_LEVELS)],
             'latitude' => ['sometimes', 'nullable', $coordinate(90)],
             'longitude' => ['sometimes', 'nullable', $coordinate(180)],
@@ -137,7 +159,7 @@ class IncidentController extends TenantController
         if (isset($data['latitude']) !== isset($data['longitude'])) {
             throw ValidationException::withMessages(['coordinates' => 'Las coordenadas deben proporcionarse juntas.']);
         }
-        if (isset($data['question_id']) && ! isset($data['inspection_id'])) {
+        if (isset($data['question_id']) && !isset($data['inspection_id'])) {
             throw ValidationException::withMessages(['inspection_id' => 'La inspección es obligatoria cuando se indica una pregunta.']);
         }
 
@@ -165,19 +187,21 @@ class IncidentController extends TenantController
                     ->where('area_id', $area->id)->lockForUpdate()->findOrFail($data['production_line_id'])
                 : null;
 
-            if ($inspection !== null && ($inspection->plant_id !== $plant->id
-                || $inspection->area_id !== $area->id
-                || $inspection->production_line_id !== $line?->id)) {
+            if (
+                $inspection !== null && ($inspection->plant_id !== $plant->id
+                    || $inspection->area_id !== $area->id
+                    || $inspection->production_line_id !== $line?->id)
+            ) {
                 throw ValidationException::withMessages(['inspection_id' => 'La ubicación del incidente no coincide con la inspección.']);
             }
             if (isset($data['question_id'])) {
                 $exists = Question::query()->where('organization_id', $org)
                     ->whereKey($data['question_id'])
-                    ->whereHas('checklistSection', fn ($query) => $query
+                    ->whereHas('checklistSection', fn($query) => $query
                         ->where('organization_id', $org)
                         ->where('checklist_version_id', $inspection->checklist_version_id))
                     ->exists();
-                if (! $exists) {
+                if (!$exists) {
                     throw ValidationException::withMessages(['question_id' => 'La pregunta no pertenece a la versión inspeccionada.']);
                 }
             }
@@ -204,8 +228,14 @@ class IncidentController extends TenantController
                 'reported_at' => now(),
             ]);
             app(AuditLogger::class)->record('incident.created', $incident, [], $incident->only([
-                'inspection_id', 'question_id', 'plant_id', 'area_id', 'production_line_id',
-                'type', 'risk_level', 'status',
+                'inspection_id',
+                'question_id',
+                'plant_id',
+                'area_id',
+                'production_line_id',
+                'type',
+                'risk_level',
+                'status',
             ]));
 
             return $incident;
@@ -247,12 +277,16 @@ class IncidentController extends TenantController
             $before = $incident->status;
             $after = $data['status'];
             if ($before !== $after) {
-                if (! in_array($after, self::TRANSITIONS[$before] ?? [], true)) {
+                if (!in_array($after, self::TRANSITIONS[$before] ?? [], true)) {
                     throw ValidationException::withMessages(['status' => 'La transición de estado no está permitida.']);
                 }
                 $incident->update(['status' => $after]);
-                app(AuditLogger::class)->record('incident.status_changed', $incident,
-                    ['status' => $before], ['status' => $after]);
+                app(AuditLogger::class)->record(
+                    'incident.status_changed',
+                    $incident,
+                    ['status' => $before],
+                    ['status' => $after]
+                );
             }
 
             return $incident->refresh();
@@ -263,8 +297,10 @@ class IncidentController extends TenantController
 
     private function requireJsonObject(Request $request, array $allowedFields): void
     {
-        if ($request->query() !== [] || ! $request->isJson()
-            || ! is_object(json_decode($request->getContent()))) {
+        if (
+            $request->query() !== [] || !$request->isJson()
+            || !is_object(json_decode($request->getContent()))
+        ) {
             throw ValidationException::withMessages(['fields' => 'Se requiere un objeto JSON sin parámetros de consulta.']);
         }
         $this->rejectUnknownFields($request->all(), $allowedFields);
@@ -280,14 +316,35 @@ class IncidentController extends TenantController
     private function dto(Incident $incident): array
     {
         $data = $incident->only([
-            'id', 'organization_id', 'inspection_id', 'question_id', 'reported_by',
-            'plant_id', 'area_id', 'production_line_id', 'type', 'title', 'description',
-            'risk_level', 'status', 'location_description', 'reported_at', 'created_at', 'updated_at',
+            'id',
+            'organization_id',
+            'inspection_id',
+            'question_id',
+            'reported_by',
+            'plant_id',
+            'area_id',
+            'production_line_id',
+            'type',
+            'title',
+            'description',
+            'risk_level',
+            'status',
+            'location_description',
+            'reported_at',
+            'created_at',
+            'updated_at',
         ]);
         foreach (['latitude', 'longitude'] as $field) {
             $raw = $incident->getRawOriginal($field);
-            $data[$field] = $raw === null ? null : number_format((float) $raw, 7, '.', '');
+
+            $data[$field] = $raw === null
+                ? null
+                : number_format((float) $raw, 7, '.', '');
         }
+
+        $data['reporter_name'] = DB::table('users')
+            ->where('id', $incident->reported_by)
+            ->value('name');
 
         return $data;
     }
