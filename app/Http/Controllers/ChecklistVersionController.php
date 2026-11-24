@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Services\ChecklistOrderingService;
 
 class ChecklistVersionController extends TenantController
 {
@@ -43,10 +44,12 @@ class ChecklistVersionController extends TenantController
                 return $version;
             }
             if ($newStatus === 'published') {
-                if ($version->status !== 'draft' || $version->published_at !== null || ! $checklist->status) {
+                if ($version->status !== 'draft' || $version->published_at !== null || !$checklist->status) {
                     throw ValidationException::withMessages(['status' => 'Solo se puede publicar un borrador nunca publicado de un checklist activo.']);
                 }
                 $this->validateBeforePublishing($version);
+                app(ChecklistOrderingService::class)
+                    ->normalizeVersion($version);
                 $previous = ChecklistVersion::where('organization_id', $organizationId)
                     ->where('checklist_id', $checklist->id)->where('status', 'published')
                     ->where('id', '!=', $version->id)->lockForUpdate()->get();
@@ -54,7 +57,7 @@ class ChecklistVersionController extends TenantController
                     $old->update(['status' => 'archived']);
                     app(AuditLogger::class)->record('checklist_version.status_changed', $old, ['status' => 'published'], ['status' => 'archived']);
                 }
-            } elseif (! in_array($version->status, ['draft', 'published'], true)) {
+            } elseif (!in_array($version->status, ['draft', 'published'], true)) {
                 throw ValidationException::withMessages(['status' => 'Transición de estado inválida.']);
             }
 
@@ -87,15 +90,17 @@ class ChecklistVersionController extends TenantController
             throw ValidationException::withMessages(['sections' => 'La estructura contiene relaciones de otra organización.']);
         }
 
-        if (! $version->sections()->exists() || $version->sections()->whereDoesntHave('questions', fn ($query) => $query->where('status', true))->exists()) {
+        if (!$version->sections()->exists() || $version->sections()->whereDoesntHave('questions', fn($query) => $query->where('status', true))->exists()) {
             throw ValidationException::withMessages(['sections' => 'Cada versión necesita secciones con preguntas activas.']);
         }
 
         $questions = Question::whereIn('checklist_section_id', $version->sections()->select('id'))
             ->where('status', true)->get();
         foreach ($questions as $question) {
-            if (! is_string($question->question_text) || trim($question->question_text) === ''
-                || ! in_array($question->answer_type, ['boolean', 'text', 'number', 'multiple_choice', 'signature', 'date'], true)) {
+            if (
+                !is_string($question->question_text) || trim($question->question_text) === ''
+                || !in_array($question->answer_type, ['boolean', 'text', 'number', 'multiple_choice', 'signature', 'date'], true)
+            ) {
                 throw ValidationException::withMessages(['questions' => 'La pregunta tiene datos inválidos.']);
             }
             if ($question->answer_type !== 'multiple_choice') {
@@ -106,16 +111,18 @@ class ChecklistVersionController extends TenantController
                 continue;
             }
             $options = $question->options;
-            if (! is_array($options) || ! array_is_list($options) || count($options) < 2) {
+            if (!is_array($options) || !array_is_list($options) || count($options) < 2) {
                 throw ValidationException::withMessages(['questions' => 'La pregunta tiene opciones inválidas.']);
             }
             $values = [];
             foreach ($options as $option) {
-                if (! is_array($option) || count($option) !== 2 || ! isset($option['value'], $option['label'])
-                    || ! is_string($option['value']) || trim($option['value']) === ''
-                    || ! is_string($option['label']) || trim($option['label']) === ''
+                if (
+                    !is_array($option) || count($option) !== 2 || !isset($option['value'], $option['label'])
+                    || !is_string($option['value']) || trim($option['value']) === ''
+                    || !is_string($option['label']) || trim($option['label']) === ''
                     || mb_strlen($option['value']) > 100 || mb_strlen($option['label']) > 150
-                    || in_array($option['value'], $values, true)) {
+                    || in_array($option['value'], $values, true)
+                ) {
                     throw ValidationException::withMessages(['questions' => 'La pregunta tiene opciones inválidas.']);
                 }
                 $values[] = $option['value'];
@@ -140,9 +147,11 @@ class ChecklistVersionController extends TenantController
         foreach ($links as $link) {
             $requirement = $requirements->get($link->norm_requirement_id);
             $norm = $requirement ? $norms->get($requirement->norm_id) : null;
-            if ($link->organization_id !== $organizationId || ! $requirement
-                || $requirement->organization_id !== $organizationId || ! $norm
-                || $norm->organization_id !== $organizationId || ! $norm->status) {
+            if (
+                $link->organization_id !== $organizationId || !$requirement
+                || $requirement->organization_id !== $organizationId || !$norm
+                || $norm->organization_id !== $organizationId || !$norm->status
+            ) {
                 throw ValidationException::withMessages(['norms' => 'Los requisitos vinculados deben pertenecer a normas activas de la organización.']);
             }
         }
@@ -168,10 +177,15 @@ class ChecklistVersionController extends TenantController
             ->orderByDesc('created_at')->orderBy('id')
             ->paginate($validated['per_page'] ?? 15, ['*'], 'page', $validated['page'] ?? 1);
 
-        return response()->json(['data' => $versions->items(), 'meta' => [
-            'current_page' => $versions->currentPage(), 'last_page' => $versions->lastPage(),
-            'per_page' => $versions->perPage(), 'total' => $versions->total(),
-        ]]);
+        return response()->json([
+            'data' => $versions->items(),
+            'meta' => [
+                'current_page' => $versions->currentPage(),
+                'last_page' => $versions->lastPage(),
+                'per_page' => $versions->perPage(),
+                'total' => $versions->total(),
+            ]
+        ]);
     }
 
     /**
@@ -202,8 +216,10 @@ class ChecklistVersionController extends TenantController
             }
             $validated = $request->validate(['version' => ['required', 'string', 'max:20']]);
 
-            if (DB::table('checklist_versions')->where('checklist_id', $checklist->id)
-                ->where('version', $validated['version'])->exists()) {
+            if (
+                DB::table('checklist_versions')->where('checklist_id', $checklist->id)
+                    ->where('version', $validated['version'])->exists()
+            ) {
                 throw ValidationException::withMessages(['version' => 'La versión ya existe.']);
             }
 
@@ -286,8 +302,10 @@ class ChecklistVersionController extends TenantController
                 throw ValidationException::withMessages(['fields' => 'La solicitud contiene campos no permitidos.']);
             }
             $validated = $request->validate(['version' => ['required', 'string', 'max:20']]);
-            if (ChecklistVersion::where('checklist_id', $checklist->id)->where('version', $validated['version'])
-                ->where('id', '!=', $version->id)->exists()) {
+            if (
+                ChecklistVersion::where('checklist_id', $checklist->id)->where('version', $validated['version'])
+                    ->where('id', '!=', $version->id)->exists()
+            ) {
                 throw ValidationException::withMessages(['version' => 'La versión ya existe.']);
             }
             $old = $version->version;

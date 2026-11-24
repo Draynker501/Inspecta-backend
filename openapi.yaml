@@ -2564,6 +2564,105 @@ paths:
                 crossTenantOperation:
                   $ref: '#/components/examples/CrossTenantRelation'
 
+
+  /versions/{versionId}/sections/reorder:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    patch:
+      summary: Reordenar Secciones de una Versión
+      description: |
+        Requiere `checklists.manage` y una versión draft nunca publicada.
+
+        Debe proporcionarse la lista completa de identificadores de las
+        secciones pertenecientes a la versión, sin duplicados ni elementos
+        ajenos.
+
+        El orden del arreglo determina la nueva posición de cada sección.
+        Las posiciones se asignan consecutivamente a partir de 1.
+
+        La operación es transaccional y registra los cambios en auditoría.
+        No se permiten parámetros de consulta ni campos adicionales.
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/checklistVersionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - section_ids
+              properties:
+                section_ids:
+                  type: array
+                  uniqueItems: true
+                  description: Identificadores de todas las secciones en el orden deseado.
+                  items:
+                    type: string
+                    format: uuid
+                  example:
+                    - "018f2b3c-4d5e-7f8a-8000-112233445501"
+                    - "018f2b3c-4d5e-7f8a-8000-112233445502"
+                    - "018f2b3c-4d5e-7f8a-8000-112233445503"
+      responses:
+        '200':
+          description: Secciones reordenadas correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChecklistSection'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          description: |
+            Solicitud inválida, identificadores duplicados, faltantes o ajenos,
+            o versión que no permite modificaciones.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
+
   /sections/{sectionId}:
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
@@ -2878,6 +2977,106 @@ paths:
                   $ref: '#/components/examples/ValidationFailed'
                 crossTenantOperation:
                   $ref: '#/components/examples/CrossTenantRelation'
+
+
+  /sections/{sectionId}/questions/reorder:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    patch:
+      summary: Reordenar Preguntas de una Sección
+      description: |
+        Requiere `checklists.manage` y que la sección pertenezca a una
+        versión draft nunca publicada.
+
+        Debe proporcionarse la lista completa de identificadores de las
+        preguntas pertenecientes a la sección, incluyendo preguntas activas
+        e inactivas, sin duplicados ni elementos ajenos.
+
+        El orden del arreglo determina la nueva posición de cada pregunta.
+        Las posiciones se asignan consecutivamente a partir de 1.
+
+        La operación es transaccional y registra los cambios en auditoría.
+        No se permiten parámetros de consulta ni campos adicionales.
+      tags:
+        - Checklists
+      parameters:
+        - $ref: '#/components/parameters/sectionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - question_ids
+              properties:
+                question_ids:
+                  type: array
+                  uniqueItems: true
+                  description: Identificadores de todas las preguntas en el orden deseado.
+                  items:
+                    type: string
+                    format: uuid
+                  example:
+                    - "018f2b3c-4d5e-7f8a-8000-112233445601"
+                    - "018f2b3c-4d5e-7f8a-8000-112233445602"
+                    - "018f2b3c-4d5e-7f8a-8000-112233445603"
+      responses:
+        '200':
+          description: Preguntas reordenadas correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Question'
+        '400':
+          description: Contexto de organización inválido (organization_required u organization_invalid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Sin acceso: usuario inactivo, organización no accesible o permiso
+            insuficiente (las policies pueden responder 403 sin code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                userInactive:
+                  $ref: '#/components/examples/UserInactive'
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
+                forbiddenPolicy:
+                  $ref: '#/components/examples/ForbiddenPolicy'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          description: |
+            Solicitud inválida, identificadores duplicados, faltantes o ajenos,
+            o versión que no permite modificaciones.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                validationFailed:
+                  $ref: '#/components/examples/ValidationFailed'
 
   /questions/{questionId}:
     parameters:
