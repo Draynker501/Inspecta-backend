@@ -24,27 +24,77 @@ class QuestionNormRequirementController extends TenantController
     public function index(Request $request, string $questionId): JsonResponse
     {
         Gate::authorize('viewAny', Checklist::class);
-        // Opción B (PWA-FUNC-01.3.1): este endpoint expone contenido normativo
-        // directo, por lo que exige `norms.view` de forma independiente al
-        // permiso operativo de checklist.
         Gate::authorize('viewAny', Norm::class);
-        $org = app(TenantContext::class)->requireId();
-        [$question, $checklist] = $this->resolveQuestion($org, $questionId);
-        Gate::authorize('view', $checklist);
-        $data = $request->validate(['page' => ['sometimes', 'integer', 'min:1'], 'per_page' => ['sometimes', 'integer', 'min:1', 'max:100']]);
-        $links = DB::table('question_norm_requirement as links')
-            ->join('norm_requirements as requirements', 'requirements.id', '=', 'links.norm_requirement_id')
-            ->join('norms as norms', 'norms.id', '=', 'requirements.norm_id')
-            ->where('links.organization_id', $org)->where('requirements.organization_id', $org)
-            ->where('norms.organization_id', $org)->where('links.question_id', $question->id)
-            ->orderBy('requirements.code')->orderBy('requirements.id')
-            ->select('links.id as link_id', 'requirements.id', 'requirements.code', 'requirements.section', 'requirements.description')
-            ->paginate($data['per_page'] ?? 15, ['*'], 'page', $data['page'] ?? 1);
 
-        return response()->json(['data' => $links->items(), 'meta' => [
-            'current_page' => $links->currentPage(), 'last_page' => $links->lastPage(),
-            'per_page' => $links->perPage(), 'total' => $links->total(),
-        ]]);
+        $org = app(TenantContext::class)->requireId();
+
+        [$question, $checklist] = $this->resolveQuestion(
+            $org,
+            $questionId
+        );
+
+        Gate::authorize('view', $checklist);
+
+        $data = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $links = DB::table('question_norm_requirement as links')
+            ->join(
+                'norm_requirements as requirements',
+                'requirements.id',
+                '=',
+                'links.norm_requirement_id'
+            )
+            ->join(
+                'norms as norms',
+                'norms.id',
+                '=',
+                'requirements.norm_id'
+            )
+            ->where('links.organization_id', $org)
+            ->where('requirements.organization_id', $org)
+            ->where('norms.organization_id', $org)
+            ->where('links.question_id', $question->id)
+            ->orderBy('norms.code')
+            ->orderBy('norms.version')
+            ->orderBy('requirements.code')
+            ->orderBy('requirements.id')
+            ->select(
+                'links.id as link_id',
+                'requirements.id',
+                'requirements.code',
+                'requirements.section',
+                'requirements.description',
+                'norms.id as norm_id',
+                'norms.code as norm_code',
+                'norms.name as norm_name',
+                'norms.version as norm_version',
+                'norms.status as norm_status'
+            )
+            ->paginate(
+                $data['per_page'] ?? 15,
+                ['*'],
+                'page',
+                $data['page'] ?? 1
+            );
+
+        $items = $links->getCollection()->map(function ($link) {
+            $link->norm_status = (bool) $link->norm_status;
+
+            return $link;
+        });
+
+        return response()->json([
+            'data' => $items->values(),
+            'meta' => [
+                'current_page' => $links->currentPage(),
+                'last_page' => $links->lastPage(),
+                'per_page' => $links->perPage(),
+                'total' => $links->total(),
+            ],
+        ]);
     }
 
     public function store(Request $request, string $questionId): JsonResponse
@@ -65,11 +115,13 @@ class QuestionNormRequirementController extends TenantController
             $norm = Norm::where('organization_id', $org)->lockForUpdate()->findOrFail($candidate->norm_id);
             Gate::authorize('view', $norm);
             $requirement = NormRequirement::where('organization_id', $org)->where('norm_id', $norm->id)->lockForUpdate()->findOrFail($candidate->id);
-            if (! $norm->status) {
+            if (!$norm->status) {
                 throw ValidationException::withMessages(['norm_requirement_id' => 'No se pueden vincular requisitos de normas inactivas.']);
             }
-            if (QuestionNormRequirement::where('organization_id', $org)->where('question_id', $question->id)
-                ->where('norm_requirement_id', $requirement->id)->lockForUpdate()->first()) {
+            if (
+                QuestionNormRequirement::where('organization_id', $org)->where('question_id', $question->id)
+                    ->where('norm_requirement_id', $requirement->id)->lockForUpdate()->first()
+            ) {
                 throw ValidationException::withMessages(['norm_requirement_id' => 'El requisito ya está vinculado.']);
             }
             $link = QuestionNormRequirement::create(['organization_id' => $org, 'question_id' => $question->id, 'norm_requirement_id' => $requirement->id]);

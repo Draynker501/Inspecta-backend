@@ -8574,8 +8574,23 @@ components:
           description: Máximo 65535 bytes en UTF-8.
           example: "Mostrar a la autoridad del trabajo los documentos que la presente Norma le obligue a elaborar."
 
-    LinkedNormRequirement:
+        LinkedNormRequirement:
       type: object
+      description: |
+        Requisito normativo vinculado a una pregunta,
+        incluyendo la identificación y el estado actual
+        de su norma padre.
+      required:
+        - link_id
+        - id
+        - code
+        - section
+        - description
+        - norm_id
+        - norm_code
+        - norm_name
+        - norm_version
+        - norm_status
       properties:
         link_id:
           type: string
@@ -8590,7 +8605,27 @@ components:
           nullable: true
         description:
           type: string
-
+        norm_id:
+          type: string
+          format: uuid
+        norm_code:
+          type: string
+          maxLength: 100
+          example: "NOM-017-STPS"
+        norm_name:
+          type: string
+          maxLength: 150
+          example: "Equipo de Protección Personal"
+        norm_version:
+          type: string
+          maxLength: 50
+          nullable: true
+          example: "2008"
+        norm_status:
+          type: boolean
+          description: Estado actual de la norma padre.
+          example: true
+          
     QuestionNormRequirement:
       type: object
       description: Vinculación entre una pregunta del checklist y un requerimiento normativo (tabla question_norm_requirement).
