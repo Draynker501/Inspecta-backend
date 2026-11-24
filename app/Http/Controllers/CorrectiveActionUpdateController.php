@@ -4,10 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\CorrectiveAction;
 use App\Models\CorrectiveActionUpdate;
-use App\Models\Organization;
 use App\Models\Incident;
-use App\Services\IncidentStatusService;
+use App\Models\Organization;
 use App\Policies\CorrectiveActionPolicy;
+use App\Services\IncidentStatusService;
 use App\Support\Audit\AuditLogger;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
@@ -135,7 +135,7 @@ class CorrectiveActionUpdateController extends TenantController
 
         $isVerification = $data['status'] === 'verified';
 
-        if (!$isVerification) {
+        if (! $isVerification) {
             Gate::authorize('recordUpdate', $candidate);
         }
 
@@ -257,7 +257,7 @@ class CorrectiveActionUpdateController extends TenantController
         string $requested
     ): void {
         if (
-            !in_array($current, self::STATUSES, true)
+            ! in_array($current, self::STATUSES, true)
             || (self::TRANSITIONS[$current] ?? null) !== $requested
         ) {
             throw ValidationException::withMessages([
@@ -272,8 +272,8 @@ class CorrectiveActionUpdateController extends TenantController
     ): void {
         if (
             $request->query() !== []
-            || !$request->isJson()
-            || !is_object(json_decode($request->getContent()))
+            || ! $request->isJson()
+            || ! is_object(json_decode($request->getContent()))
         ) {
             throw ValidationException::withMessages([
                 'fields' => 'Se requiere un objeto JSON sin parámetros de consulta.',
