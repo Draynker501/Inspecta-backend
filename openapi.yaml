@@ -8574,7 +8574,7 @@ components:
           description: Máximo 65535 bytes en UTF-8.
           example: "Mostrar a la autoridad del trabajo los documentos que la presente Norma le obligue a elaborar."
 
-        LinkedNormRequirement:
+    LinkedNormRequirement:
       type: object
       description: |
         Requisito normativo vinculado a una pregunta,
