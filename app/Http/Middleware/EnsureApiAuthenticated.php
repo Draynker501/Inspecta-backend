@@ -32,6 +32,24 @@ class EnsureApiAuthenticated
             return ApiErrorResponse::make(ApiErrorCode::Unauthenticated);
         }
 
+        // Sanctum aplica la expiración en su Guard, pero este middleware
+        // resuelve el token directamente. Se replica la misma semántica:
+        // expires_at explícito o antigüedad mayor a sanctum.expiration.
+        if ($accessToken->expires_at !== null && $accessToken->expires_at->isPast()) {
+            return ApiErrorResponse::make(ApiErrorCode::Unauthenticated);
+        }
+
+        $expiration = config('sanctum.expiration');
+
+        if (
+            is_numeric($expiration)
+            && (int) $expiration > 0
+            && $accessToken->created_at !== null
+            && $accessToken->created_at->lte(now()->subMinutes((int) $expiration))
+        ) {
+            return ApiErrorResponse::make(ApiErrorCode::Unauthenticated);
+        }
+
         // Un token emitido a un usuario que ha sido desactivado globalmente
         // deja de autenticar: se responde 401 (unauthenticated) en la
         // siguiente petición, sin revelar el estado del usuario (D-44, Alt A).
