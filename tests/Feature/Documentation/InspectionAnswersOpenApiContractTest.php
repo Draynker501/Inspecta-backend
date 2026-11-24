@@ -11,7 +11,7 @@ class InspectionAnswersOpenApiContractTest extends TestCase
     {
         $spec = Yaml::parseFile(base_path('openapi.yaml'));
 
-        $this->assertSame('2.3.0', $spec['info']['version']);
+        $this->assertSame('2.4.0', $spec['info']['version']);
 
         foreach ([
             ['/inspections/{inspectionId}/checklist', 'get'],

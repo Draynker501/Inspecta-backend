@@ -46,6 +46,6 @@ class AreaOpenApiContractTest extends TestCase
         $this->assertStringContainsString('errors.code', $path['post']['responses']['422']['description']);
         $this->assertArrayHasKey('inactivePlant', $path['post']['responses']['422']['content']['application/json']['examples']);
         $this->assertArrayHasKey('duplicateCode', $path['post']['responses']['422']['content']['application/json']['examples']);
-        $this->assertSame('2.3.0', $spec['info']['version']);
+        $this->assertSame('2.4.0', $spec['info']['version']);
     }
 }

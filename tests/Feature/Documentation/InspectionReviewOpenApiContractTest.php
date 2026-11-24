@@ -14,7 +14,7 @@ class InspectionReviewOpenApiContractTest extends TestCase
         $spec = Yaml::parseFile(base_path('openapi.yaml'));
         $path = $spec['paths']['/inspections/{inspectionId}/status'];
         $operation = $path['put'];
-        $this->assertSame('2.3.0', $spec['info']['version']);
+        $this->assertSame('2.4.0', $spec['info']['version']);
         $this->assertSame('implemented', $path['x-status']);
         $this->assertTrue($operation['requestBody']['required']);
         $this->assertSame('#/components/schemas/InspectionStatusInput', $operation['requestBody']['content']['application/json']['schema']['$ref']);

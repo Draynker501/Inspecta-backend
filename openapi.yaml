@@ -8,7 +8,7 @@ info:
 
     **Convenciones transversales:**
 
-    - Todas las colecciones usan paginación con parámetros `page` y `per_page`
+    - Las colecciones paginadas usan paginación con parámetros `page` y `per_page`
       (estándar Laravel API Resources) y devuelven el envelope `{data, meta}`.
     - El campo `status` es booleano: `true` = activo, `false` = inactivo.
       La baja lógica mediante `deleted_at` es independiente del estado `status`.
@@ -24,11 +24,14 @@ info:
       Regla transversal: el mismo código implica el mismo estado HTTP y el mismo
       texto de message. Los errores fuera del catálogo (403 de policies, 405,
       500) pueden omitir `code`.
+    - v2.4.0 (aditiva): GET /dashboard proporciona indicadores,
+      estadísticas y resúmenes operativos de la organización activa,
+      respetando permisos y restricciones de ubicación.
 
     - Coordenadas con precisión de 7 decimales (BD `DECIMAL(10,7)`):
       latitud −90..90, longitud −180..180.
 
-        **Flujo de sesión:** `POST /auth/login` → `GET /auth/organizations`
+    **Flujo de sesión:** `POST /auth/login` → `GET /auth/organizations`
     (organizaciones cliente con membresía activa) → el cliente selecciona una
     organización y la envía como cabecera `X-Organization-Id` en cada petición
     con contexto de dominio.
@@ -55,7 +58,7 @@ info:
       implementados en el servidor; mientras tanto devuelven `not_found`
       (404, código `not_found`). No deben considerarse disponibles para consumo.
 
-  version: 2.3.0
+  version: 2.4.0
 
 servers:
   - url: https://api.inspecta.com/api
@@ -69,6 +72,8 @@ security:
 tags:
   - name: Authentication
     description: Inicio y cierre de sesión, e identidad del usuario autenticado.
+  - name: Dashboard
+    description: Indicadores y estadísticas operativas de seguridad e higiene.
   - name: Organization
   - name: Users
   - name: Checklists
@@ -271,6 +276,58 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/InactiveUserError'
+
+  # ===================================================================
+  # DASHBOARD
+  # ===================================================================
+
+  /dashboard:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    get:
+      summary: Obtener estadísticas del Dashboard
+      description: Devuelve indicadores autorizados de la organización activa y ubicaciones asignadas. El mes predeterminado
+        es el actual. La tasa de aprobación utiliza inspecciones confirmadas y rechazadas durante el periodo; el total
+        de inspecciones utiliza su fecha de inicio. Las incidencias abiertas y acciones pendientes representan el
+        estado actual, independientemente del mes. La tendencia comprende cinco meses; sin revisiones, la tasa es
+        null. La gráfica de riesgo se filtra por mes. Los indicadores y gráficas no autorizados se omiten y los listados
+        no autorizados son arreglos vacíos. Sin paginación.
+      tags:
+        - Dashboard
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: month
+          required: false
+          description: Mes en formato YYYY-MM.
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
+          example: 2026-11
+      responses:
+        '200':
+          description: Estadísticas obtenidas correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+        '400':
+          description: Contexto de organización requerido o inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Usuario inactivo o sin acceso a la organización.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
 
   # ===================================================================
   # ORGANIZATION
@@ -7052,6 +7109,337 @@ components:
               $ref: '#/components/examples/ServiceUnavailableExample'
 
   schemas:
+    DashboardResponse:
+      type: object
+      required:
+        - organization_id
+        - period
+        - capabilities
+        - summary
+        - charts
+        - recent_inspections
+        - pending_corrective_actions
+      properties:
+        organization_id:
+          type: string
+          format: uuid
+        period:
+          $ref: '#/components/schemas/DashboardPeriod'
+        capabilities:
+          $ref: '#/components/schemas/DashboardCapabilities'
+        summary:
+          oneOf:
+            - $ref: '#/components/schemas/DashboardSummary'
+            - type: array
+              maxItems: 0
+              items:
+                type: object
+        charts:
+          oneOf:
+            - $ref: '#/components/schemas/DashboardCharts'
+            - type: array
+              maxItems: 0
+              items:
+                type: object
+        recent_inspections:
+          type: array
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/DashboardRecentInspection'
+        pending_corrective_actions:
+          type: array
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/DashboardPendingAction'
+    DashboardPeriod:
+      type: object
+      required:
+        - month
+        - date_from
+        - date_to
+        - previous_date_from
+        - previous_date_to
+      properties:
+        month:
+          type: string
+        date_from:
+          type: string
+          format: date
+        date_to:
+          type: string
+          format: date
+        previous_date_from:
+          type: string
+          format: date
+        previous_date_to:
+          type: string
+          format: date
+    DashboardCapabilities:
+      type: object
+      required:
+        - inspections
+        - incidents
+        - corrective_actions
+        - create_inspection
+      properties:
+        inspections:
+          type: boolean
+        incidents:
+          type: boolean
+        corrective_actions:
+          type: boolean
+        create_inspection:
+          type: boolean
+    DashboardSummary:
+      type: object
+      properties:
+        approval_rate:
+          $ref: '#/components/schemas/DashboardApprovalRate'
+        inspections:
+          $ref: '#/components/schemas/DashboardInspectionCount'
+        open_incidents:
+          $ref: '#/components/schemas/DashboardOpenIncidents'
+        pending_corrective_actions:
+          $ref: '#/components/schemas/DashboardPendingActionCount'
+      description: Las propiedades no autorizadas se omiten; sin permisos se devuelve un arreglo vacío.
+    DashboardApprovalRate:
+      type: object
+      required:
+        - value
+        - previous_value
+        - change
+        - approved
+        - rejected
+        - reviewed
+      properties:
+        value:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 100
+        previous_value:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 100
+        change:
+          type: number
+          nullable: true
+          description: Diferencia en puntos porcentuales.
+        approved:
+          type: integer
+          minimum: 0
+        rejected:
+          type: integer
+          minimum: 0
+        reviewed:
+          type: integer
+          minimum: 0
+    DashboardInspectionCount:
+      type: object
+      required:
+        - value
+        - previous_value
+        - change
+      properties:
+        value:
+          type: integer
+          minimum: 0
+        previous_value:
+          type: integer
+          minimum: 0
+        change:
+          type: integer
+    DashboardOpenIncidents:
+      type: object
+      required:
+        - value
+        - critical
+      properties:
+        value:
+          type: integer
+          minimum: 0
+        critical:
+          type: integer
+          minimum: 0
+    DashboardPendingActionCount:
+      type: object
+      required:
+        - value
+        - overdue
+      properties:
+        value:
+          type: integer
+          minimum: 0
+        overdue:
+          type: integer
+          minimum: 0
+    DashboardCharts:
+      type: object
+      properties:
+        approval_trend:
+          type: array
+          maxItems: 5
+          minItems: 5
+          items:
+            $ref: '#/components/schemas/DashboardApprovalTrendPoint'
+        incidents_by_risk:
+          type: array
+          maxItems: 4
+          minItems: 4
+          items:
+            $ref: '#/components/schemas/DashboardRiskCount'
+      description: Las propiedades no autorizadas se omiten; sin permisos se devuelve un arreglo vacío.
+    DashboardApprovalTrendPoint:
+      type: object
+      required:
+        - month
+        - value
+        - approved
+        - rejected
+        - reviewed
+      properties:
+        month:
+          type: string
+        value:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 100
+        approved:
+          type: integer
+          minimum: 0
+        rejected:
+          type: integer
+          minimum: 0
+        reviewed:
+          type: integer
+          minimum: 0
+    DashboardRiskCount:
+      type: object
+      required:
+        - risk_level
+        - value
+      properties:
+        risk_level:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+            - critical
+        value:
+          type: integer
+          minimum: 0
+    DashboardRecentInspection:
+      type: object
+      required:
+        - id
+        - checklist_version_id
+        - checklist_name
+        - checklist_version
+        - plant_name
+        - area_name
+        - production_line_name
+        - started_at
+        - status
+        - progress
+        - answered_questions
+        - required_questions
+      properties:
+        id:
+          type: string
+          format: uuid
+        checklist_version_id:
+          type: string
+          format: uuid
+        checklist_name:
+          type: string
+          nullable: true
+        checklist_version:
+          type: string
+          nullable: true
+        plant_name:
+          type: string
+          nullable: true
+        area_name:
+          type: string
+          nullable: true
+        production_line_name:
+          type: string
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          enum:
+            - draft
+            - completed
+            - confirmed
+            - rejected
+        progress:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 100
+        answered_questions:
+          type: integer
+          minimum: 0
+        required_questions:
+          type: integer
+          minimum: 0
+    DashboardPendingAction:
+      type: object
+      required:
+        - id
+        - incident_id
+        - description
+        - priority
+        - status
+        - due_date
+        - overdue
+        - plant_name
+        - area_name
+        - production_line_name
+      properties:
+        id:
+          type: string
+          format: uuid
+        incident_id:
+          type: string
+          format: uuid
+        description:
+          type: string
+        priority:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+            - critical
+        status:
+          type: string
+          enum:
+            - pending
+            - in_progress
+        due_date:
+          type: string
+          format: date
+          nullable: true
+        overdue:
+          type: boolean
+        plant_name:
+          type: string
+          nullable: true
+        area_name:
+          type: string
+          nullable: true
+        production_line_name:
+          type: string
+          nullable: true
+
 
     LocationHierarchyLine:
       type: object

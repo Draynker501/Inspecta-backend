@@ -22,6 +22,7 @@ use App\Http\Controllers\ProductionLineController;
 use App\Http\Controllers\ProductionLineStoreController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\QuestionNormRequirementController;
+use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -47,6 +48,8 @@ Route::prefix('auth')->group(function () {
     // Listado de organizaciones del usuario autenticado: no requiere tenant.
     Route::get('organizations', [OrganizationController::class, 'index'])->middleware('api.auth');
 });
+
+Route::get('dashboard', [DashboardController::class, 'index'])->middleware('api.tenant');
 
 Route::get('plants', [PlantController::class, 'index'])->middleware('api.tenant');
 Route::post('plants', [PlantController::class, 'store'])->middleware('api.tenant');

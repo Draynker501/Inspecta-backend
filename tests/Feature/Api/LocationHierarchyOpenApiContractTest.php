@@ -38,7 +38,7 @@ class LocationHierarchyOpenApiContractTest extends TestCase
             $schemas['LocationHierarchyLine']['required']
         );
 
-        $this->assertSame('2.3.0', $spec['info']['version']);
+        $this->assertSame('2.4.0', $spec['info']['version']);
         foreach ([200, 400, 401, 403, 422] as $status) {
             $this->assertArrayHasKey($status, $path['get']['responses']);
         }

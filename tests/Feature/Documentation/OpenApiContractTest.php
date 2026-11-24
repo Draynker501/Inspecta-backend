@@ -12,9 +12,12 @@ class OpenApiContractTest extends TestCase
         return (string) file_get_contents(base_path('openapi.yaml'));
     }
 
-    public function test_la_version_del_contrato_es_2_3_0(): void
+    public function test_la_version_del_contrato_es_2_4_0(): void
     {
-        $this->assertStringContainsString('version: 2.3.0', $this->spec());
+        $this->assertStringContainsString(
+            'version: 2.4.0',
+            $this->spec()
+        );
     }
 
     public function test_documenta_la_cabecera_x_organization_id(): void
@@ -175,6 +178,171 @@ class OpenApiContractTest extends TestCase
         $this->assertStringContainsString(
             'v1.4.0 (aditiva, M1.5)',
             $this->spec()
+        );
+    }
+
+    public function test_documenta_dashboard_y_su_contrato(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $this->assertArrayHasKey(
+            '/dashboard',
+            $spec['paths']
+        );
+
+        $endpoint = $spec['paths']['/dashboard'];
+
+        $this->assertArrayHasKey('get', $endpoint);
+
+        $this->assertContains(
+            ['$ref' => '#/components/parameters/organizationIdHeader'],
+            $endpoint['parameters']
+        );
+
+        $operation = $endpoint['get'];
+
+        $this->assertContains(
+            ['bearerAuth' => []],
+            $operation['security']
+        );
+
+        $month = collect($operation['parameters'])
+            ->first(
+                fn(array $parameter): bool =>
+                    ($parameter['name'] ?? null) === 'month'
+            );
+
+        $this->assertNotNull($month);
+
+        $this->assertSame('query', $month['in']);
+
+        $this->assertFalse($month['required']);
+
+        $this->assertSame(
+            'string',
+            $month['schema']['type']
+        );
+
+        foreach ([200, 400, 401, 403, 422] as $status) {
+            $this->assertArrayHasKey(
+                $status,
+                $operation['responses']
+            );
+        }
+
+        $this->assertSame(
+            '#/components/schemas/DashboardResponse',
+            $operation['responses']['200']
+            ['content']['application/json']
+            ['schema']['$ref']
+        );
+    }
+
+    public function test_dashboard_response_define_los_esquemas_requeridos(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $schemas = $spec['components']['schemas'];
+
+        $expectedSchemas = [
+            'DashboardResponse',
+            'DashboardPeriod',
+            'DashboardCapabilities',
+            'DashboardSummary',
+            'DashboardApprovalRate',
+            'DashboardInspectionCount',
+            'DashboardOpenIncidents',
+            'DashboardPendingActionCount',
+            'DashboardCharts',
+            'DashboardApprovalTrendPoint',
+            'DashboardRiskCount',
+            'DashboardRecentInspection',
+            'DashboardPendingAction',
+        ];
+
+        foreach ($expectedSchemas as $schema) {
+            $this->assertArrayHasKey(
+                $schema,
+                $schemas
+            );
+        }
+
+        $response = $schemas['DashboardResponse'];
+
+        $this->assertSame('object', $response['type']);
+
+        $this->assertEqualsCanonicalizing([
+            'organization_id',
+            'period',
+            'capabilities',
+            'summary',
+            'charts',
+            'recent_inspections',
+            'pending_corrective_actions',
+        ], $response['required']);
+
+        $this->assertSame(
+            3,
+            $response['properties']['recent_inspections']['maxItems']
+        );
+
+        $this->assertSame(
+            3,
+            $response['properties']['pending_corrective_actions']['maxItems']
+        );
+
+        $capabilities = $schemas['DashboardCapabilities'];
+
+        $this->assertEqualsCanonicalizing([
+            'inspections',
+            'incidents',
+            'corrective_actions',
+            'create_inspection',
+        ], $capabilities['required']);
+
+        foreach ($capabilities['properties'] as $property) {
+            $this->assertSame(
+                'boolean',
+                $property['type']
+            );
+        }
+
+        $this->assertArrayNotHasKey(
+            'required',
+            $schemas['DashboardSummary']
+        );
+
+        $this->assertArrayNotHasKey(
+            'required',
+            $schemas['DashboardCharts']
+        );
+
+        $this->assertTrue(
+            $schemas['DashboardApprovalRate']
+            ['properties']['value']['nullable']
+        );
+
+        $this->assertTrue(
+            $schemas['DashboardApprovalTrendPoint']
+            ['properties']['value']['nullable']
+        );
+
+        $this->assertSame(
+            5,
+            $schemas['DashboardCharts']
+            ['properties']['approval_trend']['maxItems']
+        );
+
+        $this->assertSame(
+            4,
+            $schemas['DashboardCharts']
+            ['properties']['incidents_by_risk']['maxItems']
+        );
+
+        $this->assertSame(
+            ['low', 'medium', 'high', 'critical'],
+            $schemas['DashboardRiskCount']
+            ['properties']['risk_level']['enum']
         );
     }
 }

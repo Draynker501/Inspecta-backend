@@ -12,7 +12,7 @@ class InspectionCompletionOpenApiContractTest extends TestCase
     {
         $spec = Yaml::parseFile(base_path('openapi.yaml'));
         $operation = $spec['paths']['/inspections/{inspectionId}/complete']['post'];
-        $this->assertSame('2.3.0', $spec['info']['version']);
+        $this->assertSame('2.4.0', $spec['info']['version']);
         $this->assertSame('implemented', $operation['x-status']);
         $this->assertSame('implemented', $spec['paths']['/inspections/{inspectionId}/status']['x-status']);
         $this->assertTrue($operation['requestBody']['required']);
