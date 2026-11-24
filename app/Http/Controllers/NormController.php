@@ -25,10 +25,14 @@ class NormController extends TenantController
             $data = $this->validateContent($request);
             $this->assertUnique($organizationId, $data['code'], $data['version'] ?? null);
             $norm = Norm::create([
-                'id' => (string) Str::uuid7(), 'organization_id' => $organizationId,
-                'code' => $data['code'], 'name' => $data['name'],
-                'description' => $data['description'] ?? null, 'issuing_body' => $data['issuing_body'] ?? null,
-                'version' => $data['version'] ?? null, 'effective_date' => $data['effective_date'] ?? null,
+                'id' => (string) Str::uuid7(),
+                'organization_id' => $organizationId,
+                'code' => $data['code'],
+                'name' => $data['name'],
+                'description' => $data['description'] ?? null,
+                'issuing_body' => $data['issuing_body'] ?? null,
+                'version' => $data['version'] ?? null,
+                'effective_date' => $data['effective_date'] ?? null,
                 'status' => true,
             ]);
             app(AuditLogger::class)->record('norm.created', $norm, [], $norm->only(['code', 'name', 'description', 'issuing_body', 'version', 'effective_date', 'status']));
@@ -43,17 +47,49 @@ class NormController extends TenantController
     {
         Gate::authorize('create', Norm::class);
         $organizationId = app(TenantContext::class)->requireId();
+
         $norm = DB::transaction(function () use ($request, $normId, $organizationId) {
             $guard = app(NormWriteGuard::class);
             $guard->lockOrganization($organizationId);
-            $norm = Norm::where('organization_id', $organizationId)->lockForUpdate()->findOrFail($normId);
+
+            $norm = Norm::where('organization_id', $organizationId)
+                ->lockForUpdate()
+                ->findOrFail($normId);
+
             Gate::authorize('update', $norm);
+
+            if (!$norm->status) {
+                throw ValidationException::withMessages([
+                    'status' => 'No se puede modificar una norma inactiva. Debe reactivarla primero.',
+                ]);
+            }
+
             $data = $this->validateContent($request);
-            $guard->assertNotHistorical($organizationId, normId: $norm->id);
-            $this->assertUnique($organizationId, $data['code'], array_key_exists('version', $data) ? $data['version'] : $norm->version, $norm->id);
+
+            $guard->assertNotHistorical(
+                $organizationId,
+                normId: $norm->id
+            );
+
+            $this->assertUnique(
+                $organizationId,
+                $data['code'],
+                array_key_exists('version', $data)
+                ? $data['version']
+                : $norm->version,
+                $norm->id
+            );
+
             $old = $norm->only(array_keys($data));
+
             $norm->update($data);
-            app(AuditLogger::class)->record('norm.updated', $norm, $old, $norm->only(array_keys($data)));
+
+            app(AuditLogger::class)->record(
+                'norm.updated',
+                $norm,
+                $old,
+                $norm->only(array_keys($data))
+            );
 
             return $norm->refresh();
         });
@@ -92,12 +128,18 @@ class NormController extends TenantController
         }
 
         return $request->validate([
-            'code' => ['required', 'string', 'max:100'], 'name' => ['required', 'string', 'max:150'],
-            'description' => ['sometimes', 'nullable', 'string', function (string $attribute, mixed $value, \Closure $fail): void {
-                if (is_string($value) && strlen($value) > 65535) {
-                    $fail('El texto supera el máximo de 65535 bytes.');
+            'code' => ['required', 'string', 'max:100'],
+            'name' => ['required', 'string', 'max:150'],
+            'description' => [
+                'sometimes',
+                'nullable',
+                'string',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (is_string($value) && strlen($value) > 65535) {
+                        $fail('El texto supera el máximo de 65535 bytes.');
+                    }
                 }
-            }],
+            ],
             'issuing_body' => ['sometimes', 'nullable', 'string', 'max:150'],
             'version' => ['sometimes', 'nullable', 'string', 'max:50'],
             'effective_date' => ['sometimes', 'nullable', 'date_format:Y-m-d'],

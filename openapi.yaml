@@ -3430,6 +3430,10 @@ paths:
           $ref: '#/components/responses/NotFoundError'
     put:
       summary: Actualizar Norma
+      description: |
+        Actualiza el contenido de una norma activa.
+        Las normas inactivas deben reactivarse antes de modificar su contenido.
+        Se mantienen las restricciones de preservación histórica.
       tags:
         - Norms
       parameters:
@@ -3483,7 +3487,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
+          description: Datos inválidos, norma inactiva, protección histórica o referencia a recursos de otra organización.
           content:
             application/json:
               schema:
@@ -3614,7 +3618,9 @@ paths:
           $ref: '#/components/responses/NotFoundError'
     post:
       summary: Crear Requerimiento de Norma
-      description: Agrega una cláusula específica a la norma indicada.
+      description: |
+        Agrega una cláusula específica a una norma activa.
+        No se pueden crear requisitos de normas inactivas.
       tags:
         - Norms
       parameters:
@@ -3668,7 +3674,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
+          description: Datos inválidos, norma inactiva o referencia a recursos de otra organización.
           content:
             application/json:
               schema:
@@ -3733,6 +3739,10 @@ paths:
           $ref: '#/components/responses/NotFoundError'
     put:
       summary: Actualizar Requerimiento de Norma
+      description: |
+        Actualiza un requisito perteneciente a una norma activa.
+        Los requisitos de normas inactivas permanecen en modo de solo lectura.
+        Se mantienen las restricciones de preservación histórica.
       tags:
         - Norms
       parameters:
@@ -3786,7 +3796,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
+          description: Datos inválidos, norma inactiva, protección histórica o referencia a recursos de otra organización.
           content:
             application/json:
               schema:

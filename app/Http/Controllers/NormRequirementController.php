@@ -21,17 +21,42 @@ class NormRequirementController extends TenantController
     {
         Gate::authorize('create', Norm::class);
         $organizationId = app(TenantContext::class)->requireId();
+
         $requirement = DB::transaction(function () use ($request, $normId, $organizationId) {
             app(NormWriteGuard::class)->lockOrganization($organizationId);
-            $norm = Norm::where('organization_id', $organizationId)->lockForUpdate()->findOrFail($normId);
+
+            $norm = Norm::where('organization_id', $organizationId)
+                ->lockForUpdate()
+                ->findOrFail($normId);
+
             Gate::authorize('update', $norm);
+
+            $this->assertActiveNorm($norm);
+
             $data = $this->validateContent($request, true);
+
             $this->assertUnique($norm->id, $data['code']);
+
             $requirement = NormRequirement::create([
-                'id' => (string) Str::uuid7(), 'organization_id' => $organizationId, 'norm_id' => $norm->id,
-                'code' => $data['code'], 'section' => $data['section'] ?? null, 'description' => $data['description'],
+                'id' => (string) Str::uuid7(),
+                'organization_id' => $organizationId,
+                'norm_id' => $norm->id,
+                'code' => $data['code'],
+                'section' => $data['section'] ?? null,
+                'description' => $data['description'],
             ]);
-            app(AuditLogger::class)->record('norm_requirement.created', $requirement, [], $requirement->only(['norm_id', 'code', 'section', 'description']));
+
+            app(AuditLogger::class)->record(
+                'norm_requirement.created',
+                $requirement,
+                [],
+                $requirement->only([
+                    'norm_id',
+                    'code',
+                    'section',
+                    'description',
+                ])
+            );
 
             return $requirement;
         });
@@ -43,27 +68,71 @@ class NormRequirementController extends TenantController
     {
         Gate::authorize('create', Norm::class);
         $organizationId = app(TenantContext::class)->requireId();
+
         $requirement = DB::transaction(function () use ($request, $requirementId, $organizationId) {
             $guard = app(NormWriteGuard::class);
             $guard->lockOrganization($organizationId);
-            $candidate = NormRequirement::where('organization_id', $organizationId)->findOrFail($requirementId);
-            $norm = Norm::where('organization_id', $organizationId)->lockForUpdate()->findOrFail($candidate->norm_id);
+
+            $candidate = NormRequirement::where(
+                'organization_id',
+                $organizationId
+            )->findOrFail($requirementId);
+
+            $norm = Norm::where('organization_id', $organizationId)
+                ->lockForUpdate()
+                ->findOrFail($candidate->norm_id);
+
             Gate::authorize('update', $norm);
-            $requirement = NormRequirement::where('organization_id', $organizationId)->where('norm_id', $norm->id)
-                ->lockForUpdate()->findOrFail($requirementId);
+
+            $requirement = NormRequirement::where(
+                'organization_id',
+                $organizationId
+            )
+                ->where('norm_id', $norm->id)
+                ->lockForUpdate()
+                ->findOrFail($requirementId);
+
+            $this->assertActiveNorm($norm);
+
             $data = $this->validateContent($request, false);
-            $guard->assertNotHistorical($organizationId, requirementId: $requirement->id);
+
+            $guard->assertNotHistorical(
+                $organizationId,
+                requirementId: $requirement->id
+            );
+
             if (array_key_exists('code', $data)) {
-                $this->assertUnique($norm->id, $data['code'], $requirement->id);
+                $this->assertUnique(
+                    $norm->id,
+                    $data['code'],
+                    $requirement->id
+                );
             }
+
             $old = $requirement->only(array_keys($data));
+
             $requirement->update($data);
-            app(AuditLogger::class)->record('norm_requirement.updated', $requirement, $old, $requirement->only(array_keys($data)));
+
+            app(AuditLogger::class)->record(
+                'norm_requirement.updated',
+                $requirement,
+                $old,
+                $requirement->only(array_keys($data))
+            );
 
             return $requirement->refresh();
         });
 
         return response()->json(['data' => $requirement]);
+    }
+
+    private function assertActiveNorm(Norm $norm): void
+    {
+        if (!$norm->status) {
+            throw ValidationException::withMessages([
+                'status' => 'No se pueden crear ni modificar requisitos de una norma inactiva. Debe reactivarla primero.',
+            ]);
+        }
     }
 
     private function validateContent(Request $request, bool $create): array
@@ -75,11 +144,16 @@ class NormRequirementController extends TenantController
         return $request->validate([
             'code' => [$create ? 'required' : 'sometimes', 'required', 'string', 'max:100'],
             'section' => ['sometimes', 'nullable', 'string', 'max:100'],
-            'description' => [$create ? 'required' : 'sometimes', 'required', 'string', function (string $attribute, mixed $value, \Closure $fail): void {
-                if (is_string($value) && strlen($value) > 65535) {
-                    $fail('El texto supera el máximo de 65535 bytes.');
+            'description' => [
+                $create ? 'required' : 'sometimes',
+                'required',
+                'string',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (is_string($value) && strlen($value) > 65535) {
+                        $fail('El texto supera el máximo de 65535 bytes.');
+                    }
                 }
-            }],
+            ],
         ]);
     }
 
@@ -128,7 +202,7 @@ class NormRequirementController extends TenantController
         Gate::authorize('viewAny', Norm::class);
         $requirement = NormRequirement::query()
             ->where('organization_id', app(TenantContext::class)->requireId())
-            ->whereHas('norm', fn ($query) => $query->where('organization_id', app(TenantContext::class)->requireId()))
+            ->whereHas('norm', fn($query) => $query->where('organization_id', app(TenantContext::class)->requireId()))
             ->findOrFail($requirementId);
         Gate::authorize('view', $requirement->norm);
 
