@@ -28,13 +28,24 @@ info:
     - Coordenadas con precisión de 7 decimales (BD `DECIMAL(10,7)`):
       latitud −90..90, longitud −180..180.
 
-    **Flujo de sesión:** `POST /auth/login` → `GET /auth/organizations`
+        **Flujo de sesión:** `POST /auth/login` → `GET /auth/organizations`
     (organizaciones cliente con membresía activa) → el cliente selecciona una
     organización y la envía como cabecera `X-Organization-Id` en cada petición
-    con contexto de dominio. `GET /auth/me` devuelve solo la identidad global
-    del usuario, sin depender de la organización seleccionada. Ante un
-    `organization_access_denied` con una selección previa, el cliente debe
-    volver a consultar `GET /auth/organizations` y pedir otra selección.
+    con contexto de dominio.
+
+    Una vez seleccionada la organización, el cliente consulta
+    `GET /auth/capabilities` para obtener los roles activos y las capacidades
+    de acceso a los módulos y operaciones disponibles.
+
+    `GET /auth/me` devuelve solo la identidad global del usuario,
+    sin depender de la organización seleccionada.
+
+    Al cambiar de organización, el cliente debe descartar el contexto
+    anterior y consultar nuevamente `GET /auth/capabilities` utilizando
+    la cabecera `X-Organization-Id` de la nueva organización.
+
+    Ante un `organization_access_denied` con una selección previa, el cliente
+    debe volver a consultar `GET /auth/organizations` y pedir otra selección.
 
     **Decisión por código:** los clientes deben decidir por `code` y no por el
     texto de `message` (por ejemplo, `cross_tenant_operation` tiene dos textos
@@ -164,12 +175,24 @@ paths:
     get:
       summary: Obtener capacidades generales de la organización activa
       description: |
-        Devuelve capacidades generales de la sección de acciones correctivas
-        para el usuario autenticado en la organización indicada por
-        X-Organization-Id. No sustituye la autorización por recurso: las
-        policies siguen decidiendo sobre cada acción concreta y su ubicación.
-        No se infieren capacidades por el nombre del rol. `verify` no se
-        incluye en esta versión.
+        Devuelve los roles activos y las capacidades generales de acceso
+        a los módulos de la plataforma para el usuario autenticado en la
+        organización indicada por X-Organization-Id.
+
+        Incluye las capacidades específicas de acciones correctivas,
+        como lectura, creación, actualización, registro de avances
+        y verificación.
+
+        Los nombres de los roles son exclusivamente informativos.
+        Las capacidades se determinan mediante las policies y los
+        permisos efectivos del usuario dentro de la organización activa.
+
+        No sustituye la autorización por recurso: las policies siguen
+        decidiendo sobre cada recurso concreto y su ubicación.
+
+        Las capacidades se recalculan en cada solicitud. No se exponen
+        roles ni capacidades de organizaciones a las que el usuario
+        no tiene acceso.
       tags:
         - Authentication
       security:
@@ -195,6 +218,7 @@ paths:
           description: |
             Sin acceso: membresía revocada, organización ajena/inactiva u
             organización operadora (organization_not_tenant).
+            No devuelve roles ni capacidades de la organización solicitada.
           content:
             application/json:
               schema:
@@ -2563,7 +2587,6 @@ paths:
                   $ref: '#/components/examples/ValidationFailed'
                 crossTenantOperation:
                   $ref: '#/components/examples/CrossTenantRelation'
-
 
   /versions/{versionId}/sections/reorder:
     parameters:
@@ -7189,11 +7212,16 @@ components:
     CapabilitiesResponse:
       type: object
       description: |
-        Capacidades generales de la sección de acciones correctivas en la
-        organización activa. No son autorizaciones sobre un recurso concreto:
-        cada acción y su historial se siguen autorizando con las policies.
+        Roles activos y capacidades generales del usuario dentro de
+        la organización seleccionada.
+
+        Las capacidades permiten determinar los módulos y operaciones
+        disponibles en el cliente, pero no sustituyen las comprobaciones
+        de autorización sobre recursos concretos.
       required:
         - organization_id
+        - roles
+        - modules
         - corrective_actions
       properties:
         organization_id:
@@ -7201,6 +7229,75 @@ components:
           format: uuid
           description: Organización activa seleccionada mediante X-Organization-Id.
           example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+        roles:
+          type: array
+          description: |
+            Nombres de los roles activos asignados al usuario dentro
+            de la organización seleccionada, ordenados por nombre.
+
+            Puede ser un arreglo vacío si el usuario no tiene roles activos.
+            Los nombres son informativos y no deben utilizarse como
+            mecanismo de autorización.
+          items:
+            type: string
+          example:
+            - Administrador
+        modules:
+          type: object
+          description: |
+            Capacidades generales de acceso a los módulos de la plataforma.
+            El cliente puede utilizarlas para determinar las opciones
+            de navegación disponibles.
+          required:
+            - dashboard
+            - inspections
+            - incidents
+            - corrective_actions
+            - checklists
+            - norms
+            - reports
+            - administration
+          properties:
+            dashboard:
+              type: boolean
+              description: |
+                Disponible para usuarios con acceso válido a la organización.
+                No implica autorización sobre todas las estadísticas.
+              example: true
+            inspections:
+              type: boolean
+              description: Acceso general al módulo de inspecciones según InspectionPolicy.
+              example: true
+            incidents:
+              type: boolean
+              description: Acceso general al módulo de incidencias según IncidentPolicy.
+              example: true
+            corrective_actions:
+              type: boolean
+              description: |
+                Acceso general al módulo de acciones correctivas.
+                Equivale a la capacidad corrective_actions.view.
+              example: true
+            checklists:
+              type: boolean
+              description: Acceso general al módulo de checklists según ChecklistPolicy.
+              example: true
+            norms:
+              type: boolean
+              description: Acceso general al módulo de normativa según NormPolicy.
+              example: true
+            reports:
+              type: boolean
+              description: |
+                Requiere el permiso reports.view o reports.view_own.
+              example: true
+            administration:
+              type: boolean
+              description: |
+                Requiere al menos uno de los siguientes permisos:
+                users.manage, roles.manage, memberships.manage
+                o plants.manage.
+              example: false
         corrective_actions:
           type: object
           required:

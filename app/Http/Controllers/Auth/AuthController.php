@@ -2,9 +2,14 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Authorization\Permission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\Checklist;
 use App\Models\CorrectiveAction;
+use App\Models\Incident;
+use App\Models\Inspection;
+use App\Models\Norm;
 use App\Support\Api\ApiErrorCode;
 use App\Support\Api\ApiErrorResponse;
 use App\Support\Tenancy\TenantContext;
@@ -31,20 +36,25 @@ class AuthController extends Controller
 
         $user = Auth::user();
 
-        // Usuario inactivo no puede autenticarse
+        // Usuario inactivo no puede autenticarse.
         if (! $user->status) {
             Auth::logout();
 
             return ApiErrorResponse::make(ApiErrorCode::UserInactive);
         }
 
-        // Crear token personal de Sanctum (bearer token para API)
+        // Crear token personal de Sanctum (bearer token para API).
         $token = $user->createToken('inspecta-api')->plainTextToken;
 
         return response()->json([
             'message' => 'Autenticación exitosa.',
             'data' => [
-                'user' => $user->only(['id', 'name', 'email', 'organization_id']),
+                'user' => $user->only([
+                    'id',
+                    'name',
+                    'email',
+                    'organization_id',
+                ]),
                 'token' => $token,
             ],
         ]);
@@ -59,32 +69,112 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Usuario autenticado.',
-            'data' => $user->only(['id', 'name', 'email', 'organization_id']),
+            'data' => $user->only([
+                'id',
+                'name',
+                'email',
+                'organization_id',
+            ]),
         ]);
     }
 
     /**
      * Capacidades generales del usuario en la organización activa.
      *
-     * Son capacidades de sección/operación, no autorizaciones sobre un
-     * recurso concreto: viewAny/create/updateAny/recordUpdateAny siguen
-     * delegando en CorrectiveActionPolicy y cada recurso se autoriza después
-     * con sus propias comprobaciones de organización y ubicación.
+     * Las capacidades permiten determinar los módulos y operaciones
+     * disponibles para el usuario dentro del tenant seleccionado.
+     *
+     * No sustituyen las comprobaciones de autorización sobre recursos
+     * concretos, las cuales siguen siendo responsabilidad de las policies.
+     *
+     * Los nombres de los roles son exclusivamente informativos.
      */
     public function capabilities(Request $request)
     {
         $organizationId = app(TenantContext::class)->requireId();
-        $gate = Gate::forUser($request->user());
+
+        $user = $request->user();
+
+        $gate = Gate::forUser($user);
+
+        // Capacidades específicas de acciones correctivas.
+        $correctiveActions = [
+            'view' => $gate->allows(
+                'viewAny',
+                CorrectiveAction::class
+            ),
+            'create' => $gate->allows(
+                'create',
+                CorrectiveAction::class
+            ),
+            'update' => $gate->allows(
+                'updateAny',
+                CorrectiveAction::class
+            ),
+            'record_update' => $gate->allows(
+                'recordUpdateAny',
+                CorrectiveAction::class
+            ),
+            'verify' => $gate->allows(
+                'verifyAny',
+                CorrectiveAction::class
+            ),
+        ];
+
+        // Capacidades generales de navegación por módulo.
+        $modules = [
+            'dashboard' => true,
+
+            'inspections' => $gate->allows(
+                'viewAny',
+                Inspection::class
+            ),
+
+            'incidents' => $gate->allows(
+                'viewAny',
+                Incident::class
+            ),
+
+            'corrective_actions' => $correctiveActions['view'],
+
+            'checklists' => $gate->allows(
+                'viewAny',
+                Checklist::class
+            ),
+
+            'norms' => $gate->allows(
+                'viewAny',
+                Norm::class
+            ),
+
+            'reports' => (
+                $user->hasPermission(Permission::ReportsView)
+                || $user->hasPermission(Permission::ReportsViewOwn)
+            ),
+
+            'administration' => (
+                $user->hasPermission(Permission::UsersManage)
+                || $user->hasPermission(Permission::RolesManage)
+                || $user->hasPermission(Permission::MembershipsManage)
+                || $user->hasPermission(Permission::PlantsManage)
+            ),
+        ];
+
+        // Roles activos del usuario dentro del tenant seleccionado.
+        $roles = $user->roles()
+            ->wherePivot('organization_id', $organizationId)
+            ->where('roles.organization_id', $organizationId)
+            ->where('roles.status', true)
+            ->orderBy('roles.name')
+            ->pluck('roles.name')
+            ->values()
+            ->all();
 
         return response()->json([
             'organization_id' => $organizationId,
-            'corrective_actions' => [
-                'view' => $gate->allows('viewAny', CorrectiveAction::class),
-                'create' => $gate->allows('create', CorrectiveAction::class),
-                'update' => $gate->allows('updateAny', CorrectiveAction::class),
-                'record_update' => $gate->allows('recordUpdateAny', CorrectiveAction::class),
-                'verify' => $gate->allows('verifyAny', CorrectiveAction::class),
-            ],
+            'roles' => $roles,
+            'modules' => $modules,
+            'corrective_actions' => $correctiveActions,
         ]);
     }
 
@@ -94,6 +184,7 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $token = $request->bearerToken();
+
         $accessToken = PersonalAccessToken::findToken($token);
 
         if ($accessToken) {

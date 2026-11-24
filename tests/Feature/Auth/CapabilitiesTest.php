@@ -44,7 +44,7 @@ class CapabilitiesTest extends TestCase
         ?string $systemKey = null
     ): void {
         app(TenantContext::class)->runAs($organization->id, function () use ($user, $organization, $permissions, $systemKey): void {
-            $role = $this->role($organization, 'Cap-'.Str::random(10));
+            $role = $this->role($organization, 'Cap-' . Str::random(10));
             $user->assignRole($role);
 
             foreach ($permissions as $permission) {
@@ -97,7 +97,10 @@ class CapabilitiesTest extends TestCase
         $this->capabilities($this->user, $this->orgB)
             ->assertForbidden()
             ->assertJsonPath('code', 'organization_access_denied')
-            ->assertJsonMissingPath('corrective_actions');
+            ->assertJsonMissingPath('corrective_actions')
+            ->assertJsonMissingPath('modules')
+            ->assertJsonMissingPath('roles')
+            ->assertJsonMissingPath('permissions');
     }
 
     public function test_membresia_revocada_devuelve_403(): void
@@ -142,7 +145,7 @@ class CapabilitiesTest extends TestCase
             ->assertJsonPath('corrective_actions.record_update', false)
             ->assertJsonPath('corrective_actions.verify', false)
             ->assertJsonMissingPath('permissions')
-            ->assertJsonMissingPath('roles');
+            ->assertJsonPath('roles', []);
     }
 
     public function test_findings_register_solo_habilita_lectura(): void
@@ -173,17 +176,29 @@ class CapabilitiesTest extends TestCase
 
     public function test_manage_habilita_lectura_y_operaciones_generales_de_escritura(): void
     {
-        $this->grant($this->user, $this->orgA, [Permission::CorrectiveActionsManage]);
+        $this->grant($this->user, $this->orgA, [
+            Permission::CorrectiveActionsManage,
+        ]);
+
+        $roleName = app(TenantContext::class)->runAs(
+            $this->orgA->id,
+            fn() => $this->user->roles()
+                ->wherePivot('organization_id', $this->orgA->id)
+                ->where('roles.organization_id', $this->orgA->id)
+                ->sole()
+                ->name
+        );
 
         $this->capabilities($this->user, $this->orgA)
             ->assertOk()
+            ->assertJsonPath('organization_id', $this->orgA->id)
             ->assertJsonPath('corrective_actions.view', true)
             ->assertJsonPath('corrective_actions.create', true)
             ->assertJsonPath('corrective_actions.update', true)
             ->assertJsonPath('corrective_actions.record_update', true)
             ->assertJsonPath('corrective_actions.verify', false)
             ->assertJsonMissingPath('permissions')
-            ->assertJsonMissingPath('roles');
+            ->assertJsonPath('roles', [$roleName]);
     }
 
     public function test_verify_es_independiente_de_manage_y_habilita_solo_verificacion(): void
