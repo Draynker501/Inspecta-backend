@@ -53,7 +53,7 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
     {
         return (string) Uuid::uuid5(
             Uuid::NAMESPACE_DNS,
-            $organization->id . ':' . $name
+            $organization->id.':'.$name
         );
     }
 
@@ -71,7 +71,7 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
 
     private function manifestPath(): string
     {
-        $path = sys_get_temp_dir() . '/role-manifest-' . Str::uuid7() . '.json';
+        $path = sys_get_temp_dir().'/role-manifest-'.Str::uuid7().'.json';
         $this->tempFiles[] = $path;
 
         return $path;
@@ -478,7 +478,7 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
                     'role_id' => $role,
                     'system_key' => 'admin',
                     'previous_system_key' => null,
-                ]
+                ],
             ],
         ], JSON_THROW_ON_ERROR));
 
@@ -507,7 +507,7 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
                     'role_id' => $role,
                     'system_key' => 'admin',
                     'previous_system_key' => null,
-                ]
+                ],
             ],
         ], JSON_THROW_ON_ERROR));
 

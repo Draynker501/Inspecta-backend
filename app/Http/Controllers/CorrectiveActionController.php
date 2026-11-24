@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\OrganizationMembership;
 use App\Policies\CorrectiveActionPolicy;
 use App\Policies\InspectionPolicy;
+use App\Services\IncidentStatusService;
 use App\Support\Audit\AuditLogger;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +18,6 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use App\Services\IncidentStatusService;
 
 class CorrectiveActionController extends TenantController
 {
@@ -217,7 +217,7 @@ class CorrectiveActionController extends TenantController
             ->pluck('name', 'id');
 
         $result['updates'] = $action->updates
-            ->map(fn($update) => [
+            ->map(fn ($update) => [
                 'id' => $update->id,
                 'corrective_action_id' => $update->corrective_action_id,
                 'user_id' => $update->user_id,
@@ -382,8 +382,8 @@ class CorrectiveActionController extends TenantController
     ): void {
         if (
             $request->query() !== []
-            || !$request->isJson()
-            || !is_object(json_decode($request->getContent()))
+            || ! $request->isJson()
+            || ! is_object(json_decode($request->getContent()))
         ) {
             throw ValidationException::withMessages([
                 'fields' => 'Se requiere un objeto JSON sin parámetros de consulta.',

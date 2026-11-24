@@ -11,6 +11,7 @@ use App\Models\ProductionLine;
 use App\Models\Question;
 use App\Policies\IncidentPolicy;
 use App\Policies\InspectionPolicy;
+use App\Services\IncidentStatusService;
 use App\Support\Audit\AuditLogger;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
@@ -20,7 +21,6 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use App\Services\IncidentStatusService;
 
 class IncidentController extends TenantController
 {
@@ -118,11 +118,11 @@ class IncidentController extends TenantController
         $coordinate = static function (float $max): \Closure {
             return static function (string $attribute, mixed $value, \Closure $fail) use ($max): void {
                 if (
-                    (!is_int($value) && !is_float($value) && !is_string($value))
-                    || !is_numeric($value) || !is_finite((float) $value)
+                    (! is_int($value) && ! is_float($value) && ! is_string($value))
+                    || ! is_numeric($value) || ! is_finite((float) $value)
                     || abs((float) $value) > $max
                     || (float) $value !== round((float) $value, 7)
-                    || (is_string($value) && !preg_match('/^-?\d+(?:\.\d{1,7})?$/D', $value))
+                    || (is_string($value) && ! preg_match('/^-?\d+(?:\.\d{1,7})?$/D', $value))
                 ) {
                     $fail('La coordenada no es válida.');
                 }
@@ -143,7 +143,7 @@ class IncidentController extends TenantController
                     if (is_string($value) && strlen($value) > 65535) {
                         $fail('La descripción supera 65535 bytes.');
                     }
-                }
+                },
             ],
             'risk_level' => ['required', Rule::in(self::RISK_LEVELS)],
             'latitude' => ['sometimes', 'nullable', $coordinate(90)],
@@ -153,7 +153,7 @@ class IncidentController extends TenantController
         if (isset($data['latitude']) !== isset($data['longitude'])) {
             throw ValidationException::withMessages(['coordinates' => 'Las coordenadas deben proporcionarse juntas.']);
         }
-        if (isset($data['question_id']) && !isset($data['inspection_id'])) {
+        if (isset($data['question_id']) && ! isset($data['inspection_id'])) {
             throw ValidationException::withMessages(['inspection_id' => 'La inspección es obligatoria cuando se indica una pregunta.']);
         }
 
@@ -191,11 +191,11 @@ class IncidentController extends TenantController
             if (isset($data['question_id'])) {
                 $exists = Question::query()->where('organization_id', $org)
                     ->whereKey($data['question_id'])
-                    ->whereHas('checklistSection', fn($query) => $query
+                    ->whereHas('checklistSection', fn ($query) => $query
                         ->where('organization_id', $org)
                         ->where('checklist_version_id', $inspection->checklist_version_id))
                     ->exists();
-                if (!$exists) {
+                if (! $exists) {
                     throw ValidationException::withMessages(['question_id' => 'La pregunta no pertenece a la versión inspeccionada.']);
                 }
             }
@@ -334,8 +334,8 @@ class IncidentController extends TenantController
     private function requireJsonObject(Request $request, array $allowedFields): void
     {
         if (
-            $request->query() !== [] || !$request->isJson()
-            || !is_object(json_decode($request->getContent()))
+            $request->query() !== [] || ! $request->isJson()
+            || ! is_object(json_decode($request->getContent()))
         ) {
             throw ValidationException::withMessages(['fields' => 'Se requiere un objeto JSON sin parámetros de consulta.']);
         }

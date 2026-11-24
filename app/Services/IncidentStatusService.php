@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\Incident;
 use App\Models\CorrectiveAction;
+use App\Models\Incident;
 use App\Support\Audit\AuditLogger;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Validation\ValidationException;
@@ -49,7 +49,7 @@ class IncidentStatusService
      */
     public function allActionsCompleted(Incident $incident): bool
     {
-        return !$this->actions($incident)
+        return ! $this->actions($incident)
             ->whereNotIn('status', ['completed', 'verified'])
             ->exists();
     }
@@ -59,7 +59,7 @@ class IncidentStatusService
      */
     public function allActionsVerified(Incident $incident): bool
     {
-        return !$this->actions($incident)
+        return ! $this->actions($incident)
             ->where('status', '!=', 'verified')
             ->exists();
     }
@@ -78,7 +78,7 @@ class IncidentStatusService
         }
 
         if (
-            !in_array(
+            ! in_array(
                 $requested,
                 self::TRANSITIONS[$current] ?? [],
                 true
@@ -91,7 +91,7 @@ class IncidentStatusService
 
         if (
             $requested === 'resolved'
-            && !$this->allActionsCompleted($incident)
+            && ! $this->allActionsCompleted($incident)
         ) {
             throw ValidationException::withMessages([
                 'status' => 'No se puede resolver la incidencia mientras existan acciones correctivas pendientes o en proceso.',
@@ -100,7 +100,7 @@ class IncidentStatusService
 
         if (
             $requested === 'closed'
-            && !$this->allActionsVerified($incident)
+            && ! $this->allActionsVerified($incident)
         ) {
             throw ValidationException::withMessages([
                 'status' => 'No se puede cerrar la incidencia mientras existan acciones correctivas sin verificar.',
@@ -147,7 +147,7 @@ class IncidentStatusService
             return;
         }
 
-        if (!$this->hasActions($incident)) {
+        if (! $this->hasActions($incident)) {
             return;
         }
 
