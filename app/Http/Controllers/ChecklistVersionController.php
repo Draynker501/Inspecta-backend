@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Checklist;
 use App\Models\ChecklistVersion;
 use App\Models\Question;
+use App\Services\ChecklistOrderingService;
 use App\Support\Audit\AuditLogger;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
@@ -15,7 +16,6 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use App\Services\ChecklistOrderingService;
 
 class ChecklistVersionController extends TenantController
 {
@@ -44,11 +44,10 @@ class ChecklistVersionController extends TenantController
                 return $version;
             }
             if ($newStatus === 'published') {
-                if (!$checklist->status) {
+                if (! $checklist->status) {
                     throw ValidationException::withMessages([
-                        'status' =>
-                            "El checklist \"{$checklist->name}\" está inactivo. "
-                            . 'Debes reactivarlo antes de publicar una versión.',
+                        'status' => "El checklist \"{$checklist->name}\" está inactivo. "
+                            .'Debes reactivarlo antes de publicar una versión.',
                     ]);
                 }
 
@@ -57,9 +56,8 @@ class ChecklistVersionController extends TenantController
                     || $version->published_at !== null
                 ) {
                     throw ValidationException::withMessages([
-                        'status' =>
-                            "La versión {$version->version} no es un borrador "
-                            . 'disponible para publicación.',
+                        'status' => "La versión {$version->version} no es un borrador "
+                            .'disponible para publicación.',
                     ]);
                 }
                 $this->validateBeforePublishing($version);
@@ -72,7 +70,7 @@ class ChecklistVersionController extends TenantController
                     $old->update(['status' => 'archived']);
                     app(AuditLogger::class)->record('checklist_version.status_changed', $old, ['status' => 'published'], ['status' => 'archived']);
                 }
-            } elseif (!in_array($version->status, ['draft', 'published'], true)) {
+            } elseif (! in_array($version->status, ['draft', 'published'], true)) {
                 throw ValidationException::withMessages(['status' => 'Transición de estado inválida.']);
             }
 
@@ -89,7 +87,6 @@ class ChecklistVersionController extends TenantController
 
         return response()->json(['data' => $version]);
     }
-
 
     private function validateBeforePublishing(ChecklistVersion $version): void
     {
@@ -120,8 +117,7 @@ class ChecklistVersionController extends TenantController
 
         if ($foreignSection || $foreignQuestion) {
             throw ValidationException::withMessages([
-                'sections' =>
-                    'La estructura contiene relaciones de otra organización.',
+                'sections' => 'La estructura contiene relaciones de otra organización.',
             ]);
         }
 
@@ -157,7 +153,7 @@ class ChecklistVersionController extends TenantController
         if ($sections->isEmpty()) {
             $errors['sections'][] =
                 "La versión {$version->version} no contiene secciones. "
-                . 'Registra al menos una sección con preguntas activas.';
+                .'Registra al menos una sección con preguntas activas.';
         }
 
         // Validar individualmente cada sección.
@@ -174,13 +170,13 @@ class ChecklistVersionController extends TenantController
             );
 
             $activeQuestions = $sectionQuestions->filter(
-                fn($question) => (bool) $question->status
+                fn ($question) => (bool) $question->status
             );
 
             if ($sectionQuestions->isEmpty()) {
                 $errors['sections'][] =
                     "{$sectionLabel}: no contiene preguntas. "
-                    . 'Registra al menos una pregunta activa.';
+                    .'Registra al menos una pregunta activa.';
 
                 continue;
             }
@@ -190,8 +186,8 @@ class ChecklistVersionController extends TenantController
 
                 $errors['sections'][] =
                     "{$sectionLabel}: contiene {$total} pregunta(s), "
-                    . 'pero ninguna está activa. '
-                    . 'Activa al menos una pregunta o registra una nueva.';
+                    .'pero ninguna está activa. '
+                    .'Activa al menos una pregunta o registra una nueva.';
 
                 continue;
             }
@@ -212,17 +208,17 @@ class ChecklistVersionController extends TenantController
 
                 // Texto de la pregunta.
                 if (
-                    !is_string($question->question_text)
+                    ! is_string($question->question_text)
                     || trim($question->question_text) === ''
                 ) {
                     $errors['questions'][] =
                         "{$questionLabel}: el texto de la pregunta "
-                        . 'es obligatorio.';
+                        .'es obligatorio.';
                 }
 
                 // Tipo de respuesta.
                 if (
-                    !in_array(
+                    ! in_array(
                         $question->answer_type,
                         $allowedAnswerTypes,
                         true
@@ -230,7 +226,7 @@ class ChecklistVersionController extends TenantController
                 ) {
                     $errors['questions'][] =
                         "{$questionLabel}: el tipo de respuesta "
-                        . 'no es válido.';
+                        .'no es válido.';
 
                     continue;
                 }
@@ -241,7 +237,7 @@ class ChecklistVersionController extends TenantController
                     if ($question->options !== null) {
                         $errors['questions'][] =
                             "{$questionLabel}: contiene opciones de "
-                            . 'respuesta que no corresponden a su tipo.';
+                            .'respuesta que no corresponden a su tipo.';
                     }
 
                     continue;
@@ -251,12 +247,12 @@ class ChecklistVersionController extends TenantController
                 $options = $question->options;
 
                 if (
-                    !is_array($options)
-                    || !array_is_list($options)
+                    ! is_array($options)
+                    || ! array_is_list($options)
                 ) {
                     $errors['questions'][] =
                         "{$questionLabel}: las opciones de respuesta "
-                        . 'no tienen una estructura válida.';
+                        .'no tienen una estructura válida.';
 
                     continue;
                 }
@@ -264,7 +260,7 @@ class ChecklistVersionController extends TenantController
                 if (count($options) < 2) {
                     $errors['questions'][] =
                         "{$questionLabel}: debe contener al menos "
-                        . 'dos opciones de respuesta.';
+                        .'dos opciones de respuesta.';
                 }
 
                 $values = [];
@@ -273,13 +269,13 @@ class ChecklistVersionController extends TenantController
                     $optionNumber = $index + 1;
 
                     if (
-                        !is_array($option)
+                        ! is_array($option)
                         || count($option) !== 2
-                        || !isset($option['value'], $option['label'])
+                        || ! isset($option['value'], $option['label'])
                     ) {
                         $errors['questions'][] =
                             "{$questionLabel}: la opción {$optionNumber} "
-                            . 'no tiene una estructura válida.';
+                            .'no tiene una estructura válida.';
 
                         continue;
                     }
@@ -288,39 +284,39 @@ class ChecklistVersionController extends TenantController
                     $label = $option['label'];
 
                     if (
-                        !is_string($value)
+                        ! is_string($value)
                         || trim($value) === ''
                     ) {
                         $errors['questions'][] =
                             "{$questionLabel}: la opción {$optionNumber} "
-                            . 'no tiene un valor válido.';
+                            .'no tiene un valor válido.';
                     } else {
                         if (mb_strlen($value) > 100) {
                             $errors['questions'][] =
                                 "{$questionLabel}: el valor de la opción "
-                                . "{$optionNumber} supera los 100 caracteres.";
+                                ."{$optionNumber} supera los 100 caracteres.";
                         }
 
                         if (in_array($value, $values, true)) {
                             $errors['questions'][] =
                                 "{$questionLabel}: la opción {$optionNumber} "
-                                . 'tiene un valor duplicado.';
+                                .'tiene un valor duplicado.';
                         }
 
                         $values[] = $value;
                     }
 
                     if (
-                        !is_string($label)
+                        ! is_string($label)
                         || trim($label) === ''
                     ) {
                         $errors['questions'][] =
                             "{$questionLabel}: la opción {$optionNumber} "
-                            . 'no tiene una etiqueta válida.';
+                            .'no tiene una etiqueta válida.';
                     } elseif (mb_strlen($label) > 150) {
                         $errors['questions'][] =
                             "{$questionLabel}: la etiqueta de la opción "
-                            . "{$optionNumber} supera los 150 caracteres.";
+                            ."{$optionNumber} supera los 150 caracteres.";
                     }
                 }
             }
@@ -415,38 +411,38 @@ class ChecklistVersionController extends TenantController
             // pertenecientes a otras organizaciones.
             if (
                 $link->organization_id !== $organizationId
-                || !$requirement
+                || ! $requirement
                 || $requirement->organization_id !== $organizationId
-                || !$norm
+                || ! $norm
                 || $norm->organization_id !== $organizationId
             ) {
                 $errors['norms'][] =
                     "{$questionLabel}: contiene una vinculación "
-                    . 'normativa inválida o ajena a la organización.';
+                    .'normativa inválida o ajena a la organización.';
 
                 continue;
             }
 
             // Identificar exactamente la norma inactiva.
-            if (!$norm->status) {
+            if (! $norm->status) {
                 $normLabel = $norm->code;
 
-                if (!empty($norm->version)) {
+                if (! empty($norm->version)) {
                     $normLabel .= " (Versión {$norm->version})";
                 }
 
                 $errors['norms'][] =
                     "{$questionLabel}: el requisito "
-                    . "{$requirement->code} pertenece a la norma "
-                    . "\"{$normLabel}\", que está inactiva. "
-                    . 'Reactiva la norma o desvincula el requisito.';
+                    ."{$requirement->code} pertenece a la norma "
+                    ."\"{$normLabel}\", que está inactiva. "
+                    .'Reactiva la norma o desvincula el requisito.';
             }
         }
 
         // Eliminar categorías que no contienen errores.
         $errors = array_filter(
             $errors,
-            fn(array $messages): bool => $messages !== []
+            fn (array $messages): bool => $messages !== []
         );
 
         // Devolver todos los incumplimientos en una sola respuesta.
@@ -482,7 +478,7 @@ class ChecklistVersionController extends TenantController
                 'last_page' => $versions->lastPage(),
                 'per_page' => $versions->perPage(),
                 'total' => $versions->total(),
-            ]
+            ],
         ]);
     }
 

@@ -128,7 +128,7 @@ class NormRequirementController extends TenantController
 
     private function assertActiveNorm(Norm $norm): void
     {
-        if (!$norm->status) {
+        if (! $norm->status) {
             throw ValidationException::withMessages([
                 'status' => 'No se pueden crear ni modificar requisitos de una norma inactiva. Debe reactivarla primero.',
             ]);
@@ -152,7 +152,7 @@ class NormRequirementController extends TenantController
                     if (is_string($value) && strlen($value) > 65535) {
                         $fail('El texto supera el máximo de 65535 bytes.');
                     }
-                }
+                },
             ],
         ]);
     }
@@ -202,7 +202,7 @@ class NormRequirementController extends TenantController
         Gate::authorize('viewAny', Norm::class);
         $requirement = NormRequirement::query()
             ->where('organization_id', app(TenantContext::class)->requireId())
-            ->whereHas('norm', fn($query) => $query->where('organization_id', app(TenantContext::class)->requireId()))
+            ->whereHas('norm', fn ($query) => $query->where('organization_id', app(TenantContext::class)->requireId()))
             ->findOrFail($requirementId);
         Gate::authorize('view', $requirement->norm);
 

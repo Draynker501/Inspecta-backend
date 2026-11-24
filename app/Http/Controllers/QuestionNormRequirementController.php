@@ -115,7 +115,7 @@ class QuestionNormRequirementController extends TenantController
             $norm = Norm::where('organization_id', $org)->lockForUpdate()->findOrFail($candidate->norm_id);
             Gate::authorize('view', $norm);
             $requirement = NormRequirement::where('organization_id', $org)->where('norm_id', $norm->id)->lockForUpdate()->findOrFail($candidate->id);
-            if (!$norm->status) {
+            if (! $norm->status) {
                 throw ValidationException::withMessages(['norm_requirement_id' => 'No se pueden vincular requisitos de normas inactivas.']);
             }
             if (
