@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Services\IncidentStatusService;
 
 class CorrectiveActionController extends TenantController
 {
@@ -154,6 +155,9 @@ class CorrectiveActionController extends TenantController
                 404
             );
 
+            app(IncidentStatusService::class)
+                ->validateActionCreation($incident);
+
             $this->validateAssignee($data['assigned_to'], $org);
 
             $action = CorrectiveAction::create([
@@ -284,6 +288,15 @@ class CorrectiveActionController extends TenantController
             Gate::authorize('update', $action);
 
             if (
+                isset($data['incident_id'])
+                && $data['incident_id'] !== $action->incident_id
+            ) {
+                throw ValidationException::withMessages([
+                    'incident_id' => 'No se puede cambiar la incidencia asociada a una acción correctiva existente.',
+                ]);
+            }
+
+            if (
                 isset($data['assigned_to'])
                 && $data['assigned_to'] !== $action->assigned_to
                 && in_array($action->status, ['completed', 'verified'], true)
@@ -308,6 +321,12 @@ class CorrectiveActionController extends TenantController
                 ),
                 404
             );
+            
+            if ($incident->status === 'closed') {
+                throw ValidationException::withMessages([
+                    'incident_id' => 'No se pueden modificar acciones correctivas de una incidencia cerrada.',
+                ]);
+            }
 
             if (isset($data['assigned_to'])) {
                 $this->validateAssignee($data['assigned_to'], $org);

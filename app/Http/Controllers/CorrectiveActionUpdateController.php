@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\CorrectiveAction;
 use App\Models\CorrectiveActionUpdate;
 use App\Models\Organization;
+use App\Models\Incident;
+use App\Services\IncidentStatusService;
 use App\Policies\CorrectiveActionPolicy;
 use App\Support\Audit\AuditLogger;
 use App\Support\Tenancy\TenantContext;
@@ -45,7 +47,10 @@ class CorrectiveActionUpdateController extends TenantController
         $data = $request->validate([
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => [
-                'sometimes', 'integer', 'min:1', 'max:100',
+                'sometimes',
+                'integer',
+                'min:1',
+                'max:100',
             ],
         ]);
 
@@ -121,24 +126,20 @@ class CorrectiveActionUpdateController extends TenantController
                 ]),
             ],
             'comment' => [
-                'sometimes', 'nullable', 'string', 'max:65535',
+                'sometimes',
+                'nullable',
+                'string',
+                'max:65535',
             ],
         ]);
 
         $isVerification = $data['status'] === 'verified';
 
-        if (! $isVerification) {
+        if (!$isVerification) {
             Gate::authorize('recordUpdate', $candidate);
         }
 
-        $update = DB::transaction(function () use (
-            $org,
-            $user,
-            $policy,
-            $actionId,
-            $data,
-            $isVerification
-        ): CorrectiveActionUpdate {
+        $update = DB::transaction(function () use ($org, $user, $policy, $actionId, $data, $isVerification): CorrectiveActionUpdate {
             Organization::query()
                 ->whereKey($org)
                 ->lockForUpdate()
@@ -161,8 +162,6 @@ class CorrectiveActionUpdateController extends TenantController
             $after = $data['status'];
 
             if ($isVerification) {
-                // Una transición inválida o repetida se informa como 422;
-                // después se exige la autorización independiente de verificación.
                 $this->validateStatusTransition(
                     $before,
                     $after
@@ -178,7 +177,20 @@ class CorrectiveActionUpdateController extends TenantController
                 );
             }
 
-            $changes = ['status' => $after];
+            $incident = Incident::query()
+                ->where('organization_id', $org)
+                ->lockForUpdate()
+                ->findOrFail($action->incident_id);
+
+            if ($incident->status === 'closed') {
+                throw ValidationException::withMessages([
+                    'status' => 'No se pueden registrar avances en acciones de una incidencia cerrada.',
+                ]);
+            }
+
+            $changes = [
+                'status' => $after,
+            ];
 
             if ($after === 'completed') {
                 $changes['completed_at'] = now();
@@ -226,6 +238,12 @@ class CorrectiveActionUpdateController extends TenantController
                 $auditValues
             );
 
+            // Sincronizar el estado de la incidencia.
+            app(IncidentStatusService::class)->synchronize(
+                $incident,
+                $action->id
+            );
+
             return $update;
         });
 
@@ -239,7 +257,7 @@ class CorrectiveActionUpdateController extends TenantController
         string $requested
     ): void {
         if (
-            ! in_array($current, self::STATUSES, true)
+            !in_array($current, self::STATUSES, true)
             || (self::TRANSITIONS[$current] ?? null) !== $requested
         ) {
             throw ValidationException::withMessages([
@@ -254,8 +272,8 @@ class CorrectiveActionUpdateController extends TenantController
     ): void {
         if (
             $request->query() !== []
-            || ! $request->isJson()
-            || ! is_object(json_decode($request->getContent()))
+            || !$request->isJson()
+            || !is_object(json_decode($request->getContent()))
         ) {
             throw ValidationException::withMessages([
                 'fields' => 'Se requiere un objeto JSON sin parámetros de consulta.',

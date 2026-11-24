@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Services\IncidentStatusService;
 
 class IncidentController extends TenantController
 {
@@ -28,13 +29,6 @@ class IncidentController extends TenantController
     private const RISK_LEVELS = ['low', 'medium', 'high', 'critical'];
 
     private const STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
-
-    private const TRANSITIONS = [
-        'open' => ['in_progress'],
-        'in_progress' => ['resolved'],
-        'resolved' => ['closed'],
-        'closed' => [],
-    ];
 
     public function index(Request $request): JsonResponse
     {
@@ -254,45 +248,87 @@ class IncidentController extends TenantController
         return response()->json(['data' => $this->dto($incident)]);
     }
 
-    public function updateStatus(Request $request, string $incidentId): JsonResponse
-    {
+    public function updateStatus(
+        Request $request,
+        string $incidentId
+    ): JsonResponse {
         Gate::authorize('viewAny', Incident::class);
+
         $org = app(TenantContext::class)->requireId();
         $user = $request->user();
         $policy = app(IncidentPolicy::class);
-        $candidate = Incident::query()->where('organization_id', $org)->findOrFail($incidentId);
-        abort_unless($policy->view($user, $candidate), 404);
+
+        $candidate = Incident::query()
+            ->where('organization_id', $org)
+            ->findOrFail($incidentId);
+
+        abort_unless(
+            $policy->view($user, $candidate),
+            404
+        );
+
         Gate::authorize('update', $candidate);
+
         $this->requireJsonObject($request, ['status']);
-        $data = $request->validate(['status' => ['required', Rule::in(self::STATUSES)]]);
+
+        $data = $request->validate([
+            'status' => [
+                'required',
+                Rule::in(self::STATUSES),
+            ],
+        ]);
 
         $incident = DB::transaction(function () use ($org, $user, $incidentId, $policy, $data): Incident {
-            Organization::query()->whereKey($org)->lockForUpdate()->firstOrFail();
-            app(TenantContext::class)->flushPermissionCache($user->id, $org);
-            $incident = Incident::query()->where('organization_id', $org)
-                ->lockForUpdate()->findOrFail($incidentId);
-            abort_unless($policy->view($user, $incident), 404);
+            Organization::query()
+                ->whereKey($org)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            app(TenantContext::class)
+                ->flushPermissionCache($user->id, $org);
+
+            $incident = Incident::query()
+                ->where('organization_id', $org)
+                ->lockForUpdate()
+                ->findOrFail($incidentId);
+
+            abort_unless(
+                $policy->view($user, $incident),
+                404
+            );
+
             Gate::authorize('update', $incident);
 
             $before = $incident->status;
             $after = $data['status'];
+
             if ($before !== $after) {
-                if (!in_array($after, self::TRANSITIONS[$before] ?? [], true)) {
-                    throw ValidationException::withMessages(['status' => 'La transición de estado no está permitida.']);
-                }
-                $incident->update(['status' => $after]);
+                app(IncidentStatusService::class)
+                    ->validateTransition($incident, $after);
+
+                $incident->update([
+                    'status' => $after,
+                ]);
+
                 app(AuditLogger::class)->record(
                     'incident.status_changed',
                     $incident,
-                    ['status' => $before],
-                    ['status' => $after]
+                    [
+                        'status' => $before,
+                    ],
+                    [
+                        'status' => $after,
+                        'automatic' => false,
+                    ]
                 );
             }
 
             return $incident->refresh();
         });
 
-        return response()->json(['data' => $this->dto($incident)]);
+        return response()->json([
+            'data' => $this->dto($incident),
+        ]);
     }
 
     private function requireJsonObject(Request $request, array $allowedFields): void

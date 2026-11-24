@@ -53,7 +53,7 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
     {
         return (string) Uuid::uuid5(
             Uuid::NAMESPACE_DNS,
-            $organization->id.':'.$name
+            $organization->id . ':' . $name
         );
     }
 
@@ -71,7 +71,7 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
 
     private function manifestPath(): string
     {
-        $path = sys_get_temp_dir().'/role-manifest-'.Str::uuid7().'.json';
+        $path = sys_get_temp_dir() . '/role-manifest-' . Str::uuid7() . '.json';
         $this->tempFiles[] = $path;
 
         return $path;
@@ -112,7 +112,9 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
         $this->assertNull($this->systemKey($customId));
         $this->assertSame('dry_run', $this->manifest($dryManifest)['state']);
         $this->assertTrue(Str::isUuid($this->manifest($dryManifest)['run_id']));
-        $this->assertSame(0600, fileperms($dryManifest) & 0777);
+        if (PHP_OS_FAMILY !== 'Windows') {
+            $this->assertSame(0600, fileperms($dryManifest) & 0777);
+        }
         $this->assertCount(3, $this->manifest($dryManifest)['changes']);
 
         $applyManifest = $this->manifestPath();
@@ -203,8 +205,10 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
             ['organization_id' => $org->id, 'role_id' => $roleA, 'system_key' => 'supervisor'],
         ]);
         $this->assertSame(1, Artisan::call('roles:backfill-system-key', [
-            '--source' => 'mapping-file', '--mapping' => $duplicate,
-            '--organization' => $org->id, '--apply' => true,
+            '--source' => 'mapping-file',
+            '--mapping' => $duplicate,
+            '--organization' => $org->id,
+            '--apply' => true,
         ]));
         $this->assertSame('inspector', $this->systemKey($roleA));
 
@@ -212,8 +216,10 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
             ['organization_id' => $org->id, 'role_id' => $roleA, 'system_key' => 'admin'],
         ]);
         $this->assertSame(1, Artisan::call('roles:backfill-system-key', [
-            '--source' => 'mapping-file', '--mapping' => $conflict,
-            '--organization' => $org->id, '--apply' => true,
+            '--source' => 'mapping-file',
+            '--mapping' => $conflict,
+            '--organization' => $org->id,
+            '--apply' => true,
         ]));
         $this->assertSame('inspector', $this->systemKey($roleA));
 
@@ -221,8 +227,10 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
             ['organization_id' => $org->id, 'role_id' => (string) Str::uuid7(), 'system_key' => 'admin'],
         ]);
         $this->assertSame(1, Artisan::call('roles:backfill-system-key', [
-            '--source' => 'mapping-file', '--mapping' => $missing,
-            '--organization' => $org->id, '--apply' => true,
+            '--source' => 'mapping-file',
+            '--mapping' => $missing,
+            '--organization' => $org->id,
+            '--apply' => true,
         ]));
         $this->assertNull($this->systemKey($roleB));
     }
@@ -238,8 +246,10 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
             ['organization_id' => $orgB->id, 'role_id' => $roleA, 'system_key' => 'admin'],
         ]);
         $this->assertSame(1, Artisan::call('roles:backfill-system-key', [
-            '--source' => 'mapping-file', '--mapping' => $crossTenant,
-            '--organization' => $orgB->id, '--apply' => true,
+            '--source' => 'mapping-file',
+            '--mapping' => $crossTenant,
+            '--organization' => $orgB->id,
+            '--apply' => true,
         ]));
         $this->assertNull($this->systemKey($roleA));
 
@@ -247,7 +257,8 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
             ['organization_id' => $orgA->id, 'role_id' => $roleA, 'system_key' => 'admin'],
         ], 2);
         $this->assertSame(1, Artisan::call('roles:backfill-system-key', [
-            '--source' => 'mapping-file', '--mapping' => $invalidVersion,
+            '--source' => 'mapping-file',
+            '--mapping' => $invalidVersion,
             '--organization' => $orgA->id,
         ]));
     }
@@ -262,7 +273,9 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
         ]);
 
         $this->assertSame(1, Artisan::call('roles:backfill-system-key', [
-            '--source' => 'mapping-file', '--mapping' => $mapping, '--apply' => true,
+            '--source' => 'mapping-file',
+            '--mapping' => $mapping,
+            '--apply' => true,
         ]));
         $this->assertNull($this->systemKey($role));
 
@@ -285,8 +298,11 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
         $manifestPath = $this->manifestPath();
 
         $this->assertSame(0, Artisan::call('roles:backfill-system-key', [
-            '--source' => 'mapping-file', '--mapping' => $mapping,
-            '--organization' => $org->id, '--manifest' => $manifestPath, '--apply' => true,
+            '--source' => 'mapping-file',
+            '--mapping' => $mapping,
+            '--organization' => $org->id,
+            '--manifest' => $manifestPath,
+            '--apply' => true,
         ]));
 
         $manifest = $this->manifest($manifestPath);
@@ -330,8 +346,11 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
         file_put_contents($manifest, 'original-manifest');
 
         $this->assertSame(1, Artisan::call('roles:backfill-system-key', [
-            '--source' => 'mapping-file', '--mapping' => $mapping,
-            '--organization' => $org->id, '--manifest' => $manifest, '--apply' => true,
+            '--source' => 'mapping-file',
+            '--mapping' => $mapping,
+            '--organization' => $org->id,
+            '--manifest' => $manifest,
+            '--apply' => true,
         ]));
 
         $this->assertSame('original-manifest', file_get_contents($manifest));
@@ -348,8 +367,11 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
         ]);
 
         $this->assertSame(1, Artisan::call('roles:backfill-system-key', [
-            '--source' => 'mapping-file', '--mapping' => $mapping,
-            '--organization' => $org->id, '--manifest' => sys_get_temp_dir(), '--apply' => true,
+            '--source' => 'mapping-file',
+            '--mapping' => $mapping,
+            '--organization' => $org->id,
+            '--manifest' => sys_get_temp_dir(),
+            '--apply' => true,
         ]));
 
         $this->assertNull($this->systemKey($role));
@@ -373,8 +395,11 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
 
         try {
             $this->assertSame(1, Artisan::call('roles:backfill-system-key', [
-                '--source' => 'mapping-file', '--mapping' => $mapping,
-                '--organization' => $org->id, '--manifest' => $manifest, '--apply' => true,
+                '--source' => 'mapping-file',
+                '--mapping' => $mapping,
+                '--organization' => $org->id,
+                '--manifest' => $manifest,
+                '--apply' => true,
             ]));
         } finally {
             DB::unprepared('DROP TRIGGER IF EXISTS reject_role_system_key');
@@ -395,8 +420,11 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
         $manifest = $this->manifestPath();
 
         $this->assertSame(0, Artisan::call('roles:backfill-system-key', [
-            '--source' => 'mapping-file', '--mapping' => $mapping,
-            '--organization' => $org->id, '--manifest' => $manifest, '--apply' => true,
+            '--source' => 'mapping-file',
+            '--mapping' => $mapping,
+            '--organization' => $org->id,
+            '--manifest' => $manifest,
+            '--apply' => true,
         ]));
 
         $before = file_get_contents($manifest);
@@ -418,8 +446,11 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
         $manifest = $this->manifestPath();
 
         $this->assertSame(0, Artisan::call('roles:backfill-system-key', [
-            '--source' => 'mapping-file', '--mapping' => $mapping,
-            '--organization' => $org->id, '--manifest' => $manifest, '--apply' => true,
+            '--source' => 'mapping-file',
+            '--mapping' => $mapping,
+            '--organization' => $org->id,
+            '--manifest' => $manifest,
+            '--apply' => true,
         ]));
 
         DB::table('roles')->where('id', $role)->update(['system_key' => 'supervisor']);
@@ -441,12 +472,14 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
         file_put_contents($manifest, json_encode([
             'version' => 1,
             'state' => 'prepared',
-            'changes' => [[
-                'organization_id' => $org->id,
-                'role_id' => $role,
-                'system_key' => 'admin',
-                'previous_system_key' => null,
-            ]],
+            'changes' => [
+                [
+                    'organization_id' => $org->id,
+                    'role_id' => $role,
+                    'system_key' => 'admin',
+                    'previous_system_key' => null,
+                ]
+            ],
         ], JSON_THROW_ON_ERROR));
 
         $before = file_get_contents($manifest);
@@ -468,12 +501,14 @@ class RoleSystemKeyBackfillCommandTest extends TestCase
         file_put_contents($manifest, json_encode([
             'version' => 1,
             'state' => 'uncertain',
-            'changes' => [[
-                'organization_id' => $org->id,
-                'role_id' => $role,
-                'system_key' => 'admin',
-                'previous_system_key' => null,
-            ]],
+            'changes' => [
+                [
+                    'organization_id' => $org->id,
+                    'role_id' => $role,
+                    'system_key' => 'admin',
+                    'previous_system_key' => null,
+                ]
+            ],
         ], JSON_THROW_ON_ERROR));
 
         $this->assertSame(1, Artisan::call('roles:backfill-system-key', [
