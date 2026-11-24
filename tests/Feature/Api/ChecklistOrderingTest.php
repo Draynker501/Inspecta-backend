@@ -2,9 +2,10 @@
 
 namespace Tests\Feature\Api;
 
+use App\Models\Organization;
 use App\Models\RolePermission;
 use App\Models\User;
-use App\Models\Organization;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\Support\TenantFixtures;
@@ -20,7 +21,7 @@ class ChecklistOrderingTest extends TestCase
     ): User {
         $user = $this->user($organization);
 
-        app(\App\Support\Tenancy\TenantContext::class)
+        app(TenantContext::class)
             ->set($organization->id);
 
         $role = $this->role(

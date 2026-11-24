@@ -5,6 +5,7 @@ use App\Http\Controllers\AreaStoreController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\OrganizationController;
 use App\Http\Controllers\ChecklistController;
+use App\Http\Controllers\ChecklistOrderingController;
 use App\Http\Controllers\ChecklistSectionController;
 use App\Http\Controllers\ChecklistVersionController;
 use App\Http\Controllers\CorrectiveActionController;
@@ -21,7 +22,6 @@ use App\Http\Controllers\ProductionLineController;
 use App\Http\Controllers\ProductionLineStoreController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\QuestionNormRequirementController;
-use App\Http\Controllers\ChecklistOrderingController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -77,8 +77,8 @@ Route::get('versions/{versionId}/sections', [ChecklistSectionController::class, 
 Route::post('versions/{versionId}/sections', [ChecklistSectionController::class, 'store'])->middleware('api.tenant');
 Route::get('sections/{sectionId}/questions', [QuestionController::class, 'index'])->middleware('api.tenant');
 Route::post('sections/{sectionId}/questions', [QuestionController::class, 'store'])->middleware('api.tenant');
-Route::patch('versions/{versionId}/sections/reorder',[ChecklistOrderingController::class, 'reorderSections'])->middleware('api.tenant');
-Route::patch('sections/{sectionId}/questions/reorder',[ChecklistOrderingController::class, 'reorderQuestions'])->middleware('api.tenant');
+Route::patch('versions/{versionId}/sections/reorder', [ChecklistOrderingController::class, 'reorderSections'])->middleware('api.tenant');
+Route::patch('sections/{sectionId}/questions/reorder', [ChecklistOrderingController::class, 'reorderQuestions'])->middleware('api.tenant');
 
 Route::get('norms', [NormController::class, 'index'])->middleware('api.tenant');
 Route::get('norms/{normId}', [NormController::class, 'show'])->middleware('api.tenant');

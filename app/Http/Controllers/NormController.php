@@ -58,7 +58,7 @@ class NormController extends TenantController
 
             Gate::authorize('update', $norm);
 
-            if (!$norm->status) {
+            if (! $norm->status) {
                 throw ValidationException::withMessages([
                     'status' => 'No se puede modificar una norma inactiva. Debe reactivarla primero.',
                 ]);
@@ -138,7 +138,7 @@ class NormController extends TenantController
                     if (is_string($value) && strlen($value) > 65535) {
                         $fail('El texto supera el máximo de 65535 bytes.');
                     }
-                }
+                },
             ],
             'issuing_body' => ['sometimes', 'nullable', 'string', 'max:150'],
             'version' => ['sometimes', 'nullable', 'string', 'max:50'],
