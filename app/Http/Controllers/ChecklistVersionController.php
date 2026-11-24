@@ -44,8 +44,23 @@ class ChecklistVersionController extends TenantController
                 return $version;
             }
             if ($newStatus === 'published') {
-                if ($version->status !== 'draft' || $version->published_at !== null || !$checklist->status) {
-                    throw ValidationException::withMessages(['status' => 'Solo se puede publicar un borrador nunca publicado de un checklist activo.']);
+                if (!$checklist->status) {
+                    throw ValidationException::withMessages([
+                        'status' =>
+                            "El checklist \"{$checklist->name}\" está inactivo. "
+                            . 'Debes reactivarlo antes de publicar una versión.',
+                    ]);
+                }
+
+                if (
+                    $version->status !== 'draft'
+                    || $version->published_at !== null
+                ) {
+                    throw ValidationException::withMessages([
+                        'status' =>
+                            "La versión {$version->version} no es un borrador "
+                            . 'disponible para publicación.',
+                    ]);
                 }
                 $this->validateBeforePublishing($version);
                 app(ChecklistOrderingService::class)
@@ -75,85 +90,368 @@ class ChecklistVersionController extends TenantController
         return response()->json(['data' => $version]);
     }
 
+
     private function validateBeforePublishing(ChecklistVersion $version): void
     {
-        // Las FK históricas no son compuestas: no ocultar relaciones corruptas
-        // mediante los scopes de tenant al validar la estructura completa.
+        $organizationId = $version->organization_id;
+
+        $errors = [
+            'sections' => [],
+            'questions' => [],
+            'norms' => [],
+        ];
+
+        // Verificar la integridad multi-tenancy de la estructura.
         $foreignSection = DB::table('checklist_sections')
             ->where('checklist_version_id', $version->id)
-            ->where('organization_id', '!=', $version->organization_id)->exists();
+            ->where('organization_id', '!=', $organizationId)
+            ->exists();
+
         $foreignQuestion = DB::table('questions as q')
-            ->join('checklist_sections as s', 's.id', '=', 'q.checklist_section_id')
+            ->join(
+                'checklist_sections as s',
+                's.id',
+                '=',
+                'q.checklist_section_id'
+            )
             ->where('s.checklist_version_id', $version->id)
-            ->where('q.organization_id', '!=', $version->organization_id)->exists();
+            ->where('q.organization_id', '!=', $organizationId)
+            ->exists();
+
         if ($foreignSection || $foreignQuestion) {
-            throw ValidationException::withMessages(['sections' => 'La estructura contiene relaciones de otra organización.']);
+            throw ValidationException::withMessages([
+                'sections' =>
+                    'La estructura contiene relaciones de otra organización.',
+            ]);
         }
 
-        if (!$version->sections()->exists() || $version->sections()->whereDoesntHave('questions', fn($query) => $query->where('status', true))->exists()) {
-            throw ValidationException::withMessages(['sections' => 'Cada versión necesita secciones con preguntas activas.']);
+        // Obtener secciones y preguntas de la versión.
+        $sections = $version->sections()
+            ->orderBy('display_order')
+            ->orderBy('id')
+            ->get();
+
+        $questions = Question::whereIn(
+            'checklist_section_id',
+            $sections->pluck('id')
+        )
+            ->where('organization_id', $organizationId)
+            ->orderBy('display_order')
+            ->orderBy('id')
+            ->get();
+
+        $questionsBySection = $questions->groupBy(
+            'checklist_section_id'
+        );
+
+        $allowedAnswerTypes = [
+            'boolean',
+            'text',
+            'number',
+            'multiple_choice',
+            'signature',
+            'date',
+        ];
+
+        // Validar existencia de secciones.
+        if ($sections->isEmpty()) {
+            $errors['sections'][] =
+                "La versión {$version->version} no contiene secciones. "
+                . 'Registra al menos una sección con preguntas activas.';
         }
 
-        $questions = Question::whereIn('checklist_section_id', $version->sections()->select('id'))
-            ->where('status', true)->get();
-        foreach ($questions as $question) {
-            if (
-                !is_string($question->question_text) || trim($question->question_text) === ''
-                || !in_array($question->answer_type, ['boolean', 'text', 'number', 'multiple_choice', 'signature', 'date'], true)
-            ) {
-                throw ValidationException::withMessages(['questions' => 'La pregunta tiene datos inválidos.']);
-            }
-            if ($question->answer_type !== 'multiple_choice') {
-                if ($question->options !== null) {
-                    throw ValidationException::withMessages(['questions' => 'La pregunta tiene opciones inválidas.']);
-                }
+        // Validar individualmente cada sección.
+        foreach ($sections as $section) {
+            $sectionLabel = sprintf(
+                'Sección %s — "%s"',
+                $section->display_order,
+                $section->name
+            );
+
+            $sectionQuestions = $questionsBySection->get(
+                $section->id,
+                collect()
+            );
+
+            $activeQuestions = $sectionQuestions->filter(
+                fn($question) => (bool) $question->status
+            );
+
+            if ($sectionQuestions->isEmpty()) {
+                $errors['sections'][] =
+                    "{$sectionLabel}: no contiene preguntas. "
+                    . 'Registra al menos una pregunta activa.';
 
                 continue;
             }
-            $options = $question->options;
-            if (!is_array($options) || !array_is_list($options) || count($options) < 2) {
-                throw ValidationException::withMessages(['questions' => 'La pregunta tiene opciones inválidas.']);
+
+            if ($activeQuestions->isEmpty()) {
+                $total = $sectionQuestions->count();
+
+                $errors['sections'][] =
+                    "{$sectionLabel}: contiene {$total} pregunta(s), "
+                    . 'pero ninguna está activa. '
+                    . 'Activa al menos una pregunta o registra una nueva.';
+
+                continue;
             }
-            $values = [];
-            foreach ($options as $option) {
+
+            // Validar la configuración de cada pregunta activa.
+            foreach ($activeQuestions as $question) {
+                $questionText = is_string($question->question_text)
+                    && trim($question->question_text) !== ''
+                    ? $question->question_text
+                    : 'Sin texto';
+
+                $questionLabel = sprintf(
+                    '%s | Pregunta %s — "%s"',
+                    $sectionLabel,
+                    $question->display_order,
+                    $questionText
+                );
+
+                // Texto de la pregunta.
                 if (
-                    !is_array($option) || count($option) !== 2 || !isset($option['value'], $option['label'])
-                    || !is_string($option['value']) || trim($option['value']) === ''
-                    || !is_string($option['label']) || trim($option['label']) === ''
-                    || mb_strlen($option['value']) > 100 || mb_strlen($option['label']) > 150
-                    || in_array($option['value'], $values, true)
+                    !is_string($question->question_text)
+                    || trim($question->question_text) === ''
                 ) {
-                    throw ValidationException::withMessages(['questions' => 'La pregunta tiene opciones inválidas.']);
+                    $errors['questions'][] =
+                        "{$questionLabel}: el texto de la pregunta "
+                        . 'es obligatorio.';
                 }
-                $values[] = $option['value'];
+
+                // Tipo de respuesta.
+                if (
+                    !in_array(
+                        $question->answer_type,
+                        $allowedAnswerTypes,
+                        true
+                    )
+                ) {
+                    $errors['questions'][] =
+                        "{$questionLabel}: el tipo de respuesta "
+                        . 'no es válido.';
+
+                    continue;
+                }
+
+                // Las preguntas que no son de opción múltiple
+                // no deben contener opciones.
+                if ($question->answer_type !== 'multiple_choice') {
+                    if ($question->options !== null) {
+                        $errors['questions'][] =
+                            "{$questionLabel}: contiene opciones de "
+                            . 'respuesta que no corresponden a su tipo.';
+                    }
+
+                    continue;
+                }
+
+                // Validar estructura de opciones múltiples.
+                $options = $question->options;
+
+                if (
+                    !is_array($options)
+                    || !array_is_list($options)
+                ) {
+                    $errors['questions'][] =
+                        "{$questionLabel}: las opciones de respuesta "
+                        . 'no tienen una estructura válida.';
+
+                    continue;
+                }
+
+                if (count($options) < 2) {
+                    $errors['questions'][] =
+                        "{$questionLabel}: debe contener al menos "
+                        . 'dos opciones de respuesta.';
+                }
+
+                $values = [];
+
+                foreach ($options as $index => $option) {
+                    $optionNumber = $index + 1;
+
+                    if (
+                        !is_array($option)
+                        || count($option) !== 2
+                        || !isset($option['value'], $option['label'])
+                    ) {
+                        $errors['questions'][] =
+                            "{$questionLabel}: la opción {$optionNumber} "
+                            . 'no tiene una estructura válida.';
+
+                        continue;
+                    }
+
+                    $value = $option['value'];
+                    $label = $option['label'];
+
+                    if (
+                        !is_string($value)
+                        || trim($value) === ''
+                    ) {
+                        $errors['questions'][] =
+                            "{$questionLabel}: la opción {$optionNumber} "
+                            . 'no tiene un valor válido.';
+                    } else {
+                        if (mb_strlen($value) > 100) {
+                            $errors['questions'][] =
+                                "{$questionLabel}: el valor de la opción "
+                                . "{$optionNumber} supera los 100 caracteres.";
+                        }
+
+                        if (in_array($value, $values, true)) {
+                            $errors['questions'][] =
+                                "{$questionLabel}: la opción {$optionNumber} "
+                                . 'tiene un valor duplicado.';
+                        }
+
+                        $values[] = $value;
+                    }
+
+                    if (
+                        !is_string($label)
+                        || trim($label) === ''
+                    ) {
+                        $errors['questions'][] =
+                            "{$questionLabel}: la opción {$optionNumber} "
+                            . 'no tiene una etiqueta válida.';
+                    } elseif (mb_strlen($label) > 150) {
+                        $errors['questions'][] =
+                            "{$questionLabel}: la etiqueta de la opción "
+                            . "{$optionNumber} supera los 150 caracteres.";
+                    }
+                }
             }
         }
 
-        // El bloqueo previo de organización serializa también altas y bajas de vínculos.
-        $organizationId = $version->organization_id;
+        // Validar vinculaciones normativas de toda la versión,
+        // incluyendo las preguntas inactivas.
         $links = DB::table('question_norm_requirement as link')
-            ->join('questions as q', 'q.id', '=', 'link.question_id')
-            ->join('checklist_sections as s', 's.id', '=', 'q.checklist_section_id')
+            ->join(
+                'questions as q',
+                'q.id',
+                '=',
+                'link.question_id'
+            )
+            ->join(
+                'checklist_sections as s',
+                's.id',
+                '=',
+                'q.checklist_section_id'
+            )
             ->where('s.checklist_version_id', $version->id)
-            ->select('link.organization_id', 'link.norm_requirement_id')->get();
-        $requirementIds = $links->pluck('norm_requirement_id')->unique()->sort()->values();
-        $requirements = DB::table('norm_requirements')->whereIn('id', $requirementIds)
-            ->orderBy('id')->get(['id', 'organization_id', 'norm_id']);
-        $normIds = $requirements->pluck('norm_id')->unique()->sort()->values();
-        $norms = DB::table('norms')->whereIn('id', $normIds)->orderBy('id')->lockForUpdate()->get()
+            ->select([
+                'link.organization_id',
+                'link.norm_requirement_id',
+                'q.id as question_id',
+                'q.question_text',
+                'q.display_order as question_order',
+                'q.status as question_status',
+                's.name as section_name',
+                's.display_order as section_order',
+            ])
+            ->orderBy('s.display_order')
+            ->orderBy('q.display_order')
+            ->orderBy('link.id')
+            ->get();
+
+        // Mantener el orden de bloqueos utilizado originalmente.
+        $requirementIds = $links
+            ->pluck('norm_requirement_id')
+            ->unique()
+            ->sort()
+            ->values();
+
+        $requirements = DB::table('norm_requirements')
+            ->whereIn('id', $requirementIds)
+            ->orderBy('id')
+            ->get([
+                'id',
+                'organization_id',
+                'norm_id',
+            ]);
+
+        $normIds = $requirements
+            ->pluck('norm_id')
+            ->unique()
+            ->sort()
+            ->values();
+
+        $norms = DB::table('norms')
+            ->whereIn('id', $normIds)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get()
             ->keyBy('id');
-        $requirements = DB::table('norm_requirements')->whereIn('id', $requirementIds)
-            ->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+
+        $requirements = DB::table('norm_requirements')
+            ->whereIn('id', $requirementIds)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('id');
+
         foreach ($links as $link) {
-            $requirement = $requirements->get($link->norm_requirement_id);
-            $norm = $requirement ? $norms->get($requirement->norm_id) : null;
+            $requirement = $requirements->get(
+                $link->norm_requirement_id
+            );
+
+            $norm = $requirement
+                ? $norms->get($requirement->norm_id)
+                : null;
+
+            $questionLabel = sprintf(
+                'Sección %s — "%s" | Pregunta %s — "%s"%s',
+                $link->section_order,
+                $link->section_name,
+                $link->question_order,
+                $link->question_text,
+                $link->question_status ? '' : ' (Inactiva)'
+            );
+
+            // No exponer información de requisitos o normas
+            // pertenecientes a otras organizaciones.
             if (
-                $link->organization_id !== $organizationId || !$requirement
-                || $requirement->organization_id !== $organizationId || !$norm
-                || $norm->organization_id !== $organizationId || !$norm->status
+                $link->organization_id !== $organizationId
+                || !$requirement
+                || $requirement->organization_id !== $organizationId
+                || !$norm
+                || $norm->organization_id !== $organizationId
             ) {
-                throw ValidationException::withMessages(['norms' => 'Los requisitos vinculados deben pertenecer a normas activas de la organización.']);
+                $errors['norms'][] =
+                    "{$questionLabel}: contiene una vinculación "
+                    . 'normativa inválida o ajena a la organización.';
+
+                continue;
             }
+
+            // Identificar exactamente la norma inactiva.
+            if (!$norm->status) {
+                $normLabel = $norm->code;
+
+                if (!empty($norm->version)) {
+                    $normLabel .= " (Versión {$norm->version})";
+                }
+
+                $errors['norms'][] =
+                    "{$questionLabel}: el requisito "
+                    . "{$requirement->code} pertenece a la norma "
+                    . "\"{$normLabel}\", que está inactiva. "
+                    . 'Reactiva la norma o desvincula el requisito.';
+            }
+        }
+
+        // Eliminar categorías que no contienen errores.
+        $errors = array_filter(
+            $errors,
+            fn(array $messages): bool => $messages !== []
+        );
+
+        // Devolver todos los incumplimientos en una sola respuesta.
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
         }
     }
 
