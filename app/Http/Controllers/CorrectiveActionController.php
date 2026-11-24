@@ -212,11 +212,16 @@ class CorrectiveActionController extends TenantController
 
         $result = $this->dto($action);
 
+        $userNames = DB::table('users')
+            ->whereIn('id', $action->updates->pluck('user_id')->unique())
+            ->pluck('name', 'id');
+
         $result['updates'] = $action->updates
             ->map(fn($update) => [
                 'id' => $update->id,
                 'corrective_action_id' => $update->corrective_action_id,
                 'user_id' => $update->user_id,
+                'user_name' => $userNames->get($update->user_id),
                 'status' => $update->status,
                 'comment' => $update->comment,
                 'created_at' => $update->created_at,
@@ -321,7 +326,7 @@ class CorrectiveActionController extends TenantController
                 ),
                 404
             );
-            
+
             if ($incident->status === 'closed') {
                 throw ValidationException::withMessages([
                     'incident_id' => 'No se pueden modificar acciones correctivas de una incidencia cerrada.',

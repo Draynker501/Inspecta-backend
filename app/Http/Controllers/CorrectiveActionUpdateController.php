@@ -310,6 +310,9 @@ class CorrectiveActionUpdateController extends TenantController
             'organization_id' => $update->organization_id,
             'corrective_action_id' => $update->corrective_action_id,
             'user_id' => $update->user_id,
+            'user_name' => DB::table('users')
+                ->where('id', $update->user_id)
+                ->value('name'),
             'status' => $update->status,
             'comment' => $update->comment,
             'created_at' => $update->created_at,
