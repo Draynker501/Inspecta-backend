@@ -77,6 +77,7 @@ class UserController extends TenantController
             'data' => $user,
         ]);
     }
+
     public function replaceRoles(
         ReplaceUserRolesRequest $request,
         string $userId,
