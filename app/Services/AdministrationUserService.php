@@ -4,8 +4,8 @@ namespace App\Services;
 
 use App\Authorization\Permission;
 use App\Models\OrganizationMembership;
-use App\Models\User;
 use App\Models\Role;
+use App\Models\User;
 use App\Models\UserRole;
 use App\Support\Audit\AuditLogger;
 use App\Support\Locations\LocationReadScope;
@@ -385,6 +385,7 @@ class AdministrationUserService
 
             $added = array_values(array_diff($roleIds, $current));
             $removed = array_values(array_diff($current, $roleIds));
+
             foreach ($roles as $role) {
                 if (in_array($role->id, $added, true)) {
                     $this->security->ensureCanAssignRole($actor, $role);
@@ -403,14 +404,21 @@ class AdministrationUserService
             $this->context->flushPermissionCache($userId, $organizationId);
             sort($current);
             sort($roleIds);
+
             if ($current !== $roleIds) {
-                $this->audit->record('user.roles_updated', $membership,
-                    ['role_ids' => $current], ['role_ids' => $roleIds]);
+                $this->audit->record(
+                    'user.roles_updated',
+                    $membership,
+                    ['role_ids' => $current],
+                    ['role_ids' => $roleIds]
+                );
             }
 
             // No volver a autorizar después de una posible reducción de permisos propios.
-            return $this->serializeMembership($actor, $this->membershipQuery()
-                ->where('user_id', $userId)->firstOrFail());
+            return $this->serializeMembership(
+                $actor,
+                $this->membershipQuery()->where('user_id', $userId)->firstOrFail()
+            );
         });
     }
 
