@@ -9272,6 +9272,7 @@ components:
     InspectionOnline:
       type: object
       description: DTO sin respuestas ni relaciones anidadas.
+      required: [inspector_name, plant_name, area_name, production_line_name, checklist_name, checklist_version, progress, answered_questions, required_questions]
       properties:
         id:
           type: string
@@ -9344,6 +9345,38 @@ components:
           type: string
           format: date-time
           nullable: true
+        inspector_name:
+          type: string
+          nullable: true
+        plant_name:
+          type: string
+          nullable: true
+        area_name:
+          type: string
+          nullable: true
+        production_line_name:
+          type: string
+          nullable: true
+        checklist_name:
+          type: string
+          nullable: true
+        checklist_version:
+          type: string
+          nullable: true
+        progress:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 100
+          description: Porcentaje de preguntas obligatorias activas respondidas; null si no existen preguntas obligatorias. No garantiza la validez integral de las respuestas.
+        answered_questions:
+          type: integer
+          minimum: 0
+          description: Preguntas obligatorias activas con respuesta no nula, no vacía y distinta de __NA__.
+        required_questions:
+          type: integer
+          minimum: 0
+          description: Total de preguntas obligatorias activas de la versión.
 
     InspectionBase:
       type: object

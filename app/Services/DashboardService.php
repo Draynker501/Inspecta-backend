@@ -10,7 +10,6 @@ use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 class DashboardService
@@ -33,7 +32,8 @@ class DashboardService
     ];
 
     public function __construct(
-        private readonly TenantContext $tenantContext
+        private readonly TenantContext $tenantContext,
+        private readonly InspectionSummaryService $inspectionSummaryService
     ) {}
 
     /**
@@ -637,155 +637,49 @@ class DashboardService
         CarbonImmutable $end
     ): array {
         $inspections = (clone $query)
+            ->where('organization_id', $organizationId)
             ->where('started_at', '>=', $start)
             ->where('started_at', '<', $end)
-            ->with([
-                'checklistVersion' => fn ($relation) => $relation->where(
-                    'organization_id',
-                    $organizationId
-                ),
-
-                'checklistVersion.checklist' => fn ($relation) => $relation->where(
-                    'organization_id',
-                    $organizationId
-                ),
-
-                'plant' => fn ($relation) => $relation->where(
-                    'organization_id',
-                    $organizationId
-                ),
-
-                'area' => fn ($relation) => $relation->where(
-                    'organization_id',
-                    $organizationId
-                ),
-
-                'productionLine' => fn ($relation) => $relation->where(
-                    'organization_id',
-                    $organizationId
-                ),
-            ])
             ->orderByDesc('started_at')
             ->orderByDesc('id')
             ->limit(3)
             ->get();
 
+        $summaries = $this->inspectionSummaryService
+            ->summarize($inspections);
+
         return $inspections
-            ->map(function (Inspection $inspection) use ($organizationId): array {
-                $progress = $this->inspectionProgress(
-                    $inspection,
-                    $organizationId
-                );
+            ->map(function (Inspection $inspection) use ($summaries): array {
+                $summary = $summaries[$inspection->id];
 
                 return [
                     'id' => $inspection->id,
 
                     'checklist_version_id' => $inspection->checklist_version_id,
 
-                    'checklist_name' => $inspection->checklistVersion
-                        ?->checklist
-                        ?->name,
+                    'checklist_name' => $summary['checklist_name'],
 
-                    'checklist_version' => $inspection->checklistVersion
-                        ?->version,
+                    'checklist_version' => $summary['checklist_version'],
 
-                    'plant_name' => $inspection->plant?->name,
+                    'plant_name' => $summary['plant_name'],
 
-                    'area_name' => $inspection->area?->name,
+                    'area_name' => $summary['area_name'],
 
-                    'production_line_name' => $inspection->productionLine?->name,
+                    'production_line_name' => $summary['production_line_name'],
 
-                    'started_at' => $inspection->started_at
-                        ?->toISOString(),
+                    'started_at' => $inspection->started_at?->toISOString(),
 
                     'status' => $inspection->status,
 
-                    'progress' => $progress['percentage'],
+                    'progress' => $summary['progress'],
 
-                    'answered_questions' => $progress['answered'],
+                    'answered_questions' => $summary['answered_questions'],
 
-                    'required_questions' => $progress['required'],
+                    'required_questions' => $summary['required_questions'],
                 ];
             })
             ->values()
             ->all();
-    }
-
-    /**
-     * Calcula el avance de captura de preguntas obligatorias.
-     */
-    private function inspectionProgress(
-        Inspection $inspection,
-        string $organizationId
-    ): array {
-        $questions = DB::table('questions as q')
-            ->join(
-                'checklist_sections as s',
-                's.id',
-                '=',
-                'q.checklist_section_id'
-            )
-            ->where(
-                'q.organization_id',
-                $organizationId
-            )
-            ->where(
-                's.organization_id',
-                $organizationId
-            )
-            ->where(
-                's.checklist_version_id',
-                $inspection->checklist_version_id
-            )
-            ->where('q.status', true)
-            ->where('q.required', true);
-
-        $required = (clone $questions)
-            ->count('q.id');
-
-        $answered = (clone $questions)
-            ->join(
-                'inspection_answers as a',
-                function ($join) use ($inspection, $organizationId): void {
-                    $join
-                        ->on(
-                            'a.question_id',
-                            '=',
-                            'q.id'
-                        )
-                        ->on(
-                            'a.checklist_section_id',
-                            '=',
-                            's.id'
-                        )
-                        ->where(
-                            'a.organization_id',
-                            $organizationId
-                        )
-                        ->where(
-                            'a.inspection_id',
-                            $inspection->id
-                        )
-                        ->where(
-                            'a.checklist_version_id',
-                            $inspection->checklist_version_id
-                        );
-                }
-            )
-            ->whereNotNull('a.answer')
-            ->where('a.answer', '!=', '')
-            ->distinct()
-            ->count('q.id');
-
-        $percentage = $required > 0
-            ? round(($answered / $required) * 100, 2)
-            : null;
-
-        return [
-            'required' => $required,
-            'answered' => $answered,
-            'percentage' => $percentage,
-        ];
     }
 
     /*

@@ -484,4 +484,129 @@ class OpenApiContractTest extends TestCase
             );
         }
     }
+
+    public function test_inspection_online_documenta_los_campos_descriptivos(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $schema = $spec['components']['schemas']['InspectionOnline'];
+
+        $this->assertSame('object', $schema['type']);
+
+        $fields = [
+            'inspector_name',
+            'plant_name',
+            'area_name',
+            'production_line_name',
+            'checklist_name',
+            'checklist_version',
+        ];
+
+        foreach ($fields as $field) {
+            $this->assertArrayHasKey(
+                $field,
+                $schema['properties']
+            );
+
+            $this->assertContains(
+                $field,
+                $schema['required']
+            );
+
+            $this->assertSame(
+                'string',
+                $schema['properties'][$field]['type']
+            );
+
+            $this->assertTrue(
+                $schema['properties'][$field]['nullable']
+            );
+        }
+    }
+
+    public function test_inspection_online_documenta_el_avance(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $schema = $spec['components']['schemas']['InspectionOnline'];
+
+        $properties = $schema['properties'];
+
+        foreach ([
+            'progress',
+            'answered_questions',
+            'required_questions',
+        ] as $field) {
+            $this->assertArrayHasKey($field, $properties);
+
+            $this->assertContains(
+                $field,
+                $schema['required']
+            );
+        }
+
+        $progress = $properties['progress'];
+
+        $this->assertSame('number', $progress['type']);
+
+        $this->assertTrue($progress['nullable']);
+
+        $this->assertSame(0, $progress['minimum']);
+
+        $this->assertSame(100, $progress['maximum']);
+
+        foreach ([
+            'answered_questions',
+            'required_questions',
+        ] as $field) {
+            $this->assertSame(
+                'integer',
+                $properties[$field]['type']
+            );
+
+            $this->assertSame(
+                0,
+                $properties[$field]['minimum']
+            );
+        }
+    }
+
+    public function test_inspections_y_dashboard_comparten_el_contrato_de_avance(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $schemas = $spec['components']['schemas'];
+
+        $inspection = $schemas['InspectionOnline']['properties'];
+
+        $dashboard = $schemas['DashboardRecentInspection']['properties'];
+
+        foreach ([
+            'plant_name',
+            'area_name',
+            'production_line_name',
+            'checklist_name',
+            'checklist_version',
+            'progress',
+            'answered_questions',
+            'required_questions',
+        ] as $field) {
+            $this->assertArrayHasKey($field, $inspection);
+
+            $this->assertArrayHasKey($field, $dashboard);
+
+            foreach ([
+                'type',
+                'nullable',
+                'minimum',
+                'maximum',
+            ] as $attribute) {
+                $this->assertSame(
+                    $inspection[$field][$attribute] ?? null,
+                    $dashboard[$field][$attribute] ?? null,
+                    "El atributo {$attribute} de {$field} no coincide."
+                );
+            }
+        }
+    }
 }

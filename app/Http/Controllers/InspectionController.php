@@ -11,11 +11,13 @@ use App\Models\Organization;
 use App\Models\Plant;
 use App\Models\ProductionLine;
 use App\Policies\InspectionPolicy;
+use App\Services\InspectionSummaryService;
 use App\Support\Audit\AuditLogger;
 use App\Support\Inspections\InspectionAnswerValidator;
 use App\Support\Inspections\InspectionCompletion;
 use App\Support\Inspections\InspectionReview;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +28,10 @@ use Illuminate\Validation\ValidationException;
 
 class InspectionController extends TenantController
 {
+    public function __construct(
+        private readonly InspectionSummaryService $inspectionSummaryService
+    ) {}
+
     public function store(Request $request): JsonResponse
     {
         Gate::authorize('create', Inspection::class);
@@ -152,39 +158,99 @@ class InspectionController extends TenantController
     public function index(Request $request): JsonResponse
     {
         Gate::authorize('viewAny', Inspection::class);
-        if (array_diff(array_keys($request->query()), ['page', 'per_page', 'status', 'plant_id', 'area_id']) !== []) {
-            throw ValidationException::withMessages(['fields' => 'La solicitud contiene campos no permitidos.']);
+
+        if (
+            array_diff(
+                array_keys($request->query()),
+                ['page', 'per_page', 'status', 'plant_id', 'area_id']
+            ) !== []
+        ) {
+            throw ValidationException::withMessages([
+                'fields' => 'La solicitud contiene campos no permitidos.',
+            ]);
         }
+
         $data = $request->validate([
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
-            'status' => ['sometimes', Rule::in(['draft', 'completed', 'confirmed', 'rejected'])],
+            'status' => [
+                'sometimes',
+                Rule::in([
+                    'draft',
+                    'completed',
+                    'confirmed',
+                    'rejected',
+                ]),
+            ],
             'plant_id' => ['sometimes', 'uuid'],
             'area_id' => ['sometimes', 'uuid'],
         ]);
+
         $user = $request->user();
+
         $org = app(TenantContext::class)->requireId();
-        $query = Inspection::query()->where('organization_id', $org);
+
+        $query = Inspection::query()
+            ->where('organization_id', $org);
+
         if (! $user->hasPermission(Permission::InspectionsManage)) {
             $query->where('user_id', $user->id);
         }
+
         $query->where(function ($query) use ($org, $user): void {
-            $query->whereIn('plant_id', function ($subquery) use ($org, $user): void {
-                $subquery->from('user_plants')->select('plant_id')->where('organization_id', $org)->where('user_id', $user->id);
-            })->orWhereIn('area_id', function ($subquery) use ($org, $user): void {
-                $subquery->from('user_areas')->select('area_id')->where('organization_id', $org)->where('user_id', $user->id);
-            });
+            $query->whereIn(
+                'plant_id',
+                function ($subquery) use ($org, $user): void {
+                    $subquery
+                        ->from('user_plants')
+                        ->select('plant_id')
+                        ->where('organization_id', $org)
+                        ->where('user_id', $user->id);
+                }
+            )->orWhereIn(
+                'area_id',
+                function ($subquery) use ($org, $user): void {
+                    $subquery
+                        ->from('user_areas')
+                        ->select('area_id')
+                        ->where('organization_id', $org)
+                        ->where('user_id', $user->id);
+                }
+            );
         });
+
         foreach (['status', 'plant_id', 'area_id'] as $field) {
             if (isset($data[$field])) {
                 $query->where($field, $data[$field]);
             }
         }
-        $page = $query->orderByDesc('created_at')->orderByDesc('id')
-            ->paginate($data['per_page'] ?? 15, ['*'], 'page', $data['page'] ?? 1);
+
+        $page = $query
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate(
+                $data['per_page'] ?? 15,
+                ['*'],
+                'page',
+                $data['page'] ?? 1
+            );
+
+        $inspections = new Collection($page->items());
+
+        $summaries = $this->inspectionSummaryService
+            ->summarize($inspections);
+
+        $items = $inspections
+            ->map(fn (Inspection $inspection): array => $this->dto(
+                $inspection,
+                $summaries[$inspection->id]
+            ))
+            ->values()
+            ->all();
 
         return response()->json([
-            'data' => array_map($this->dto(...), $page->items()),
+            'data' => $items,
+
             'meta' => [
                 'current_page' => $page->currentPage(),
                 'last_page' => $page->lastPage(),
@@ -332,8 +398,10 @@ class InspectionController extends TenantController
         ]);
     }
 
-    private function dto(Inspection $inspection): array
-    {
+    private function dto(
+        Inspection $inspection,
+        ?array $summary = null
+    ): array {
         $data = $inspection->only([
             'id',
             'organization_id',
@@ -354,17 +422,19 @@ class InspectionController extends TenantController
             'created_at',
             'updated_at',
         ]);
-        // El cast histórico decimal:10,7 no es válido en Eloquent: evitarlo sin
-        // cambiar el modelo fuera del alcance de este corte HTTP.
+
+        // Conservar el tratamiento existente de coordenadas.
         foreach (['latitude', 'longitude'] as $field) {
             $raw = $inspection->getRawOriginal($field);
-            $data[$field] = $raw === null ? null : number_format((float) $raw, 7, '.', '');
+
+            $data[$field] = $raw === null
+                ? null
+                : number_format((float) $raw, 7, '.', '');
         }
 
-        $data['inspector_name'] = DB::table('users')
-            ->where('id', $inspection->user_id)
-            ->value('name');
+        $summary ??= $this->inspectionSummaryService
+            ->summarizeOne($inspection);
 
-        return $data;
+        return array_merge($data, $summary);
     }
 }
