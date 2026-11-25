@@ -75,6 +75,7 @@ class AdministrationRolesTest extends TestCase
     {
         $user = $this->user($this->organization);
         $this->assign($this->organization, $user, $this->makeRole($this->organization, $permissions));
+
         return $this->actingAsApiInOrganization($user, $this->organization);
     }
 
