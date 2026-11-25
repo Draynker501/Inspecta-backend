@@ -11,8 +11,7 @@ class DashboardController extends TenantController
 {
     public function __construct(
         private readonly DashboardService $dashboardService
-    ) {
-    }
+    ) {}
 
     /**
      * Obtiene los indicadores y estadísticas del Dashboard
@@ -28,14 +27,11 @@ class DashboardController extends TenantController
                 'date_format:Y-m',
             ],
         ], [
-            'month.required' =>
-                'Debes proporcionar un mes válido.',
+            'month.required' => 'Debes proporcionar un mes válido.',
 
-            'month.string' =>
-                'El periodo debe ser una cadena de texto.',
+            'month.string' => 'El periodo debe ser una cadena de texto.',
 
-            'month.date_format' =>
-                'El periodo debe tener el formato YYYY-MM.',
+            'month.date_format' => 'El periodo debe tener el formato YYYY-MM.',
         ]);
 
         $period = isset($validated['month'])

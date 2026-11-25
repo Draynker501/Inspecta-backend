@@ -237,10 +237,8 @@ class DashboardService
                 'month' => $start->format('Y-m'),
                 'date_from' => $start->toDateString(),
                 'date_to' => $end->subDay()->toDateString(),
-                'previous_date_from' =>
-                    $previousStart->toDateString(),
-                'previous_date_to' =>
-                    $previousEnd->subDay()->toDateString(),
+                'previous_date_from' => $previousStart->toDateString(),
+                'previous_date_to' => $previousEnd->subDay()->toDateString(),
             ],
 
             'capabilities' => [
@@ -259,8 +257,7 @@ class DashboardService
 
             'recent_inspections' => $recentInspections,
 
-            'pending_corrective_actions' =>
-                $pendingCorrectiveActions,
+            'pending_corrective_actions' => $pendingCorrectiveActions,
         ];
     }
 
@@ -515,36 +512,30 @@ class DashboardService
             ->where('started_at', '>=', $start)
             ->where('started_at', '<', $end)
             ->with([
-                'checklistVersion' => fn ($relation) =>
-                    $relation->where(
-                        'organization_id',
-                        $organizationId
-                    ),
+                'checklistVersion' => fn ($relation) => $relation->where(
+                    'organization_id',
+                    $organizationId
+                ),
 
-                'checklistVersion.checklist' =>
-                    fn ($relation) =>
-                        $relation->where(
-                            'organization_id',
-                            $organizationId
-                        ),
+                'checklistVersion.checklist' => fn ($relation) => $relation->where(
+                    'organization_id',
+                    $organizationId
+                ),
 
-                'plant' => fn ($relation) =>
-                    $relation->where(
-                        'organization_id',
-                        $organizationId
-                    ),
+                'plant' => fn ($relation) => $relation->where(
+                    'organization_id',
+                    $organizationId
+                ),
 
-                'area' => fn ($relation) =>
-                    $relation->where(
-                        'organization_id',
-                        $organizationId
-                    ),
+                'area' => fn ($relation) => $relation->where(
+                    'organization_id',
+                    $organizationId
+                ),
 
-                'productionLine' => fn ($relation) =>
-                    $relation->where(
-                        'organization_id',
-                        $organizationId
-                    ),
+                'productionLine' => fn ($relation) => $relation->where(
+                    'organization_id',
+                    $organizationId
+                ),
             ])
             ->orderByDesc('started_at')
             ->orderByDesc('id')
@@ -563,40 +554,31 @@ class DashboardService
                 return [
                     'id' => $inspection->id,
 
-                    'checklist_version_id' =>
-                        $inspection->checklist_version_id,
+                    'checklist_version_id' => $inspection->checklist_version_id,
 
-                    'checklist_name' =>
-                        $inspection->checklistVersion
-                            ?->checklist
-                            ?->name,
+                    'checklist_name' => $inspection->checklistVersion
+                        ?->checklist
+                        ?->name,
 
-                    'checklist_version' =>
-                        $inspection->checklistVersion
-                            ?->version,
+                    'checklist_version' => $inspection->checklistVersion
+                        ?->version,
 
-                    'plant_name' =>
-                        $inspection->plant?->name,
+                    'plant_name' => $inspection->plant?->name,
 
-                    'area_name' =>
-                        $inspection->area?->name,
+                    'area_name' => $inspection->area?->name,
 
-                    'production_line_name' =>
-                        $inspection->productionLine?->name,
+                    'production_line_name' => $inspection->productionLine?->name,
 
-                    'started_at' =>
-                        $inspection->started_at
-                            ?->toISOString(),
+                    'started_at' => $inspection->started_at
+                        ?->toISOString(),
 
                     'status' => $inspection->status,
 
                     'progress' => $progress['percentage'],
 
-                    'answered_questions' =>
-                        $progress['answered'],
+                    'answered_questions' => $progress['answered'],
 
-                    'required_questions' =>
-                        $progress['required'],
+                    'required_questions' => $progress['required'],
                 ];
             })
             ->values()
@@ -696,30 +678,25 @@ class DashboardService
     ): array {
         $actions = (clone $query)
             ->with([
-                'incident' => fn ($relation) =>
-                    $relation->where(
-                        'organization_id',
-                        $organizationId
-                    ),
+                'incident' => fn ($relation) => $relation->where(
+                    'organization_id',
+                    $organizationId
+                ),
 
-                'incident.plant' => fn ($relation) =>
-                    $relation->where(
-                        'organization_id',
-                        $organizationId
-                    ),
+                'incident.plant' => fn ($relation) => $relation->where(
+                    'organization_id',
+                    $organizationId
+                ),
 
-                'incident.area' => fn ($relation) =>
-                    $relation->where(
-                        'organization_id',
-                        $organizationId
-                    ),
+                'incident.area' => fn ($relation) => $relation->where(
+                    'organization_id',
+                    $organizationId
+                ),
 
-                'incident.productionLine' =>
-                    fn ($relation) =>
-                        $relation->where(
-                            'organization_id',
-                            $organizationId
-                        ),
+                'incident.productionLine' => fn ($relation) => $relation->where(
+                    'organization_id',
+                    $organizationId
+                ),
             ])
 
             // Primero las acciones con fecha de vencimiento.
@@ -769,16 +746,13 @@ class DashboardService
                         && $dueDate->toDateString()
                             < $today->toDateString(),
 
-                    'plant_name' =>
-                        $action->incident?->plant?->name,
+                    'plant_name' => $action->incident?->plant?->name,
 
-                    'area_name' =>
-                        $action->incident?->area?->name,
+                    'area_name' => $action->incident?->area?->name,
 
-                    'production_line_name' =>
-                        $action->incident
-                            ?->productionLine
-                            ?->name,
+                    'production_line_name' => $action->incident
+                        ?->productionLine
+                        ?->name,
                 ];
             })
             ->values()

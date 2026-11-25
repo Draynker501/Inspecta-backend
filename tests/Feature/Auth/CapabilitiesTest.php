@@ -44,7 +44,7 @@ class CapabilitiesTest extends TestCase
         ?string $systemKey = null
     ): void {
         app(TenantContext::class)->runAs($organization->id, function () use ($user, $organization, $permissions, $systemKey): void {
-            $role = $this->role($organization, 'Cap-' . Str::random(10));
+            $role = $this->role($organization, 'Cap-'.Str::random(10));
             $user->assignRole($role);
 
             foreach ($permissions as $permission) {
@@ -182,7 +182,7 @@ class CapabilitiesTest extends TestCase
 
         $roleName = app(TenantContext::class)->runAs(
             $this->orgA->id,
-            fn() => $this->user->roles()
+            fn () => $this->user->roles()
                 ->wherePivot('organization_id', $this->orgA->id)
                 ->where('roles.organization_id', $this->orgA->id)
                 ->sole()
