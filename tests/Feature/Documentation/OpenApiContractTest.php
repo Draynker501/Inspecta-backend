@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Documentation;
 
+use App\Authorization\Permission;
 use Symfony\Component\Yaml\Yaml;
 use Tests\TestCase;
 
@@ -1319,7 +1320,7 @@ class OpenApiContractTest extends TestCase
         }
 
         $schemas = $spec['components']['schemas'];
-        $this->assertEqualsCanonicalizing(\App\Authorization\Permission::values(), $schemas['AdministrationPermissionKey']['enum']);
+        $this->assertEqualsCanonicalizing(Permission::values(), $schemas['AdministrationPermissionKey']['enum']);
         $this->assertTrue($schemas['AdministrationRolePermissionsInput']['properties']['permissions']['uniqueItems']);
         $this->assertTrue($schemas['AdministrationUserRolesInput']['properties']['role_ids']['uniqueItems']);
         $this->assertSame('boolean', $schemas['AdministrationRoleStatusInput']['properties']['status']['type']);
