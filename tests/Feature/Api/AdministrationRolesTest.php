@@ -20,7 +20,9 @@ class AdministrationRolesTest extends TestCase
     use RefreshDatabase, TenantFixtures;
 
     private Organization $organization;
+
     private User $administrator;
+
     private Role $adminRole;
 
     protected function setUp(): void
@@ -42,6 +44,7 @@ class AdministrationRolesTest extends TestCase
     {
         return app(TenantContext::class)->runAs($org->id, function () use ($org, $permissions, $key) {
             $role = $this->role($org, 'Role-'.Str::random(12));
+
             foreach ($permissions as $permission) {
                 RolePermission::create([
                     'organization_id' => $org->id,
@@ -49,9 +52,11 @@ class AdministrationRolesTest extends TestCase
                     'permission' => $permission->value,
                 ]);
             }
+
             if ($key !== null) {
                 DB::table('roles')->where('id', $role->id)->update(['system_key' => $key]);
             }
+
             return $role->refresh();
         });
     }
@@ -136,8 +141,10 @@ class AdministrationRolesTest extends TestCase
     public function test_cannot_delegate_permission_not_owned(): void
     {
         $role = $this->makeRole($this->organization);
-        $this->limited([Permission::RolesManage])->putJson('/api/roles/'.$role->id.'/permissions',
-            ['permissions' => ['reports.view']])->assertForbidden();
+        $this->limited([Permission::RolesManage])->putJson(
+            '/api/roles/'.$role->id.'/permissions',
+            ['permissions' => ['reports.view']]
+        )->assertForbidden();
         $this->assertDatabaseMissing('role_permissions', ['role_id' => $role->id]);
     }
 
@@ -149,11 +156,15 @@ class AdministrationRolesTest extends TestCase
         $this->asAdmin()->patchJson('/api/roles/'.$role->id.'/status', ['status' => false])
             ->assertOk()->assertJsonPath('data.status', false);
         $this->assertDatabaseHas('user_roles', ['user_id' => $member->id, 'role_id' => $role->id]);
-        $this->assertFalse(app(TenantContext::class)->runAs($this->organization->id,
-            fn () => $member->hasPermission(Permission::ReportsView)));
+        $this->assertFalse(app(TenantContext::class)->runAs(
+            $this->organization->id,
+            fn () => $member->hasPermission(Permission::ReportsView)
+        ));
         $this->asAdmin()->patchJson('/api/roles/'.$role->id.'/status', ['status' => true])->assertOk();
-        $this->assertTrue(app(TenantContext::class)->runAs($this->organization->id,
-            fn () => $member->hasPermission(Permission::ReportsView)));
+        $this->assertTrue(app(TenantContext::class)->runAs(
+            $this->organization->id,
+            fn () => $member->hasPermission(Permission::ReportsView)
+        ));
     }
 
     public function test_replaces_user_roles_and_is_idempotent(): void
@@ -163,10 +174,12 @@ class AdministrationRolesTest extends TestCase
         $new = $this->makeRole($this->organization, [Permission::ReportsView]);
         $this->assign($this->organization, $member, $old);
         $url = '/api/users/'.$member->id.'/roles';
+
         for ($i = 0; $i < 2; $i++) {
             $this->asAdmin()->putJson($url, ['role_ids' => [$new->id]])
                 ->assertOk()->assertJsonCount(1, 'data.roles')->assertJsonPath('data.roles.0.id', $new->id);
         }
+
         $this->assertDatabaseMissing('user_roles', ['user_id' => $member->id, 'role_id' => $old->id]);
         $this->assertDatabaseHas('user_roles', ['user_id' => $member->id, 'role_id' => $new->id]);
         $this->assertSame(1, DB::table('audit_logs')->where('action', 'user.roles_updated')->count());
