@@ -286,12 +286,44 @@ paths:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Obtener estadísticas del Dashboard
-      description: Devuelve indicadores autorizados de la organización activa y ubicaciones asignadas. El mes predeterminado
-        es el actual. La tasa de aprobación utiliza inspecciones confirmadas y rechazadas durante el periodo; el total
-        de inspecciones utiliza su fecha de inicio. Las incidencias abiertas y acciones pendientes representan el
-        estado actual, independientemente del mes. La tendencia comprende cinco meses; sin revisiones, la tasa es
-        null. La gráfica de riesgo se filtra por mes. Los indicadores y gráficas no autorizados se omiten y los listados
-        no autorizados son arreglos vacíos. Sin paginación.
+      description: |
+        Devuelve indicadores autorizados de la organización activa,
+        considerando los permisos, las ubicaciones asignadas y la
+        propiedad de las inspecciones.
+
+        El mes predeterminado es el actual.
+
+        La tasa de aprobación utiliza las inspecciones confirmadas
+        y rechazadas durante el periodo, considerando sus fechas
+        de revisión. El total de inspecciones utiliza su fecha
+        de inicio.
+
+        Las incidencias abiertas y las acciones pendientes representan
+        el estado actual, independientemente del mes seleccionado.
+
+        La tendencia de aprobación admite tres agrupaciones:
+        - weekly: intervalos consecutivos de siete días dentro
+          del mes seleccionado, con un último intervalo ajustado
+          a la duración del mes.
+        - monthly: últimos cinco meses, incluyendo el seleccionado.
+        - yearly: últimos cinco años calendario completos,
+          incluyendo el año seleccionado.
+
+        La agrupación predeterminada es monthly.
+
+        Los intervalos sin inspecciones revisadas devuelven
+        una tasa de aprobación null.
+
+        La agrupación temporal modifica exclusivamente la tendencia
+        de aprobación. Los indicadores generales, la gráfica de
+        incidencias y los listados conservan su comportamiento.
+
+        La gráfica de riesgo se filtra por mes.
+
+        Los indicadores y gráficas no autorizados se omiten.
+        Los listados no autorizados son arreglos vacíos.
+
+        Sin paginación.
       tags:
         - Dashboard
       security:
@@ -300,11 +332,23 @@ paths:
         - in: query
           name: month
           required: false
-          description: Mes en formato YYYY-MM.
+          description: Mes en formato YYYY-MM. Por defecto, el mes actual.
           schema:
             type: string
-            pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
-          example: 2026-11
+            pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'
+          example: '2026-11'
+        - in: query
+          name: granularity
+          required: false
+          description: Agrupación temporal de la tendencia de aprobación.
+          schema:
+            type: string
+            enum:
+              - weekly
+              - monthly
+              - yearly
+            default: monthly
+          example: weekly
       responses:
         '200':
           description: Estadísticas obtenidas correctamente.
@@ -7151,10 +7195,12 @@ components:
           maxItems: 3
           items:
             $ref: '#/components/schemas/DashboardPendingAction'
+
     DashboardPeriod:
       type: object
       required:
         - month
+        - granularity
         - date_from
         - date_to
         - previous_date_from
@@ -7162,18 +7208,37 @@ components:
       properties:
         month:
           type: string
+          pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'
+          example: '2026-11'
+        granularity:
+          type: string
+          enum:
+            - weekly
+            - monthly
+            - yearly
+          description: Agrupación aplicada a la tendencia de aprobación.
+          example: monthly
         date_from:
           type: string
           format: date
+          description: Primer día del mes seleccionado.
+          example: '2026-11-01'
         date_to:
           type: string
           format: date
+          description: Último día del mes seleccionado.
+          example: '2026-11-30'
         previous_date_from:
           type: string
           format: date
+          description: Primer día del mes anterior.
+          example: '2026-10-01'
         previous_date_to:
           type: string
           format: date
+          description: Último día del mes anterior.
+          example: '2026-10-31'
+          
     DashboardCapabilities:
       type: object
       required:
@@ -7274,26 +7339,42 @@ components:
         overdue:
           type: integer
           minimum: 0
+          
     DashboardCharts:
       type: object
+      description: |
+        Las propiedades no autorizadas se omiten.
+        Sin permisos para las gráficas se devuelve un objeto vacío.
       properties:
         approval_trend:
           type: array
+          minItems: 4
           maxItems: 5
-          minItems: 5
+          description: |
+            Tendencia de aprobación ordenada cronológicamente.
+
+            La agrupación semanal devuelve cuatro o cinco intervalos,
+            dependiendo de la duración del mes seleccionado.
+
+            Las agrupaciones mensual y anual devuelven cinco
+            intervalos.
           items:
             $ref: '#/components/schemas/DashboardApprovalTrendPoint'
         incidents_by_risk:
           type: array
-          maxItems: 4
           minItems: 4
+          maxItems: 4
+          description: Incidencias del mes agrupadas por nivel de riesgo.
           items:
             $ref: '#/components/schemas/DashboardRiskCount'
-      description: Las propiedades no autorizadas se omiten; sin permisos se devuelve un arreglo vacío.
+
     DashboardApprovalTrendPoint:
       type: object
       required:
         - month
+        - period
+        - date_from
+        - date_to
         - value
         - approved
         - rejected
@@ -7301,6 +7382,19 @@ components:
       properties:
         month:
           type: string
+          description: Mes inicial del intervalo, conservado por compatibilidad.
+          pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'
+        period:
+          type: string
+          description: Identificador del intervalo (YYYY-MM-DD, YYYY-MM o YYYY).
+        date_from:
+          type: string
+          format: date
+          description: Fecha inicial inclusiva.
+        date_to:
+          type: string
+          format: date
+          description: Fecha final inclusiva.
         value:
           type: number
           nullable: true
@@ -7315,6 +7409,7 @@ components:
         reviewed:
           type: integer
           minimum: 0
+
     DashboardRiskCount:
       type: object
       required:

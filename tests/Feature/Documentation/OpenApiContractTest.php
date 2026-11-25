@@ -337,4 +337,151 @@ class OpenApiContractTest extends TestCase
             $schemas['DashboardRiskCount']['properties']['risk_level']['enum']
         );
     }
+
+    public function test_dashboard_documenta_la_agrupacion_temporal(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $operation = $spec['paths']['/dashboard']['get'];
+
+        $granularity = collect($operation['parameters'])
+            ->first(
+                fn (array $parameter): bool => ($parameter['name'] ?? null) === 'granularity'
+            );
+
+        $this->assertNotNull($granularity);
+
+        $this->assertSame('query', $granularity['in']);
+
+        $this->assertFalse($granularity['required']);
+
+        $this->assertSame(
+            'string',
+            $granularity['schema']['type']
+        );
+
+        $this->assertSame(
+            ['weekly', 'monthly', 'yearly'],
+            $granularity['schema']['enum']
+        );
+
+        $this->assertSame(
+            'monthly',
+            $granularity['schema']['default']
+        );
+
+        $this->assertArrayHasKey(
+            422,
+            $operation['responses']
+        );
+    }
+
+    public function test_dashboard_documenta_los_intervalos_de_aprobacion(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $schemas = $spec['components']['schemas'];
+
+        $period = $schemas['DashboardPeriod'];
+
+        $this->assertEqualsCanonicalizing([
+            'month',
+            'granularity',
+            'date_from',
+            'date_to',
+            'previous_date_from',
+            'previous_date_to',
+        ], $period['required']);
+
+        $this->assertSame(
+            'string',
+            $period['properties']['granularity']['type']
+        );
+
+        $this->assertSame(
+            ['weekly', 'monthly', 'yearly'],
+            $period['properties']['granularity']['enum']
+        );
+
+        $trend = $schemas['DashboardCharts']['properties']['approval_trend'];
+
+        $this->assertSame('array', $trend['type']);
+
+        $this->assertSame(4, $trend['minItems']);
+
+        $this->assertSame(5, $trend['maxItems']);
+
+        $this->assertSame(
+            '#/components/schemas/DashboardApprovalTrendPoint',
+            $trend['items']['$ref']
+        );
+
+        $point = $schemas['DashboardApprovalTrendPoint'];
+
+        $this->assertEqualsCanonicalizing([
+            'month',
+            'period',
+            'date_from',
+            'date_to',
+            'value',
+            'approved',
+            'rejected',
+            'reviewed',
+        ], $point['required']);
+
+        $properties = $point['properties'];
+
+        $this->assertSame(
+            'string',
+            $properties['month']['type']
+        );
+
+        $this->assertSame(
+            'string',
+            $properties['period']['type']
+        );
+
+        foreach (['date_from', 'date_to'] as $field) {
+            $this->assertSame(
+                'string',
+                $properties[$field]['type']
+            );
+
+            $this->assertSame(
+                'date',
+                $properties[$field]['format']
+            );
+        }
+
+        $this->assertSame(
+            'number',
+            $properties['value']['type']
+        );
+
+        $this->assertTrue(
+            $properties['value']['nullable']
+        );
+
+        $this->assertSame(
+            0,
+            $properties['value']['minimum']
+        );
+
+        $this->assertSame(
+            100,
+            $properties['value']['maximum']
+        );
+
+        foreach (['approved', 'rejected', 'reviewed'] as $field) {
+            $this->assertSame(
+                'integer',
+                $properties[$field]['type']
+            );
+
+            $this->assertSame(
+                0,
+                $properties[$field]['minimum']
+            );
+        }
+    }
 }

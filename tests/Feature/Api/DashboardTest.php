@@ -162,6 +162,7 @@ class DashboardTest extends TestCase
             ->getJson('/api/dashboard')
             ->assertOk()
             ->assertJsonPath('period.month', '2026-11')
+            ->assertJsonPath('period.granularity', 'monthly')
             ->assertJsonPath('period.date_from', '2026-11-01')
             ->assertJsonPath('period.date_to', '2026-11-30')
             ->assertJsonPath(
@@ -567,5 +568,294 @@ class DashboardTest extends TestCase
                     'value' => 0,
                 ],
             ]);
+    }
+
+    public function test_dashboard_rejects_invalid_granularity(): void
+    {
+        $organization = $this->clientOrganization('DASH-INVALID-GRAN');
+
+        $user = $this->user($organization);
+
+        $this->actingAsApiInOrganization($user, $organization)
+            ->getJson('/api/dashboard?granularity=daily')
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'validation_failed')
+            ->assertJsonValidationErrors('granularity');
+    }
+
+    public function test_dashboard_supports_monthly_approval_trend(): void
+    {
+        $organization = $this->clientOrganization('DASH-MONTHLY');
+
+        $user = $this->user($organization);
+
+        $this->assignPermissions(
+            $user,
+            $organization,
+            'Supervisor Dashboard Mensual',
+            [Permission::InspectionsManage]
+        );
+
+        $response = $this->actingAsApiInOrganization(
+            $user,
+            $organization
+        )
+            ->getJson('/api/dashboard?month=2026-11&granularity=monthly')
+            ->assertOk()
+            ->assertJsonPath('period.granularity', 'monthly')
+            ->assertJsonCount(5, 'charts.approval_trend');
+
+        $expected = [
+            ['2026-07', '2026-07-01', '2026-07-31'],
+            ['2026-08', '2026-08-01', '2026-08-31'],
+            ['2026-09', '2026-09-01', '2026-09-30'],
+            ['2026-10', '2026-10-01', '2026-10-31'],
+            ['2026-11', '2026-11-01', '2026-11-30'],
+        ];
+
+        foreach ($expected as $index => [$period, $from, $to]) {
+            $prefix = "charts.approval_trend.{$index}";
+
+            $response
+                ->assertJsonPath("{$prefix}.month", $period)
+                ->assertJsonPath("{$prefix}.period", $period)
+                ->assertJsonPath("{$prefix}.date_from", $from)
+                ->assertJsonPath("{$prefix}.date_to", $to)
+                ->assertJsonPath("{$prefix}.value", null)
+                ->assertJsonPath("{$prefix}.approved", 0)
+                ->assertJsonPath("{$prefix}.rejected", 0)
+                ->assertJsonPath("{$prefix}.reviewed", 0);
+        }
+    }
+
+    public function test_dashboard_supports_weekly_approval_trend(): void
+    {
+        $organization = $this->clientOrganization('DASH-WEEKLY');
+
+        $user = $this->user($organization);
+
+        $this->assignPermissions(
+            $user,
+            $organization,
+            'Supervisor Dashboard Semanal',
+            [Permission::InspectionsManage]
+        );
+
+        $response = $this->actingAsApiInOrganization(
+            $user,
+            $organization
+        )
+            ->getJson('/api/dashboard?month=2026-11&granularity=weekly')
+            ->assertOk()
+            ->assertJsonPath('period.granularity', 'weekly')
+            ->assertJsonCount(5, 'charts.approval_trend');
+
+        $expected = [
+            ['2026-11-01', '2026-11-07'],
+            ['2026-11-08', '2026-11-14'],
+            ['2026-11-15', '2026-11-21'],
+            ['2026-11-22', '2026-11-28'],
+            ['2026-11-29', '2026-11-30'],
+        ];
+
+        foreach ($expected as $index => [$from, $to]) {
+            $prefix = "charts.approval_trend.{$index}";
+
+            $response
+                ->assertJsonPath("{$prefix}.month", '2026-11')
+                ->assertJsonPath("{$prefix}.period", $from)
+                ->assertJsonPath("{$prefix}.date_from", $from)
+                ->assertJsonPath("{$prefix}.date_to", $to)
+                ->assertJsonPath("{$prefix}.value", null)
+                ->assertJsonPath("{$prefix}.approved", 0)
+                ->assertJsonPath("{$prefix}.rejected", 0)
+                ->assertJsonPath("{$prefix}.reviewed", 0);
+        }
+    }
+
+    public function test_dashboard_supports_yearly_approval_trend(): void
+    {
+        $organization = $this->clientOrganization('DASH-YEARLY');
+
+        $user = $this->user($organization);
+
+        $this->assignPermissions(
+            $user,
+            $organization,
+            'Supervisor Dashboard Anual',
+            [Permission::InspectionsManage]
+        );
+
+        $response = $this->actingAsApiInOrganization(
+            $user,
+            $organization
+        )
+            ->getJson('/api/dashboard?month=2026-11&granularity=yearly')
+            ->assertOk()
+            ->assertJsonPath('period.granularity', 'yearly')
+            ->assertJsonCount(5, 'charts.approval_trend');
+
+        foreach (range(2022, 2026) as $index => $year) {
+            $prefix = "charts.approval_trend.{$index}";
+
+            $response
+                ->assertJsonPath("{$prefix}.month", "{$year}-01")
+                ->assertJsonPath("{$prefix}.period", (string) $year)
+                ->assertJsonPath("{$prefix}.date_from", "{$year}-01-01")
+                ->assertJsonPath("{$prefix}.date_to", "{$year}-12-31")
+                ->assertJsonPath("{$prefix}.value", null)
+                ->assertJsonPath("{$prefix}.approved", 0)
+                ->assertJsonPath("{$prefix}.rejected", 0)
+                ->assertJsonPath("{$prefix}.reviewed", 0);
+        }
+    }
+
+    public function test_dashboard_weekly_trend_handles_february(): void
+    {
+        $organization = $this->clientOrganization('DASH-FEBRUARY');
+
+        $user = $this->user($organization);
+
+        $this->assignPermissions(
+            $user,
+            $organization,
+            'Supervisor Dashboard Febrero',
+            [Permission::InspectionsManage]
+        );
+
+        $this->actingAsApiInOrganization($user, $organization)
+            ->getJson('/api/dashboard?month=2024-02&granularity=weekly')
+            ->assertOk()
+            ->assertJsonPath('period.date_to', '2024-02-29')
+            ->assertJsonCount(5, 'charts.approval_trend')
+            ->assertJsonPath(
+                'charts.approval_trend.4.period',
+                '2024-02-29'
+            )
+            ->assertJsonPath(
+                'charts.approval_trend.4.date_from',
+                '2024-02-29'
+            )
+            ->assertJsonPath(
+                'charts.approval_trend.4.date_to',
+                '2024-02-29'
+            );
+
+        $this->getJson(
+            '/api/dashboard?month=2026-02&granularity=weekly'
+        )
+            ->assertOk()
+            ->assertJsonPath('period.date_to', '2026-02-28')
+            ->assertJsonCount(4, 'charts.approval_trend')
+            ->assertJsonPath(
+                'charts.approval_trend.3.date_from',
+                '2026-02-22'
+            )
+            ->assertJsonPath(
+                'charts.approval_trend.3.date_to',
+                '2026-02-28'
+            );
+    }
+
+    public function test_dashboard_granularity_does_not_change_other_statistics(): void
+    {
+        $organization = $this->clientOrganization('DASH-GRAN-KPI');
+
+        $user = $this->user($organization);
+
+        $this->assignPermissions(
+            $user,
+            $organization,
+            'Gestor Dashboard Agrupaciones',
+            [
+                Permission::InspectionsManage,
+                Permission::InspectionsExecute,
+                Permission::FindingsRegister,
+                Permission::FindingsClose,
+                Permission::CorrectiveActionsManage,
+            ]
+        );
+
+        $monthly = $this->actingAsApiInOrganization(
+            $user,
+            $organization
+        )
+            ->getJson('/api/dashboard?month=2026-11&granularity=monthly')
+            ->assertOk()
+            ->json();
+
+        foreach (['weekly', 'yearly'] as $granularity) {
+            $response = $this->getJson(
+                "/api/dashboard?month=2026-11&granularity={$granularity}"
+            )
+                ->assertOk()
+                ->assertJsonPath('period.granularity', $granularity)
+                ->json();
+
+            foreach ([
+                'organization_id',
+                'capabilities',
+                'summary',
+                'recent_inspections',
+                'pending_corrective_actions',
+            ] as $key) {
+                $this->assertSame(
+                    $monthly[$key],
+                    $response[$key]
+                );
+            }
+
+            $this->assertSame(
+                $monthly['charts']['incidents_by_risk'],
+                $response['charts']['incidents_by_risk']
+            );
+
+            foreach ([
+                'month',
+                'date_from',
+                'date_to',
+                'previous_date_from',
+                'previous_date_to',
+            ] as $key) {
+                $this->assertSame(
+                    $monthly['period'][$key],
+                    $response['period'][$key]
+                );
+            }
+        }
+    }
+
+    public function test_dashboard_granularities_respect_inspection_permissions(): void
+    {
+        $organization = $this->clientOrganization('DASH-GRAN-PERM');
+
+        $user = $this->user($organization);
+
+        $this->assignPermissions(
+            $user,
+            $organization,
+            'Gestor Incidencias Agrupaciones',
+            [Permission::FindingsRegister]
+        );
+
+        $this->actingAsApiInOrganization(
+            $user,
+            $organization
+        );
+
+        foreach (['weekly', 'monthly', 'yearly'] as $granularity) {
+            $this->getJson(
+                "/api/dashboard?month=2026-11&granularity={$granularity}"
+            )
+                ->assertOk()
+                ->assertJsonPath('period.granularity', $granularity)
+                ->assertJsonPath('capabilities.inspections', false)
+                ->assertJsonPath('capabilities.incidents', true)
+                ->assertJsonMissingPath('summary.approval_rate')
+                ->assertJsonMissingPath('summary.inspections')
+                ->assertJsonMissingPath('charts.approval_trend')
+                ->assertJsonCount(4, 'charts.incidents_by_risk')
+                ->assertJsonPath('recent_inspections', []);
+        }
     }
 }

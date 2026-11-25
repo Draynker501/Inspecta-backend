@@ -41,7 +41,8 @@ class DashboardService
      */
     public function getDashboard(
         User $user,
-        CarbonImmutable $period
+        CarbonImmutable $period,
+        string $granularity = 'monthly'
     ): array {
         $organizationId = $this->tenantContext->requireId();
 
@@ -143,7 +144,8 @@ class DashboardService
 
             $charts['approval_trend'] = $this->approvalTrend(
                 $inspectionQuery,
-                $start
+                $start,
+                $granularity
             );
 
             $recentInspections = $this->recentInspections(
@@ -235,9 +237,15 @@ class DashboardService
 
             'period' => [
                 'month' => $start->format('Y-m'),
+
+                'granularity' => $granularity,
+
                 'date_from' => $start->toDateString(),
+
                 'date_to' => $end->subDay()->toDateString(),
+
                 'previous_date_from' => $previousStart->toDateString(),
+
                 'previous_date_to' => $previousEnd->subDay()->toDateString(),
             ],
 
@@ -274,9 +282,11 @@ class DashboardService
         $query = Inspection::query()
             ->where('organization_id', $organizationId);
 
-        if (! $user->hasPermission(
-            Permission::InspectionsManage
-        )) {
+        if (
+            ! $user->hasPermission(
+                Permission::InspectionsManage
+            )
+        ) {
             $query->where('user_id', $user->id);
         }
 
@@ -309,10 +319,7 @@ class DashboardService
             ->where('organization_id', $organizationId)
             ->whereHas(
                 'incident',
-                function (Builder $query) use (
-                    $user,
-                    $organizationId
-                ): void {
+                function (Builder $query) use ($user, $organizationId): void {
                     $query->where(
                         'organization_id',
                         $organizationId
@@ -336,17 +343,11 @@ class DashboardService
         string $organizationId
     ): Builder {
         return $query->where(
-            function (Builder $location) use (
-                $user,
-                $organizationId
-            ): void {
+            function (Builder $location) use ($user, $organizationId): void {
                 $location
                     ->whereIn(
                         'plant_id',
-                        function ($subquery) use (
-                            $user,
-                            $organizationId
-                        ): void {
+                        function ($subquery) use ($user, $organizationId): void {
                             $subquery
                                 ->select('plant_id')
                                 ->from('user_plants')
@@ -362,10 +363,7 @@ class DashboardService
                     )
                     ->orWhereIn(
                         'area_id',
-                        function ($subquery) use (
-                            $user,
-                            $organizationId
-                        ): void {
+                        function ($subquery) use ($user, $organizationId): void {
                             $subquery
                                 ->select('area_id')
                                 ->from('user_areas')
@@ -438,34 +436,164 @@ class DashboardService
         ];
     }
 
+    /**
+     * Genera la tendencia de aprobación según la agrupación
+     * temporal seleccionada.
+     */
     private function approvalTrend(
+        Builder $query,
+        CarbonImmutable $period,
+        string $granularity = 'monthly'
+    ): array {
+        return match ($granularity) {
+            'weekly' => $this->weeklyApprovalTrend(
+                $query,
+                $period
+            ),
+
+            'yearly' => $this->yearlyApprovalTrend(
+                $query,
+                $period
+            ),
+
+            default => $this->monthlyApprovalTrend(
+                $query,
+                $period
+            ),
+        };
+    }
+
+    /**
+     * Genera intervalos de siete días dentro del mes
+     * seleccionado, sin incluir días de otros meses.
+     */
+    private function weeklyApprovalTrend(
+        Builder $query,
+        CarbonImmutable $period
+    ): array {
+        $trend = [];
+
+        $monthStart = $period->startOfMonth();
+        $monthEnd = $monthStart->addMonth();
+
+        $start = $monthStart;
+
+        while ($start->lt($monthEnd)) {
+            $end = $start->addDays(7);
+
+            if ($end->gt($monthEnd)) {
+                $end = $monthEnd;
+            }
+
+            $trend[] = $this->approvalTrendPoint(
+                $query,
+                $start,
+                $end,
+                $start->toDateString()
+            );
+
+            $start = $end;
+        }
+
+        return $trend;
+    }
+
+    /**
+     * Genera la tendencia de los últimos cinco meses,
+     * incluyendo el mes seleccionado.
+     */
+    private function monthlyApprovalTrend(
         Builder $query,
         CarbonImmutable $period
     ): array {
         $trend = [];
 
         for ($offset = 4; $offset >= 0; $offset--) {
-            $start = $period->subMonths($offset)
-                ->startOfMonth();
+            $start = $period
+                ->startOfMonth()
+                ->subMonths($offset);
 
             $end = $start->addMonth();
 
-            $statistics = $this->approvalStatistics(
+            $trend[] = $this->approvalTrendPoint(
                 $query,
                 $start,
-                $end
+                $end,
+                $start->format('Y-m')
             );
-
-            $trend[] = [
-                'month' => $start->format('Y-m'),
-                'value' => $statistics['rate'],
-                'approved' => $statistics['approved'],
-                'rejected' => $statistics['rejected'],
-                'reviewed' => $statistics['reviewed'],
-            ];
         }
 
         return $trend;
+    }
+
+    /**
+     * Genera la tendencia de los últimos cinco años,
+     * incluyendo el año del periodo seleccionado.
+     */
+    private function yearlyApprovalTrend(
+        Builder $query,
+        CarbonImmutable $period
+    ): array {
+        $trend = [];
+
+        for ($offset = 4; $offset >= 0; $offset--) {
+            $start = $period
+                ->startOfYear()
+                ->subYears($offset);
+
+            $end = $start->addYear();
+
+            $trend[] = $this->approvalTrendPoint(
+                $query,
+                $start,
+                $end,
+                $start->format('Y')
+            );
+        }
+
+        return $trend;
+    }
+
+    /**
+     * Construye un punto de la tendencia de aprobación.
+     *
+     * La fecha inicial es inclusiva y la fecha final
+     * utilizada en la consulta es exclusiva.
+     */
+    private function approvalTrendPoint(
+        Builder $query,
+        CarbonImmutable $start,
+        CarbonImmutable $end,
+        string $periodKey
+    ): array {
+        $statistics = $this->approvalStatistics(
+            $query,
+            $start,
+            $end
+        );
+
+        return [
+            // Se conserva por compatibilidad con el contrato anterior.
+            'month' => $start->format('Y-m'),
+
+            // Identificador del intervalo temporal.
+            'period' => $periodKey,
+
+            // Límites inclusivos para presentación.
+            'date_from' => $start->toDateString(),
+
+            'date_to' => $end
+                ->subDay()
+                ->toDateString(),
+
+            'value' => $statistics['rate'],
+
+            'approved' => $statistics['approved'],
+
+            'rejected' => $statistics['rejected'],
+
+            'reviewed' => $statistics['reviewed'],
+        ];
     }
 
     /*
@@ -543,9 +671,7 @@ class DashboardService
             ->get();
 
         return $inspections
-            ->map(function (Inspection $inspection) use (
-                $organizationId
-            ): array {
+            ->map(function (Inspection $inspection) use ($organizationId): array {
                 $progress = $this->inspectionProgress(
                     $inspection,
                     $organizationId
@@ -620,10 +746,7 @@ class DashboardService
         $answered = (clone $questions)
             ->join(
                 'inspection_answers as a',
-                function ($join) use (
-                    $inspection,
-                    $organizationId
-                ): void {
+                function ($join) use ($inspection, $organizationId): void {
                     $join
                         ->on(
                             'a.question_id',
@@ -724,9 +847,7 @@ class DashboardService
             ->get();
 
         return $actions
-            ->map(function (CorrectiveAction $action) use (
-                $today
-            ): array {
+            ->map(function (CorrectiveAction $action) use ($today): array {
                 $dueDate = $action->due_date;
 
                 return [
@@ -744,7 +865,7 @@ class DashboardService
 
                     'overdue' => $dueDate !== null
                         && $dueDate->toDateString()
-                            < $today->toDateString(),
+                        < $today->toDateString(),
 
                     'plant_name' => $action->incident?->plant?->name,
 
