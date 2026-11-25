@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Administration\RoleController;
 use App\Http\Controllers\Administration\UserController;
 use App\Http\Controllers\AreaController;
 use App\Http\Controllers\AreaStoreController;
@@ -53,6 +54,14 @@ Route::prefix('auth')->group(function () {
 
 Route::get('dashboard', [DashboardController::class, 'index'])->middleware('api.tenant');
 Route::get('reports/summary', [ReportController::class, 'summary'])->middleware('api.tenant');
+// Administración de roles y permisos.
+Route::get('roles', [RoleController::class, 'index'])->middleware('api.tenant');
+Route::post('roles', [RoleController::class, 'store'])->middleware('api.tenant');
+Route::get('roles/{roleId}', [RoleController::class, 'show'])->middleware('api.tenant');
+Route::patch('roles/{roleId}', [RoleController::class, 'update'])->middleware('api.tenant');
+Route::patch('roles/{roleId}/status', [RoleController::class, 'updateStatus'])->middleware('api.tenant');
+Route::put('roles/{roleId}/permissions', [RoleController::class, 'replacePermissions'])->middleware('api.tenant');
+Route::get('permissions', [RoleController::class, 'permissions'])->middleware('api.tenant');
 // Administración de usuarios y membresías.
 Route::get('users', [UserController::class, 'index'])->middleware('api.tenant');
 Route::post('users', [UserController::class, 'store'])->middleware('api.tenant');
