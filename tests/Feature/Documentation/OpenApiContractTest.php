@@ -1279,4 +1279,40 @@ class OpenApiContractTest extends TestCase
             $list['meta']['$ref']
         );
     }
+    public function test_documenta_roles_permisos_y_asignaciones(): void
+    {
+        $spec = Yaml::parse($this->spec());
+        $operations = [
+            ['/roles', 'get', 200, 'AdministrationRolesResponse', null],
+            ['/roles', 'post', 201, 'AdministrationRoleResponse', 'AdministrationRoleCreateInput'],
+            ['/roles/{roleId}', 'get', 200, 'AdministrationRoleResponse', null],
+            ['/roles/{roleId}', 'patch', 200, 'AdministrationRoleResponse', 'AdministrationRoleUpdateInput'],
+            ['/roles/{roleId}/status', 'patch', 200, 'AdministrationRoleResponse', 'AdministrationRoleStatusInput'],
+            ['/roles/{roleId}/permissions', 'put', 200, 'AdministrationRoleResponse', 'AdministrationRolePermissionsInput'],
+            ['/permissions', 'get', 200, 'AdministrationPermissionsResponse', null],
+            ['/users/{userId}/roles', 'put', 200, 'AdministrationUserResponse', 'AdministrationUserRolesInput'],
+        ];
+        foreach ($operations as [$path, $method, $status, $output, $input]) {
+            $item = $spec['paths'][$path];
+            $this->assertSame('implemented', $item['x-status']);
+            $this->assertContains(['$ref' => '#/components/parameters/organizationIdHeader'], $item['parameters']);
+            $operation = $item[$method];
+            $this->assertSame('#/components/schemas/'.$output,
+                $operation['responses'][$status]['content']['application/json']['schema']['$ref']);
+            foreach ([400, 401, 403, 422] as $error) {
+                $this->assertArrayHasKey($error, $operation['responses']);
+            }
+            if ($input !== null) {
+                $this->assertTrue($operation['requestBody']['required']);
+                $this->assertSame('#/components/schemas/'.$input,
+                    $operation['requestBody']['content']['application/json']['schema']['$ref']);
+                $this->assertArrayHasKey(415, $operation['responses']);
+            }
+        }
+        $schemas = $spec['components']['schemas'];
+        $this->assertEqualsCanonicalizing(\App\Authorization\Permission::values(), $schemas['AdministrationPermissionKey']['enum']);
+        $this->assertTrue($schemas['AdministrationRolePermissionsInput']['properties']['permissions']['uniqueItems']);
+        $this->assertTrue($schemas['AdministrationUserRolesInput']['properties']['role_ids']['uniqueItems']);
+        $this->assertSame('boolean', $schemas['AdministrationRoleStatusInput']['properties']['status']['type']);
+    }
 }
