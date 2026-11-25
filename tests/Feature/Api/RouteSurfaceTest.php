@@ -137,6 +137,14 @@ class RouteSurfaceTest extends TestCase
             'POST api/users',
             'GET api/users/{userId}',
             'PATCH api/users/{userId}/membership/status',
+            'GET api/roles',
+            'POST api/roles',
+            'GET api/roles/{roleId}',
+            'PATCH api/roles/{roleId}',
+            'PATCH api/roles/{roleId}/status',
+            'PUT api/roles/{roleId}/permissions',
+            'GET api/permissions',
+            'PUT api/users/{userId}/roles',
         ];
 
         foreach ($expected as $operation) {
@@ -233,6 +241,14 @@ class RouteSurfaceTest extends TestCase
             'POST api/users',
             'GET api/users/{userId}',
             'PATCH api/users/{userId}/membership/status',
+            'GET api/roles',
+            'POST api/roles',
+            'GET api/roles/{roleId}',
+            'PATCH api/roles/{roleId}',
+            'PATCH api/roles/{roleId}/status',
+            'PUT api/roles/{roleId}/permissions',
+            'GET api/permissions',
+            'PUT api/users/{userId}/roles',
         ];
 
         $unexpected = array_values(array_diff($apiOperations, $allowed));
@@ -305,15 +321,6 @@ class RouteSurfaceTest extends TestCase
             $uris[] = $route->uri();
         }
 
-        $this->assertNotContains('api/roles', $uris);
-
-        $this->assertNotContains('api/permissions', $uris);
-
-        $this->assertNotContains(
-            'api/users/{userId}/roles',
-            $uris
-        );
-
         $this->assertNotContains(
             'api/users/{userId}/locations',
             $uris
@@ -361,6 +368,14 @@ class RouteSurfaceTest extends TestCase
             ['POST', 'api/users'],
             ['GET', 'api/users/{userId}'],
             ['PATCH', 'api/users/{userId}/membership/status'],
+            ['GET', 'api/roles'],
+            ['POST', 'api/roles'],
+            ['GET', 'api/roles/{roleId}'],
+            ['PATCH', 'api/roles/{roleId}'],
+            ['PATCH', 'api/roles/{roleId}/status'],
+            ['PUT', 'api/roles/{roleId}/permissions'],
+            ['GET', 'api/permissions'],
+            ['PUT', 'api/users/{userId}/roles'],
         ];
 
         foreach ($operations as [$method, $uri]) {
