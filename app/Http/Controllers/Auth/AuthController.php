@@ -121,6 +121,46 @@ class AuthController extends Controller
             ),
         ];
 
+        // Capacidades específicas de administración.
+        $administration = [
+            'manage_users' => $user->hasPermission(
+                Permission::UsersManage
+            ),
+
+            'manage_memberships' => $user->hasPermission(
+                Permission::MembershipsManage
+            ),
+
+            'manage_roles' => $user->hasPermission(
+                Permission::RolesManage
+            ),
+
+            'view_locations' => $user->hasPermission(
+                Permission::PlantsView
+            ),
+
+            'manage_locations' => $user->hasPermission(
+                Permission::PlantsManage
+            ),
+
+            'view_all_locations' => $user->hasPermission(
+                Permission::LocationsViewAll
+            ),
+        ];
+
+        // Operaciones que requieren múltiples permisos.
+        $administration['create_users'] =
+            $administration['manage_users']
+            && $administration['manage_memberships'];
+
+        $administration['assign_roles'] =
+            $administration['manage_users']
+            && $administration['manage_roles'];
+
+        $administration['assign_locations'] =
+            $administration['manage_users']
+            && $administration['manage_locations'];
+
         // Capacidades generales de navegación por módulo.
         $modules = [
             'dashboard' => true,
@@ -153,10 +193,10 @@ class AuthController extends Controller
             ),
 
             'administration' => (
-                $user->hasPermission(Permission::UsersManage)
-                || $user->hasPermission(Permission::RolesManage)
-                || $user->hasPermission(Permission::MembershipsManage)
-                || $user->hasPermission(Permission::PlantsManage)
+                $administration['manage_users']
+                || $administration['manage_roles']
+                || $administration['manage_memberships']
+                || $administration['manage_locations']
             ),
         ];
 
@@ -175,6 +215,7 @@ class AuthController extends Controller
             'roles' => $roles,
             'modules' => $modules,
             'corrective_actions' => $correctiveActions,
+            'administration' => $administration,
         ]);
     }
 

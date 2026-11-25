@@ -188,7 +188,8 @@ paths:
 
         Incluye las capacidades específicas de acciones correctivas,
         como lectura, creación, actualización, registro de avances
-        y verificación.
+        y verificación. También incluye capacidades administrativas de
+        usuarios, membresías, roles y ubicaciones.
 
         Los nombres de los roles son exclusivamente informativos.
         Las capacidades se determinan mediante las policies y los
@@ -8044,6 +8045,7 @@ components:
         - roles
         - modules
         - corrective_actions
+        - administration
       properties:
         organization_id:
           type: string
@@ -8147,6 +8149,49 @@ components:
                 `corrective_actions.verify` y un rol activo con
                 `system_key` admin o supervisor; la separación
                 ejecutor/responsable/verificador se comprueba por recurso.
+        administration:
+          type: object
+          description: |
+            Capacidades administrativas generales. No sustituyen la autorización
+            sobre recursos concretos ni las restricciones de seguridad del tenant.
+          required:
+            - manage_users
+            - manage_memberships
+            - manage_roles
+            - view_locations
+            - manage_locations
+            - view_all_locations
+            - create_users
+            - assign_roles
+            - assign_locations
+          properties:
+            manage_users:
+              type: boolean
+              description: Permiso efectivo users.manage.
+            manage_memberships:
+              type: boolean
+              description: Permiso efectivo memberships.manage.
+            manage_roles:
+              type: boolean
+              description: Permiso efectivo roles.manage.
+            view_locations:
+              type: boolean
+              description: Permiso efectivo plants.view.
+            manage_locations:
+              type: boolean
+              description: Permiso efectivo plants.manage.
+            view_all_locations:
+              type: boolean
+              description: Permiso efectivo locations.view_all; no sustituye el acceso operativo por ubicación.
+            create_users:
+              type: boolean
+              description: Autorización general para crear usuarios y sus membresías.
+            assign_roles:
+              type: boolean
+              description: Autorización general para gestionar asignaciones de roles, sujeta a las restricciones de privilegios.
+            assign_locations:
+              type: boolean
+              description: Autorización general para gestionar asignaciones de ubicaciones, sujeta al alcance autorizado.
 
     LogoutResponse:
       type: object

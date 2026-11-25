@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable(['id', 'name', 'email', 'password'])]
@@ -168,9 +169,20 @@ class User extends Authenticatable
             return false;
         }
 
+        if (
+            OrganizationMembership::findActive(
+                $this->id,
+                $organizationId
+            ) === null
+        ) {
+            return false;
+        }
+
         return $this->roles()
+            ->wherePivot('organization_id', $organizationId)
             ->where('roles.name', $role)
             ->where('roles.organization_id', $organizationId)
+            ->where('roles.status', true)
             ->exists();
     }
 
@@ -246,10 +258,20 @@ class User extends Authenticatable
         return RolePermission::query()
             ->where('organization_id', $organizationId)
             ->whereIn('role_id', function ($query) use ($organizationId) {
-                $query->select('role_id')
+                $query->select('user_roles.role_id')
                     ->from('user_roles')
-                    ->where('user_id', $this->id)
-                    ->where('organization_id', $organizationId);
+                    ->join('roles', function ($join) {
+                        $join->on('roles.id', '=', 'user_roles.role_id')
+                            ->on(
+                                'roles.organization_id',
+                                '=',
+                                'user_roles.organization_id'
+                            );
+                    })
+                    ->where('user_roles.user_id', $this->id)
+                    ->where('user_roles.organization_id', $organizationId)
+                    ->where('roles.organization_id', $organizationId)
+                    ->where('roles.status', true);
             })
             ->pluck('permission')
             ->unique()
@@ -311,16 +333,38 @@ class User extends Authenticatable
             throw CrossTenantOperationException::write();
         }
 
-        $membership = OrganizationMembership::findActive($this->id, $organizationId);
+        $membership = OrganizationMembership::findActive(
+            $this->id,
+            $organizationId
+        );
 
         if (! $membership) {
             throw CrossTenantOperationException::write();
         }
 
         return DB::transaction(function () use ($role, $organizationId) {
+            $currentRole = Role::query()
+                ->where('organization_id', $organizationId)
+                ->whereKey($role->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (! $currentRole->status) {
+                throw ValidationException::withMessages([
+                    'role_id' => [
+                        'No se puede asignar un rol inactivo.',
+                    ],
+                ]);
+            }
+
             $userRole = UserRole::firstOrCreate(
-                ['user_id' => $this->id, 'role_id' => $role->id],
-                ['organization_id' => $organizationId],
+                [
+                    'user_id' => $this->id,
+                    'role_id' => $currentRole->id,
+                ],
+                [
+                    'organization_id' => $organizationId,
+                ],
             );
 
             if ($userRole->organization_id !== $organizationId) {
@@ -328,11 +372,16 @@ class User extends Authenticatable
             }
 
             if ($userRole->wasRecentlyCreated) {
-                app(AuditLogger::class)->record('role.assigned', $userRole, [], [
-                    'user_id' => $this->id,
-                    'role_id' => $role->id,
-                    'organization_id' => $organizationId,
-                ]);
+                app(AuditLogger::class)->record(
+                    'role.assigned',
+                    $userRole,
+                    [],
+                    [
+                        'user_id' => $this->id,
+                        'role_id' => $currentRole->id,
+                        'organization_id' => $organizationId,
+                    ]
+                );
             }
 
             return $userRole;

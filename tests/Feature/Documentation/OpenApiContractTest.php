@@ -71,6 +71,7 @@ class OpenApiContractTest extends TestCase
                 'roles',
                 'modules',
                 'corrective_actions',
+                'administration',
             ],
             $schema['required']
         );
@@ -159,6 +160,40 @@ class OpenApiContractTest extends TestCase
             $this->assertSame(
                 'boolean',
                 $correctiveActions['properties'][$capability]['type']
+            );
+        }
+
+        // Capacidades específicas de administración.
+        $expectedAdministration = [
+            'manage_users',
+            'manage_memberships',
+            'manage_roles',
+            'view_locations',
+            'manage_locations',
+            'view_all_locations',
+            'create_users',
+            'assign_roles',
+            'assign_locations',
+        ];
+
+        $administration = $properties['administration'];
+
+        $this->assertSame('object', $administration['type']);
+
+        $this->assertEqualsCanonicalizing(
+            $expectedAdministration,
+            $administration['required']
+        );
+
+        foreach ($expectedAdministration as $capability) {
+            $this->assertArrayHasKey(
+                $capability,
+                $administration['properties']
+            );
+
+            $this->assertSame(
+                'boolean',
+                $administration['properties'][$capability]['type']
             );
         }
     }

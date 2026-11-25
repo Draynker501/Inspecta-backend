@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToOrganization;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -39,15 +40,41 @@ class Role extends Model
                 );
             }
         });
+
+        static::updated(function (Role $role): void {
+            if ($role->wasChanged('status')) {
+                app(TenantContext::class)
+                    ->flushPermissionCache(
+                        null,
+                        $role->organization_id
+                    );
+            }
+        });
+
+        static::deleted(function (Role $role): void {
+            app(TenantContext::class)
+                ->flushPermissionCache(
+                    null,
+                    $role->organization_id
+                );
+        });
     }
 
     public function organization(): BelongsTo
     {
-        return $this->belongsTo(Organization::class, 'organization_id');
+        return $this->belongsTo(
+            Organization::class,
+            'organization_id'
+        );
     }
 
     public function users(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'user_roles', 'role_id', 'user_id');
+        return $this->belongsToMany(
+            User::class,
+            'user_roles',
+            'role_id',
+            'user_id'
+        );
     }
 }
