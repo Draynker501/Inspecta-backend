@@ -892,4 +892,391 @@ class OpenApiContractTest extends TestCase
             $incidents['properties']['by_area']['items']['$ref']
         );
     }
+
+    public function test_documenta_los_endpoints_de_administracion_de_usuarios(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $operations = [
+            ['/users', 'get', 200, 'AdministrationUsersResponse'],
+            ['/users', 'post', 201, 'AdministrationUserResponse'],
+            ['/users/{userId}', 'get', 200, 'AdministrationUserResponse'],
+            [
+                '/users/{userId}/membership/status',
+                'patch',
+                200,
+                'AdministrationUserResponse',
+            ],
+        ];
+
+        foreach ($operations as [$path, $method, $success, $schema]) {
+            $this->assertArrayHasKey($path, $spec['paths']);
+
+            $endpoint = $spec['paths'][$path];
+
+            $this->assertSame('implemented', $endpoint['x-status']);
+
+            $this->assertContains(
+                ['$ref' => '#/components/parameters/organizationIdHeader'],
+                $endpoint['parameters']
+            );
+
+            $this->assertArrayHasKey($method, $endpoint);
+
+            $operation = $endpoint[$method];
+
+            $this->assertContains('Users', $operation['tags']);
+
+            foreach ([$success, 400, 401, 403, 422] as $status) {
+                $this->assertArrayHasKey(
+                    $status,
+                    $operation['responses']
+                );
+            }
+
+            $this->assertSame(
+                '#/components/schemas/'.$schema,
+                $operation['responses'][$success]['content']['application/json']['schema']['$ref']
+            );
+
+            if (str_contains($path, '{userId}')) {
+                $this->assertContains(
+                    ['$ref' => '#/components/parameters/userIdParam'],
+                    $operation['parameters']
+                );
+
+                $this->assertArrayHasKey(
+                    404,
+                    $operation['responses']
+                );
+            }
+
+            if (in_array($method, ['post', 'patch'], true)) {
+                $this->assertArrayHasKey(
+                    415,
+                    $operation['responses']
+                );
+
+                $this->assertTrue(
+                    $operation['requestBody']['required']
+                );
+            }
+        }
+
+        $this->assertArrayNotHasKey(
+            'put',
+            $spec['paths']['/users/{userId}']
+        );
+
+        $this->assertArrayNotHasKey(
+            'patch',
+            $spec['paths']['/users/{userId}']
+        );
+    }
+
+    public function test_administracion_de_usuarios_documenta_los_filtros(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $parameters = collect(
+            $spec['paths']['/users']['get']['parameters']
+        )->keyBy('name');
+
+        $this->assertEqualsCanonicalizing(
+            ['page', 'per_page', 'q', 'status', 'role_id'],
+            $parameters->keys()->all()
+        );
+
+        foreach ($parameters as $parameter) {
+            $this->assertSame('query', $parameter['in']);
+
+            $this->assertFalse(
+                $parameter['required'] ?? false
+            );
+        }
+
+        $page = $parameters['page']['schema'];
+
+        $this->assertSame('integer', $page['type']);
+        $this->assertSame(1, $page['minimum']);
+        $this->assertSame(1, $page['default']);
+
+        $perPage = $parameters['per_page']['schema'];
+
+        $this->assertSame('integer', $perPage['type']);
+        $this->assertSame(1, $perPage['minimum']);
+        $this->assertSame(100, $perPage['maximum']);
+        $this->assertSame(15, $perPage['default']);
+
+        $search = $parameters['q']['schema'];
+
+        $this->assertSame('string', $search['type']);
+        $this->assertSame(100, $search['maxLength']);
+
+        $status = $parameters['status']['schema'];
+
+        $this->assertSame('string', $status['type']);
+
+        $this->assertEqualsCanonicalizing(
+            ['active', 'revoked'],
+            $status['enum']
+        );
+
+        $roleId = $parameters['role_id']['schema'];
+
+        $this->assertSame('string', $roleId['type']);
+        $this->assertSame('uuid', $roleId['format']);
+    }
+
+    public function test_administracion_de_usuarios_documenta_los_esquemas_de_entrada(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $schemas = $spec['components']['schemas'];
+
+        $createOperation = $spec['paths']['/users']['post'];
+
+        $this->assertSame(
+            '#/components/schemas/AdministrationUserCreateInput',
+            $createOperation['requestBody']['content']['application/json']['schema']['$ref']
+        );
+
+        $create = $schemas['AdministrationUserCreateInput'];
+
+        $this->assertSame('object', $create['type']);
+        $this->assertFalse($create['additionalProperties']);
+
+        $expectedFields = [
+            'name',
+            'email',
+            'password',
+            'password_confirmation',
+        ];
+
+        $this->assertEqualsCanonicalizing(
+            $expectedFields,
+            $create['required']
+        );
+
+        $this->assertEqualsCanonicalizing(
+            $expectedFields,
+            array_keys($create['properties'])
+        );
+
+        $properties = $create['properties'];
+
+        $this->assertSame(
+            150,
+            $properties['name']['maxLength']
+        );
+
+        $this->assertSame(
+            'email',
+            $properties['email']['format']
+        );
+
+        $this->assertSame(
+            255,
+            $properties['email']['maxLength']
+        );
+
+        $this->assertSame(
+            12,
+            $properties['password']['minLength']
+        );
+
+        $this->assertSame(
+            72,
+            $properties['password']['maxLength']
+        );
+
+        foreach (['password', 'password_confirmation'] as $field) {
+            $this->assertSame(
+                'password',
+                $properties[$field]['format']
+            );
+
+            $this->assertTrue(
+                $properties[$field]['writeOnly']
+            );
+        }
+
+        $membershipOperation =
+            $spec['paths']['/users/{userId}/membership/status']['patch'];
+
+        $this->assertSame(
+            '#/components/schemas/AdministrationMembershipStatusInput',
+            $membershipOperation['requestBody']['content']['application/json']['schema']['$ref']
+        );
+
+        $membership = $schemas['AdministrationMembershipStatusInput'];
+
+        $this->assertSame('object', $membership['type']);
+        $this->assertFalse($membership['additionalProperties']);
+
+        $this->assertSame(
+            ['status'],
+            $membership['required']
+        );
+
+        $this->assertSame(
+            ['status'],
+            array_keys($membership['properties'])
+        );
+
+        $this->assertEqualsCanonicalizing(
+            ['active', 'revoked'],
+            $membership['properties']['status']['enum']
+        );
+    }
+
+    public function test_administracion_de_usuarios_documenta_los_esquemas_de_respuesta(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $schemas = $spec['components']['schemas'];
+
+        $expectedSchemas = [
+            'AdministrationUser' => [
+                'id',
+                'name',
+                'email',
+                'account_status',
+                'membership',
+                'roles',
+                'locations',
+            ],
+            'AdministrationMembership' => [
+                'id',
+                'status',
+                'revoked_at',
+            ],
+            'AdministrationUserRole' => [
+                'id',
+                'name',
+                'system_key',
+                'status',
+            ],
+            'AdministrationUserLocations' => [
+                'plants',
+                'areas',
+            ],
+            'AdministrationUserPlant' => [
+                'id',
+                'name',
+                'code',
+                'status',
+            ],
+            'AdministrationUserArea' => [
+                'id',
+                'name',
+                'code',
+                'status',
+                'plant_id',
+            ],
+            'AdministrationUserResponse' => [
+                'data',
+            ],
+            'AdministrationUsersResponse' => [
+                'data',
+                'meta',
+            ],
+        ];
+
+        foreach ($expectedSchemas as $name => $fields) {
+            $this->assertArrayHasKey($name, $schemas);
+
+            $schema = $schemas[$name];
+
+            $this->assertSame('object', $schema['type']);
+
+            $this->assertEqualsCanonicalizing(
+                $fields,
+                $schema['required']
+            );
+
+            $this->assertEqualsCanonicalizing(
+                $fields,
+                array_keys($schema['properties'])
+            );
+        }
+
+        $user = $schemas['AdministrationUser']['properties'];
+
+        $this->assertSame('uuid', $user['id']['format']);
+        $this->assertSame('email', $user['email']['format']);
+        $this->assertSame('boolean', $user['account_status']['type']);
+
+        $this->assertSame(
+            '#/components/schemas/AdministrationMembership',
+            $user['membership']['$ref']
+        );
+
+        $this->assertSame('array', $user['roles']['type']);
+
+        $this->assertSame(
+            '#/components/schemas/AdministrationUserRole',
+            $user['roles']['items']['$ref']
+        );
+
+        $this->assertSame(
+            '#/components/schemas/AdministrationUserLocations',
+            $user['locations']['$ref']
+        );
+
+        $membership = $schemas['AdministrationMembership']['properties'];
+
+        $this->assertEqualsCanonicalizing(
+            ['active', 'revoked'],
+            $membership['status']['enum']
+        );
+
+        $this->assertTrue(
+            $membership['revoked_at']['nullable']
+        );
+
+        $this->assertSame(
+            'date-time',
+            $membership['revoked_at']['format']
+        );
+
+        $role = $schemas['AdministrationUserRole']['properties'];
+
+        $this->assertTrue($role['system_key']['nullable']);
+        $this->assertSame('boolean', $role['status']['type']);
+
+        $locations = $schemas['AdministrationUserLocations']['properties'];
+
+        $this->assertSame('array', $locations['plants']['type']);
+        $this->assertSame('array', $locations['areas']['type']);
+
+        $this->assertSame(
+            '#/components/schemas/AdministrationUserPlant',
+            $locations['plants']['items']['$ref']
+        );
+
+        $this->assertSame(
+            '#/components/schemas/AdministrationUserArea',
+            $locations['areas']['items']['$ref']
+        );
+
+        $this->assertSame(
+            '#/components/schemas/AdministrationUser',
+            $schemas['AdministrationUserResponse']['properties']['data']['$ref']
+        );
+
+        $list = $schemas['AdministrationUsersResponse']['properties'];
+
+        $this->assertSame('array', $list['data']['type']);
+
+        $this->assertSame(
+            '#/components/schemas/AdministrationUser',
+            $list['data']['items']['$ref']
+        );
+
+        $this->assertSame(
+            '#/components/schemas/PaginationMeta',
+            $list['meta']['$ref']
+        );
+    }
 }

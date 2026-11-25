@@ -282,6 +282,8 @@ class AdministrationSecurityService
             $actor,
             $this->getRolePermissions($role)
         );
+
+        $this->ensureCanDelegateSystemRole($actor, $role);
     }
 
     /**
@@ -316,6 +318,11 @@ class AdministrationSecurityService
             $this->ensureCanDelegatePermissions(
                 $actor,
                 $this->getRolePermissions($role)
+            );
+
+            $this->ensureCanDelegateSystemRole(
+                $actor,
+                $role
             );
         }
     }
@@ -516,5 +523,41 @@ class AdministrationSecurityService
                 'La organización debe conservar al menos un administrador operativo.',
             ],
         ]);
+    }
+
+    /**
+     * Protege los privilegios especiales de los roles base.
+     */
+    public function ensureCanDelegateSystemRole(
+        User $actor,
+        Role $role
+    ): void {
+        $this->ensureActiveMember($actor);
+        $this->ensureTenant($role);
+
+        $organizationId = $this->context->requireId();
+
+        if ($role->system_key === 'admin') {
+            $isBaseAdministrator = $actor->roles()
+                ->wherePivot('organization_id', $organizationId)
+                ->where('roles.organization_id', $organizationId)
+                ->where('roles.system_key', 'admin')
+                ->where('roles.status', true)
+                ->exists();
+
+            abort_unless(
+                $isBaseAdministrator,
+                403,
+                'Solo un administrador base puede administrar este rol.'
+            );
+        }
+
+        if ($role->system_key === 'supervisor') {
+            abort_unless(
+                $actor->hasEligibleVerifierRole(),
+                403,
+                'No puedes conceder los privilegios de este rol.'
+            );
+        }
     }
 }

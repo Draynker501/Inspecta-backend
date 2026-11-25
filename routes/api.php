@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Administration\UserController;
 use App\Http\Controllers\AreaController;
 use App\Http\Controllers\AreaStoreController;
 use App\Http\Controllers\Auth\AuthController;
@@ -52,6 +53,11 @@ Route::prefix('auth')->group(function () {
 
 Route::get('dashboard', [DashboardController::class, 'index'])->middleware('api.tenant');
 Route::get('reports/summary', [ReportController::class, 'summary'])->middleware('api.tenant');
+// Administración de usuarios y membresías.
+Route::get('users', [UserController::class, 'index'])->middleware('api.tenant');
+Route::post('users', [UserController::class, 'store'])->middleware('api.tenant');
+Route::get('users/{userId}', [UserController::class, 'show'])->middleware('api.tenant');
+Route::patch('users/{userId}/membership/status', [UserController::class, 'updateMembershipStatus'])->middleware('api.tenant');
 Route::get('plants', [PlantController::class, 'index'])->middleware('api.tenant');
 Route::post('plants', [PlantController::class, 'store'])->middleware('api.tenant');
 Route::get('plants/{plantId}', [PlantController::class, 'show'])->middleware('api.tenant');

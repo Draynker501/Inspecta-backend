@@ -1484,36 +1484,58 @@ paths:
   # ===================================================================
 
   /users:
-    x-status: planned
+    x-status: implemented
     parameters:
-      - $ref: '#/components/parameters/organizationIdHeader'
+    - $ref: '#/components/parameters/organizationIdHeader'
     get:
-      summary: Listar Usuarios
-      description: Obtiene una lista paginada de todos los usuarios registrados.
+      summary: Listar usuarios
+      description: Requiere users.manage o memberships.manage. Lista membresías de la organización activa, incluidas
+        las revocadas. No admite cuerpo ni parámetros desconocidos.
       tags:
-        - Users
+      - Users
       parameters:
-        - $ref: '#/components/parameters/pageParam'
-        - $ref: '#/components/parameters/perPageParam'
-        - in: query
-          name: status
-          schema:
-            type: boolean
-          description: Filtrar por usuarios activos o inactivos.
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+        description: Página.
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 15
+        description: Registros por página.
+      - name: q
+        in: query
+        schema:
+          type: string
+          maxLength: 100
+        description: Búsqueda literal por nombre o correo.
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - active
+          - revoked
+        description: Estado de membresía.
+      - name: role_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+        description: Filtrar por rol de la organización; un UUID ajeno o inexistente no devuelve registros.
       responses:
         '200':
-          description: Lista de usuarios obtenida.
+          description: Listar usuarios
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/User'
-                  meta:
-                    $ref: '#/components/schemas/PaginationMeta'
+                $ref: '#/components/schemas/AdministrationUsersResponse'
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -1528,9 +1550,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -1544,27 +1568,28 @@ paths:
                   $ref: '#/components/examples/OrganizationNotTenant'
                 forbiddenPolicy:
                   $ref: '#/components/examples/ForbiddenPolicy'
+        '422':
+          $ref: '#/components/responses/ValidationError'
     post:
-      summary: Crear Usuario
-      description: Crea un nuevo usuario. Permite enviar arreglos opcionales con IDs de roles, plantas y áreas para configurar sus permisos inmediatamente.
+      summary: Crear usuario
+      description: Requiere users.manage y memberships.manage. Crea identidad global nueva y membresía activa sin
+        roles ni ubicaciones. Correo globalmente único; no vincula cuentas existentes. Solo JSON, sin parámetros de
+        consulta.
       tags:
-        - Users
+      - Users
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserCreateInput'
+              $ref: '#/components/schemas/AdministrationUserCreateInput'
       responses:
         '201':
-          description: Usuario creado exitosamente.
+          description: Crear usuario
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/User'
+                $ref: '#/components/schemas/AdministrationUserResponse'
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -1579,9 +1604,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -1595,39 +1622,33 @@ paths:
                   $ref: '#/components/examples/OrganizationNotTenant'
                 forbiddenPolicy:
                   $ref: '#/components/examples/ForbiddenPolicy'
-        '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
+        '415':
+          description: Content-Type debe ser application/json.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              examples:
-                validationFailed:
-                  $ref: '#/components/examples/ValidationFailed'
-                crossTenantOperation:
-                  $ref: '#/components/examples/CrossTenantRelation'
-
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /users/{userId}:
-    x-status: planned
+    x-status: implemented
     parameters:
-      - $ref: '#/components/parameters/organizationIdHeader'
+    - $ref: '#/components/parameters/organizationIdHeader'
     get:
-      summary: Obtener detalle de Usuario
-      description: Retorna la información de un usuario, incluyendo los roles, plantas y áreas a las que tiene acceso.
+      summary: Consultar usuario
+      description: Requiere users.manage o memberships.manage. Consulta la membresía de la organización activa. No
+        admite cuerpo ni parámetros de consulta.
       tags:
-        - Users
+      - Users
       parameters:
-        - $ref: '#/components/parameters/userIdParam'
+      - $ref: '#/components/parameters/userIdParam'
       responses:
         '200':
-          description: Detalle del usuario obtenido.
+          description: Consultar usuario
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/UserDetail'
+                $ref: '#/components/schemas/AdministrationUserResponse'
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -1642,64 +1663,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              examples:
-                userInactive:
-                  $ref: '#/components/examples/UserInactive'
-                organizationAccessDenied:
-                  $ref: '#/components/examples/OrganizationAccessDenied'
-                organizationNotTenant:
-                  $ref: '#/components/examples/OrganizationNotTenant'
-                forbiddenPolicy:
-                  $ref: '#/components/examples/ForbiddenPolicy'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-    put:
-      summary: Actualizar Usuario
-      description: Actualiza información básica del usuario (Nombre, Email, Estado). No se usa para actualizar contraseñas.
-      tags:
-        - Users
-      parameters:
-        - $ref: '#/components/parameters/userIdParam'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UserUpdateInput'
-      responses:
-        '200':
-          description: Usuario actualizado.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/User'
-        '400':
-          description: Contexto de organización inválido (organization_required u organization_invalid).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              examples:
-                organizationRequired:
-                  $ref: '#/components/examples/OrganizationRequired'
-                organizationInvalid:
-                  $ref: '#/components/examples/OrganizationInvalid'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
-            insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -1716,44 +1684,33 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              examples:
-                validationFailed:
-                  $ref: '#/components/examples/ValidationFailed'
-                crossTenantOperation:
-                  $ref: '#/components/examples/CrossTenantRelation'
+          $ref: '#/components/responses/ValidationError'
+  /users/{userId}/membership/status:
+    x-status: implemented
+    parameters:
+    - $ref: '#/components/parameters/organizationIdHeader'
     patch:
-      summary: Activar/Desactivar Usuario
-      description: Cambia el estado lógico del usuario (activa o inactiva).
+      summary: Cambiar estado de membresía
+      description: Requiere memberships.manage. Conserva identidad global, roles, ubicaciones e historial. No permite
+        autorrevocación ni pérdida del último administrador. La reactivación valida cuenta, roles y alcance de ubicaciones.
+        Solo JSON, sin parámetros de consulta.
       tags:
-        - Users
+      - Users
       parameters:
-        - $ref: '#/components/parameters/userIdParam'
+      - $ref: '#/components/parameters/userIdParam'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - status
-              properties:
-                status:
-                  type: boolean
+              $ref: '#/components/schemas/AdministrationMembershipStatusInput'
       responses:
         '200':
-          description: Estado actualizado.
+          description: Cambiar estado de membresía
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/User'
+                $ref: '#/components/schemas/AdministrationUserResponse'
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -1768,9 +1725,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -1786,6 +1745,14 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
+        '415':
+          description: Content-Type debe ser application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
 
   /users/{userId}/password:
     x-status: planned
@@ -7227,6 +7194,186 @@ components:
               $ref: '#/components/examples/ServiceUnavailableExample'
 
   schemas:
+    AdministrationMembership:
+      type: object
+      required:
+      - id
+      - status
+      - revoked_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - active
+          - revoked
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+    AdministrationUserRole:
+      type: object
+      required:
+      - id
+      - name
+      - system_key
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        system_key:
+          type: string
+          nullable: true
+        status:
+          type: boolean
+    AdministrationUserPlant:
+      type: object
+      required:
+      - id
+      - name
+      - code
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        status:
+          type: boolean
+    AdministrationUserArea:
+      type: object
+      required:
+      - id
+      - name
+      - code
+      - status
+      - plant_id
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        status:
+          type: boolean
+        plant_id:
+          type: string
+          format: uuid
+    AdministrationUserLocations:
+      type: object
+      required:
+      - plants
+      - areas
+      properties:
+        plants:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdministrationUserPlant'
+        areas:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdministrationUserArea'
+      description: Asignaciones visibles según plants.view y alcance del actor. Un arreglo vacío no garantiza ausencia
+        de asignaciones.
+    AdministrationUser:
+      type: object
+      required:
+      - id
+      - name
+      - email
+      - account_status
+      - membership
+      - roles
+      - locations
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        account_status:
+          type: boolean
+        membership:
+          $ref: '#/components/schemas/AdministrationMembership'
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdministrationUserRole'
+        locations:
+          $ref: '#/components/schemas/AdministrationUserLocations'
+    AdministrationUserResponse:
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          $ref: '#/components/schemas/AdministrationUser'
+    AdministrationUsersResponse:
+      type: object
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdministrationUser'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+    AdministrationUserCreateInput:
+      type: object
+      required:
+      - name
+      - email
+      - password
+      - password_confirmation
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        password:
+          type: string
+          format: password
+          minLength: 12
+          maxLength: 72
+          writeOnly: true
+          description: Al menos una mayúscula, una minúscula y un número; máximo 72 bytes, sin NUL.
+        password_confirmation:
+          type: string
+          format: password
+          writeOnly: true
+          description: Debe coincidir con password.
+      additionalProperties: false
+    AdministrationMembershipStatusInput:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          enum:
+          - active
+          - revoked
+      additionalProperties: false
+
     ReportPeriod:
       type: object
       required:

@@ -133,6 +133,10 @@ class RouteSurfaceTest extends TestCase
             'PATCH api/versions/{versionId}/sections/reorder',
             'PATCH api/sections/{sectionId}/questions/reorder',
             'GET api/reports/summary',
+            'GET api/users',
+            'POST api/users',
+            'GET api/users/{userId}',
+            'PATCH api/users/{userId}/membership/status',
         ];
 
         foreach ($expected as $operation) {
@@ -225,6 +229,10 @@ class RouteSurfaceTest extends TestCase
             'PATCH api/versions/{versionId}/sections/reorder',
             'PATCH api/sections/{sectionId}/questions/reorder',
             'GET api/reports/summary',
+            'GET api/users',
+            'POST api/users',
+            'GET api/users/{userId}',
+            'PATCH api/users/{userId}/membership/status',
         ];
 
         $unexpected = array_values(array_diff($apiOperations, $allowed));
@@ -289,7 +297,7 @@ class RouteSurfaceTest extends TestCase
             ->assertOk();
     }
 
-    public function test_rutas_planeadas_no_estan_registradas(): void
+    public function test_rutas_administrativas_planeadas_no_estan_registradas(): void
     {
         $uris = [];
 
@@ -297,7 +305,19 @@ class RouteSurfaceTest extends TestCase
             $uris[] = $route->uri();
         }
 
-        $this->assertNotContains('api/users', $uris);
+        $this->assertNotContains('api/roles', $uris);
+
+        $this->assertNotContains('api/permissions', $uris);
+
+        $this->assertNotContains(
+            'api/users/{userId}/roles',
+            $uris
+        );
+
+        $this->assertNotContains(
+            'api/users/{userId}/locations',
+            $uris
+        );
     }
 
     public function test_no_estan_registradas_las_rutas_desactivadas(): void
@@ -332,5 +352,32 @@ class RouteSurfaceTest extends TestCase
             'api.tenant',
             $route->middleware()
         );
+    }
+
+    public function test_users_declara_el_grupo_api_tenant_en_sus_rutas(): void
+    {
+        $operations = [
+            ['GET', 'api/users'],
+            ['POST', 'api/users'],
+            ['GET', 'api/users/{userId}'],
+            ['PATCH', 'api/users/{userId}/membership/status'],
+        ];
+
+        foreach ($operations as [$method, $uri]) {
+            $route = collect(Route::getRoutes())->first(
+                fn ($route) => $route->uri() === $uri
+                    && in_array($method, $route->methods(), true)
+            );
+
+            $this->assertNotNull(
+                $route,
+                "Ruta no registrada: {$method} {$uri}"
+            );
+
+            $this->assertContains(
+                'api.tenant',
+                $route->middleware()
+            );
+        }
     }
 }
