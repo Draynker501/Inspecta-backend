@@ -1844,61 +1844,326 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /roles:
-    x-status: planned
+    x-status: implemented
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
-      summary: Listar Roles
-      description: Obtiene la lista paginada de roles disponibles para asignar a los usuarios.
-      tags:
-        - Users
+      summary: Listar roles
+      description: Requiere users.manage o roles.manage. Solo organización activa.
+      tags: [Users]
       parameters:
-        - $ref: '#/components/parameters/pageParam'
-        - $ref: '#/components/parameters/perPageParam'
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: per_page
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 15}
+        - name: q
+          in: query
+          schema: {type: string, maxLength: 100}
+        - name: status
+          in: query
+          schema: {type: integer, enum: [0, 1]}
       responses:
         '200':
-          description: Lista de roles obtenida.
+          description: Operación exitosa.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Role'
-                  meta:
-                    $ref: '#/components/schemas/PaginationMeta'
+                $ref: '#/components/schemas/AdministrationRolesResponse'
         '400':
-          description: Contexto de organización inválido (organization_required u organization_invalid).
+          description: Contexto de organización inválido.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              examples:
-                organizationRequired:
-                  $ref: '#/components/examples/OrganizationRequired'
-                organizationInvalid:
-                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
-            insuficiente (las policies pueden responder 403 sin code).
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    post:
+      summary: Crear rol
+      description: Requiere roles.manage. Crea rol personalizado activo sin permisos.
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministrationRoleCreateInput'
+      responses:
+        '201':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationRoleResponse'
+        '400':
+          description: Contexto de organización inválido.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              examples:
-                userInactive:
-                  $ref: '#/components/examples/UserInactive'
-                organizationAccessDenied:
-                  $ref: '#/components/examples/OrganizationAccessDenied'
-                organizationNotTenant:
-                  $ref: '#/components/examples/OrganizationNotTenant'
-                forbiddenPolicy:
-                  $ref: '#/components/examples/ForbiddenPolicy'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '415':
+          description: Content-Type debe ser application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /roles/{roleId}:
+    x-status: implemented
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    get:
+      summary: Consultar rol
+      description: Requiere users.manage o roles.manage. Solo organización activa.
+      tags: [Users]
+      parameters:
+        - name: roleId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationRoleResponse'
+        '400':
+          description: Contexto de organización inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      summary: Editar rol
+      description: Requiere roles.manage. Roles base protegidos y delegación limitada a permisos propios.
+      tags: [Users]
+      parameters:
+        - name: roleId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministrationRoleUpdateInput'
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationRoleResponse'
+        '400':
+          description: Contexto de organización inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '415':
+          description: Content-Type debe ser application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /roles/{roleId}/status:
+    x-status: implemented
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    patch:
+      summary: Cambiar estado de rol
+      description: Requiere roles.manage. Roles base protegidos y delegación limitada a permisos propios. Conserva asignaciones.
+      tags: [Users]
+      parameters:
+        - name: roleId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministrationRoleStatusInput'
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationRoleResponse'
+        '400':
+          description: Contexto de organización inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '415':
+          description: Content-Type debe ser application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /roles/{roleId}/permissions:
+    x-status: implemented
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    put:
+      summary: Sustituir permisos
+      description: Requiere roles.manage. Roles base protegidos y delegación limitada a permisos propios. Admite arreglo vacío.
+      tags: [Users]
+      parameters:
+        - name: roleId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministrationRolePermissionsInput'
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationRoleResponse'
+        '400':
+          description: Contexto de organización inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '415':
+          description: Content-Type debe ser application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /permissions:
+    x-status: implemented
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    get:
+      summary: Consultar catálogo de permisos
+      description: Requiere roles.manage. assignable indica si el actor posee el permiso.
+      tags: [Users]
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationPermissionsResponse'
+        '400':
+          description: Contexto de organización inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /users/{userId}/roles:
+    x-status: implemented
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    put:
+      summary: Sustituir roles de usuario
+      description: Requiere users.manage y roles.manage. Membresía y cuenta activas. Conserva roles inactivos existentes pero no permite nuevas asignaciones inactivas. Protege al último administrador.
+      tags: [Users]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministrationUserRolesInput'
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationUserResponse'
+        '400':
+          description: Contexto de organización inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '415':
+          description: Content-Type debe ser application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
 
   # ===================================================================
   # CHECKLISTS
@@ -7194,6 +7459,93 @@ components:
               $ref: '#/components/examples/ServiceUnavailableExample'
 
   schemas:
+    AdministrationPermissionKey:
+      type: string
+      enum: [plants.view, locations.view_all, plants.manage, users.manage, roles.manage, memberships.manage, checklists.view, checklists.manage, norms.view, norms.manage, inspections.manage, inspections.execute, findings.register, findings.close, corrective_actions.manage, corrective_actions.verify, reports.view, reports.view_own]
+    AdministrationRole:
+      type: object
+      required: [id, name, description, system_key, status, permissions, users_count]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, maxLength: 50}
+        description: {type: string, nullable: true}
+        system_key: {type: string, nullable: true}
+        status: {type: boolean}
+        permissions:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/AdministrationPermissionKey'
+        users_count: {type: integer, minimum: 0, description: Número de membresías activas asignadas.}
+    AdministrationRoleResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/AdministrationRole'
+    AdministrationRolesResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdministrationRole'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+    AdministrationRoleCreateInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 50}
+        description: {type: string, nullable: true, maxLength: 2000}
+    AdministrationRoleUpdateInput:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: {type: string, minLength: 1, maxLength: 50}
+        description: {type: string, nullable: true, maxLength: 2000}
+    AdministrationRoleStatusInput:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: {type: boolean}
+    AdministrationRolePermissionsInput:
+      type: object
+      additionalProperties: false
+      required: [permissions]
+      properties:
+        permissions:
+          type: array
+          uniqueItems: true
+          maxItems: 18
+          items:
+            $ref: '#/components/schemas/AdministrationPermissionKey'
+    AdministrationPermissionsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required: [key, assignable]
+            properties:
+              key:
+                $ref: '#/components/schemas/AdministrationPermissionKey'
+              assignable: {type: boolean}
+    AdministrationUserRolesInput:
+      type: object
+      additionalProperties: false
+      required: [role_ids]
+      properties:
+        role_ids:
+          type: array
+          uniqueItems: true
+          items: {type: string, format: uuid}
     AdministrationMembership:
       type: object
       required:
