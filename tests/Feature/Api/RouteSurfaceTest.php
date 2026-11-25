@@ -132,6 +132,7 @@ class RouteSurfaceTest extends TestCase
             'GET api/evidences/{evidenceId}/preview',
             'PATCH api/versions/{versionId}/sections/reorder',
             'PATCH api/sections/{sectionId}/questions/reorder',
+            'GET api/reports/summary',
         ];
 
         foreach ($expected as $operation) {
@@ -223,6 +224,7 @@ class RouteSurfaceTest extends TestCase
             'GET api/evidences/{evidenceId}/preview',
             'PATCH api/versions/{versionId}/sections/reorder',
             'PATCH api/sections/{sectionId}/questions/reorder',
+            'GET api/reports/summary',
         ];
 
         $unexpected = array_values(array_diff($apiOperations, $allowed));

@@ -609,4 +609,252 @@ class OpenApiContractTest extends TestCase
             }
         }
     }
+
+    public function test_reports_documenta_los_parametros_y_respuestas(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $path = $spec['paths']['/reports/summary'];
+
+        $operation = $path['get'];
+
+        $this->assertContains([
+            '$ref' => '#/components/parameters/organizationIdHeader',
+        ], $path['parameters']);
+
+        $this->assertContains(
+            ['bearerAuth' => []],
+            $operation['security']
+        );
+
+        $parameters = collect(
+            $operation['parameters']
+        )->keyBy('name');
+
+        $this->assertEqualsCanonicalizing([
+            'date_from',
+            'date_to',
+            'plant_id',
+            'area_id',
+            'production_line_id',
+        ], $parameters->keys()->all());
+
+        foreach (['date_from', 'date_to'] as $field) {
+            $parameter = $parameters->get($field);
+
+            $this->assertSame(
+                'query',
+                $parameter['in']
+            );
+
+            $this->assertTrue($parameter['required']);
+
+            $this->assertSame(
+                'string',
+                $parameter['schema']['type']
+            );
+
+            $this->assertSame(
+                'date',
+                $parameter['schema']['format']
+            );
+        }
+
+        foreach ([
+            'plant_id',
+            'area_id',
+            'production_line_id',
+        ] as $field) {
+            $parameter = $parameters->get($field);
+
+            $this->assertSame(
+                'query',
+                $parameter['in']
+            );
+
+            $this->assertFalse($parameter['required']);
+
+            $this->assertSame(
+                'string',
+                $parameter['schema']['type']
+            );
+
+            $this->assertSame(
+                'uuid',
+                $parameter['schema']['format']
+            );
+        }
+
+        foreach ([200, 400, 401, 403, 422] as $status) {
+            $this->assertArrayHasKey(
+                $status,
+                $operation['responses']
+            );
+        }
+
+        $this->assertSame(
+            '#/components/schemas/ReportSummaryResponse',
+            $operation['responses'][200]['content']['application/json']['schema']['$ref']
+        );
+    }
+
+    public function test_reports_documenta_las_secciones_y_capacidades(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $schemas = $spec['components']['schemas'];
+
+        $summary = $schemas['ReportSummaryResponse'];
+
+        $this->assertSame(
+            'object',
+            $summary['type']
+        );
+
+        $this->assertEqualsCanonicalizing([
+            'organization_id',
+            'period',
+            'filters',
+            'scope',
+            'capabilities',
+            'inspections',
+            'incidents',
+            'corrective_actions',
+        ], $summary['required']);
+
+        $this->assertSame(
+            ['all', 'own'],
+            $summary['properties']['scope']['enum']
+        );
+
+        $capabilities = $schemas['ReportCapabilities'];
+
+        $this->assertEqualsCanonicalizing([
+            'inspections',
+            'incidents',
+            'corrective_actions',
+        ], $capabilities['required']);
+
+        foreach ($capabilities['properties'] as $property) {
+            $this->assertSame(
+                'boolean',
+                $property['type']
+            );
+        }
+
+        $sections = [
+            'inspections' => 'ReportInspectionStatistics',
+            'incidents' => 'ReportIncidentStatistics',
+            'corrective_actions' => 'ReportCorrectiveActionStatistics',
+        ];
+
+        foreach ($sections as $field => $schema) {
+            $this->assertSame(
+                "#/components/schemas/{$schema}",
+                $summary['properties'][$field]['$ref']
+            );
+
+            $this->assertTrue(
+                $schemas[$schema]['nullable']
+            );
+
+            $this->assertSame(
+                'object',
+                $schemas[$schema]['type']
+            );
+        }
+    }
+
+    public function test_reports_documenta_las_tasas_y_distribuciones(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $schemas = $spec['components']['schemas'];
+
+        $rates = [
+            'ReportInspectionStatistics' => [
+                'completion_rate',
+                'approval_rate',
+            ],
+            'ReportCorrectiveActionStatistics' => [
+                'verification_rate',
+            ],
+            'ReportIncidentArea' => [
+                'percentage',
+            ],
+        ];
+
+        foreach ($rates as $schema => $fields) {
+            foreach ($fields as $field) {
+                $property =
+                    $schemas[$schema]['properties'][$field];
+
+                $this->assertSame(
+                    'number',
+                    $property['type']
+                );
+
+                $this->assertTrue(
+                    $property['nullable']
+                );
+
+                $this->assertSame(
+                    0,
+                    $property['minimum']
+                );
+
+                $this->assertSame(
+                    100,
+                    $property['maximum']
+                );
+            }
+        }
+
+        $inspections =
+            $schemas['ReportInspectionStatistics'];
+
+        $incidents =
+            $schemas['ReportIncidentStatistics'];
+
+        $actions =
+            $schemas['ReportCorrectiveActionStatistics'];
+
+        $this->assertEqualsCanonicalizing([
+            'draft',
+            'completed',
+            'confirmed',
+            'rejected',
+        ], $inspections['properties']['by_status']['required']);
+
+        $this->assertEqualsCanonicalizing([
+            'open',
+            'in_progress',
+            'resolved',
+            'closed',
+        ], $incidents['properties']['by_status']['required']);
+
+        $this->assertEqualsCanonicalizing([
+            'low',
+            'medium',
+            'high',
+            'critical',
+        ], $incidents['properties']['by_risk_level']['required']);
+
+        $this->assertEqualsCanonicalizing([
+            'pending',
+            'in_progress',
+            'completed',
+            'verified',
+        ], $actions['properties']['by_status']['required']);
+
+        $this->assertSame(
+            'array',
+            $incidents['properties']['by_area']['type']
+        );
+
+        $this->assertSame(
+            '#/components/schemas/ReportIncidentArea',
+            $incidents['properties']['by_area']['items']['$ref']
+        );
+    }
 }
