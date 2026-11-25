@@ -68,12 +68,13 @@ class CreatePlatformUserCommand extends Command
 
         $operator = Organization::query()
             ->where('code', 'INSPECTA-OP')
+            ->where('type', Organization::TYPE_OPERATOR)
             ->where('status', true)
             ->whereNull('deleted_at')
             ->first();
 
         if (! $operator) {
-            $this->error('La operadora INSPECTA-OP no existe. Ejecute el seeder de arranque (OrganizationSeeder) antes de crear el usuario de plataforma.');
+            $this->error('La organizacion operadora INSPECTA-OP no existe o no esta activa. Cree la operadora antes de crear el usuario de plataforma.');
 
             return self::FAILURE;
         }
