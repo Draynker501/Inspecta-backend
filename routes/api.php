@@ -10,6 +10,7 @@ use App\Http\Controllers\ChecklistSectionController;
 use App\Http\Controllers\ChecklistVersionController;
 use App\Http\Controllers\CorrectiveActionController;
 use App\Http\Controllers\CorrectiveActionUpdateController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EvidenceController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\InspectionAnswerController;
@@ -22,7 +23,6 @@ use App\Http\Controllers\ProductionLineController;
 use App\Http\Controllers\ProductionLineStoreController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\QuestionNormRequirementController;
-use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
 
 /*

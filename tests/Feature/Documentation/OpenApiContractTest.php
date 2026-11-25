@@ -208,8 +208,7 @@ class OpenApiContractTest extends TestCase
 
         $month = collect($operation['parameters'])
             ->first(
-                fn(array $parameter): bool =>
-                    ($parameter['name'] ?? null) === 'month'
+                fn (array $parameter): bool => ($parameter['name'] ?? null) === 'month'
             );
 
         $this->assertNotNull($month);
@@ -232,9 +231,7 @@ class OpenApiContractTest extends TestCase
 
         $this->assertSame(
             '#/components/schemas/DashboardResponse',
-            $operation['responses']['200']
-            ['content']['application/json']
-            ['schema']['$ref']
+            $operation['responses']['200']['content']['application/json']['schema']['$ref']
         );
     }
 
@@ -318,31 +315,26 @@ class OpenApiContractTest extends TestCase
         );
 
         $this->assertTrue(
-            $schemas['DashboardApprovalRate']
-            ['properties']['value']['nullable']
+            $schemas['DashboardApprovalRate']['properties']['value']['nullable']
         );
 
         $this->assertTrue(
-            $schemas['DashboardApprovalTrendPoint']
-            ['properties']['value']['nullable']
+            $schemas['DashboardApprovalTrendPoint']['properties']['value']['nullable']
         );
 
         $this->assertSame(
             5,
-            $schemas['DashboardCharts']
-            ['properties']['approval_trend']['maxItems']
+            $schemas['DashboardCharts']['properties']['approval_trend']['maxItems']
         );
 
         $this->assertSame(
             4,
-            $schemas['DashboardCharts']
-            ['properties']['incidents_by_risk']['maxItems']
+            $schemas['DashboardCharts']['properties']['incidents_by_risk']['maxItems']
         );
 
         $this->assertSame(
             ['low', 'medium', 'high', 'critical'],
-            $schemas['DashboardRiskCount']
-            ['properties']['risk_level']['enum']
+            $schemas['DashboardRiskCount']['properties']['risk_level']['enum']
         );
     }
 }
