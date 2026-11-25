@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Authorization\Permission;
 use App\Models\OrganizationMembership;
 use App\Models\User;
+use App\Models\Role;
+use App\Models\UserRole;
 use App\Support\Audit\AuditLogger;
 use App\Support\Locations\LocationReadScope;
 use App\Support\Tenancy\TenantContext;
@@ -364,6 +366,54 @@ class AdministrationUserService
      * Nunca utiliza users.organization_id para determinar
      * la pertenencia de un usuario a la organización.
      */
+    public function replaceRoles(User $actor, string $userId, array $roleIds): array
+    {
+        return $this->security->transaction($actor, function () use ($actor, $userId, $roleIds): array {
+            $this->security->authorize($actor, Permission::UsersManage, Permission::RolesManage);
+            $organizationId = $this->context->requireId();
+            $membership = OrganizationMembership::query()->forOrganization($organizationId)
+                ->forUser($userId)->lockForUpdate()->firstOrFail();
+            $target = User::query()->whereKey($membership->user_id)->firstOrFail();
+            $this->security->ensureActiveMember($target);
+            $this->security->ensureCanManageMember($actor, $target);
+
+            $current = $target->roles()->wherePivot('organization_id', $organizationId)
+                ->where('roles.organization_id', $organizationId)->pluck('roles.id')->all();
+            $roles = Role::query()->where('organization_id', $organizationId)
+                ->whereIn('id', $roleIds)->orderBy('id')->lockForUpdate()->get();
+            abort_unless($roles->count() === count($roleIds), 404, 'El recurso solicitado no está disponible.');
+
+            $added = array_values(array_diff($roleIds, $current));
+            $removed = array_values(array_diff($current, $roleIds));
+            foreach ($roles as $role) {
+                if (in_array($role->id, $added, true)) {
+                    $this->security->ensureCanAssignRole($actor, $role);
+                }
+            }
+
+            foreach ($roles as $role) {
+                if (in_array($role->id, $added, true)) {
+                    $target->assignRole($role);
+                }
+            }
+
+            UserRole::query()->where('organization_id', $organizationId)
+                ->where('user_id', $userId)->whereIn('role_id', $removed)->delete();
+
+            $this->context->flushPermissionCache($userId, $organizationId);
+            sort($current);
+            sort($roleIds);
+            if ($current !== $roleIds) {
+                $this->audit->record('user.roles_updated', $membership,
+                    ['role_ids' => $current], ['role_ids' => $roleIds]);
+            }
+
+            // No volver a autorizar después de una posible reducción de permisos propios.
+            return $this->serializeMembership($actor, $this->membershipQuery()
+                ->where('user_id', $userId)->firstOrFail());
+        });
+    }
+
     private function membershipQuery(): Builder
     {
         $organizationId = $this->context->requireId();
