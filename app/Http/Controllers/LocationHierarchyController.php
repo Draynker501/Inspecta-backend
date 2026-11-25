@@ -172,15 +172,24 @@ class LocationHierarchyController extends TenantController
         foreach ($rootPlants as $plant) {
             $plantAreas = [];
 
+            $plantAvailable = (bool) $plant->getAttribute('status');
+
             foreach ($areasByPlant->get((string) $plant->getKey(), collect()) as $area) {
                 $areaLines = [];
 
+                $areaAvailable = $plantAvailable
+                    && (bool) $area->getAttribute('status');
+
                 foreach ($linesByArea->get((string) $area->getKey(), collect()) as $line) {
+                    $lineAvailable = $areaAvailable
+                        && (bool) $line->getAttribute('status');
+
                     $areaLines[] = [
                         'id' => (string) $line->getKey(),
                         'name' => (string) $line->getAttribute('name'),
                         'code' => (string) $line->getAttribute('code'),
                         'status' => (bool) $line->getAttribute('status'),
+                        'available' => $lineAvailable,
                     ];
                 }
 
@@ -190,6 +199,7 @@ class LocationHierarchyController extends TenantController
                     'code' => (string) $area->getAttribute('code'),
                     'type' => $area->getAttribute('type'),
                     'status' => (bool) $area->getAttribute('status'),
+                    'available' => $areaAvailable,
                     'production_lines' => $areaLines,
                 ];
             }
@@ -199,6 +209,7 @@ class LocationHierarchyController extends TenantController
                 'name' => (string) $plant->getAttribute('name'),
                 'code' => (string) $plant->getAttribute('code'),
                 'status' => (bool) $plant->getAttribute('status'),
+                'available' => $plantAvailable,
                 'areas' => $plantAreas,
             ];
         }

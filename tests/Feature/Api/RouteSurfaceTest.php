@@ -67,12 +67,18 @@ class RouteSurfaceTest extends TestCase
             'GET api/plants',
             'POST api/plants',
             'GET api/plants/{plantId}',
+            'PATCH api/plants/{plantId}',
+            'PATCH api/plants/{plantId}/status',
             'GET api/plants/{plantId}/areas',
             'POST api/plants/{plantId}/areas',
             'GET api/areas/{areaId}',
+            'PATCH api/areas/{areaId}',
+            'PATCH api/areas/{areaId}/status',
             'GET api/areas/{areaId}/lines',
             'POST api/areas/{areaId}/lines',
             'GET api/production-lines/{productionLineId}',
+            'PATCH api/production-lines/{productionLineId}',
+            'PATCH api/production-lines/{productionLineId}/status',
             'GET api/locations/hierarchy',
             'GET api/norms',
             'GET api/norms/{normId}',
@@ -171,12 +177,18 @@ class RouteSurfaceTest extends TestCase
             'GET api/plants',
             'POST api/plants',
             'GET api/plants/{plantId}',
+            'PATCH api/plants/{plantId}',
+            'PATCH api/plants/{plantId}/status',
             'GET api/plants/{plantId}/areas',
             'POST api/plants/{plantId}/areas',
             'GET api/areas/{areaId}',
+            'PATCH api/areas/{areaId}',
+            'PATCH api/areas/{areaId}/status',
             'GET api/areas/{areaId}/lines',
             'POST api/areas/{areaId}/lines',
             'GET api/production-lines/{productionLineId}',
+            'PATCH api/production-lines/{productionLineId}',
+            'PATCH api/production-lines/{productionLineId}/status',
             'GET api/locations/hierarchy',
             'GET api/norms',
             'GET api/norms/{normId}',
@@ -393,6 +405,79 @@ class RouteSurfaceTest extends TestCase
                 'api.tenant',
                 $route->middleware()
             );
+        }
+    }
+
+    public function test_las_rutas_de_administracion_de_ubicaciones_declaran_api_tenant(): void
+    {
+        $operations = [
+            ['PATCH', 'api/plants/{plantId}'],
+            ['PATCH', 'api/plants/{plantId}/status'],
+            ['PATCH', 'api/areas/{areaId}'],
+            ['PATCH', 'api/areas/{areaId}/status'],
+            ['PATCH', 'api/production-lines/{productionLineId}'],
+            ['PATCH', 'api/production-lines/{productionLineId}/status'],
+        ];
+
+        foreach ($operations as [$method, $uri]) {
+            $route = collect(Route::getRoutes())->first(
+                fn ($route) => $route->uri() === $uri
+                    && in_array($method, $route->methods(), true)
+            );
+
+            $this->assertNotNull(
+                $route,
+                "Ruta no registrada: {$method} {$uri}"
+            );
+
+            $this->assertContains(
+                'api.tenant',
+                $route->middleware()
+            );
+        }
+    }
+
+    public function test_las_rutas_de_administracion_de_ubicaciones_requieren_token(): void
+    {
+        $id = str_repeat('0', 36);
+
+        $operations = [
+            ["/api/plants/{$id}", ['name' => 'Planta']],
+            ["/api/plants/{$id}/status", ['status' => false]],
+            ["/api/areas/{$id}", ['name' => 'Área']],
+            ["/api/areas/{$id}/status", ['status' => false]],
+            ["/api/production-lines/{$id}", ['name' => 'Línea']],
+            ["/api/production-lines/{$id}/status", ['status' => false]],
+        ];
+
+        foreach ($operations as [$uri, $payload]) {
+            $this->patchJson($uri, $payload)
+                ->assertStatus(401);
+        }
+    }
+
+    public function test_las_rutas_de_administracion_de_ubicaciones_requieren_contexto_organizacional(): void
+    {
+        $organization = $this->clientOrganization('ORG-LOCATION-ADMIN');
+        $user = $this->admin($organization);
+        $token = $user->createToken('tests')->plainTextToken;
+
+        $id = str_repeat('0', 36);
+
+        $operations = [
+            ["/api/plants/{$id}", ['name' => 'Planta']],
+            ["/api/plants/{$id}/status", ['status' => false]],
+            ["/api/areas/{$id}", ['name' => 'Área']],
+            ["/api/areas/{$id}/status", ['status' => false]],
+            ["/api/production-lines/{$id}", ['name' => 'Línea']],
+            ["/api/production-lines/{$id}/status", ['status' => false]],
+        ];
+
+        foreach ($operations as [$uri, $payload]) {
+            $this->withHeader('Authorization', 'Bearer '.$token)
+                ->patchJson($uri, $payload)
+                ->assertStatus(400)
+                ->assertJsonPath('code', 'organization_required');
         }
     }
 }

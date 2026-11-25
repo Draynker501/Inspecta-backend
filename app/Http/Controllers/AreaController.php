@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Authorization\Permission;
+use App\Http\Requests\UpdateLocationRequest;
+use App\Http\Requests\UpdateLocationStatusRequest;
 use App\Models\Area;
+use App\Services\AdministrationLocationService;
 use App\Support\Locations\LocationReadScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
@@ -31,6 +34,36 @@ class AreaController extends TenantController
         }
 
         return response()->json(['data' => $area->toArray()]);
+    }
+
+    public function update(
+        UpdateLocationRequest $request,
+        string $areaId,
+        AdministrationLocationService $service,
+    ) {
+        $area = $service->updateArea(
+            $areaId,
+            $request->validated(),
+        );
+
+        return response()->json([
+            'data' => $area->toArray(),
+        ]);
+    }
+
+    public function updateStatus(
+        UpdateLocationStatusRequest $request,
+        string $areaId,
+        AdministrationLocationService $service,
+    ) {
+        $area = $service->updateAreaStatus(
+            $areaId,
+            $request->validated('status'),
+        );
+
+        return response()->json([
+            'data' => $area->toArray(),
+        ]);
     }
 
     public function lines(Request $request, string $areaId)
@@ -69,16 +102,28 @@ class AreaController extends TenantController
             abort(404);
         }
 
-        $baseQuery = LocationReadScope::linesForArea($user, $organizationId, $areaId, $plantId);
+        $baseQuery = LocationReadScope::linesForArea(
+            $user,
+            $organizationId,
+            $areaId,
+            $plantId,
+        );
 
         $query = clone $baseQuery;
 
         if (array_key_exists('status', $validated)) {
-            $query->where('status', filter_var($validated['status'], FILTER_VALIDATE_BOOLEAN));
+            $query->where(
+                'status',
+                filter_var(
+                    $validated['status'],
+                    FILTER_VALIDATE_BOOLEAN,
+                ),
+            );
         }
 
         if (isset($validated['q'])) {
             $escaped = LocationReadScope::escapeLike($validated['q']);
+
             $query->where(function ($builder) use ($escaped): void {
                 $builder->whereRaw("name LIKE ? ESCAPE '!'", ['%'.$escaped.'%'])
                     ->orWhereRaw("code LIKE ? ESCAPE '!'", ['%'.$escaped.'%']);
@@ -86,10 +131,16 @@ class AreaController extends TenantController
         }
 
         $perPage = $validated['per_page'] ?? 15;
+
         $lines = $query
             ->orderBy('name')
             ->orderBy('id')
-            ->paginate($perPage, ['*'], 'page', $validated['page'] ?? 1);
+            ->paginate(
+                $perPage,
+                ['*'],
+                'page',
+                $validated['page'] ?? 1,
+            );
 
         return response()->json([
             'data' => collect($lines->items())->map->toArray()->all(),

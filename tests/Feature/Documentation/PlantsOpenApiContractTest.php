@@ -68,7 +68,26 @@ class PlantsOpenApiContractTest extends TestCase
         $error = $get['responses'][422];
         $this->assertStringContainsString('validation_failed', $error['description']);
         $this->assertSame('#/components/schemas/Error', $error['content']['application/json']['schema']['$ref']);
-        $this->assertArrayNotHasKey('x-status', $spec['paths']['/plants/{plantId}']);
-        $this->assertSame('#/components/schemas/PlantInput', $spec['paths']['/plants/{plantId}']['put']['requestBody']['content']['application/json']['schema']['$ref']);
+        $plantPath = $spec['paths']['/plants/{plantId}'];
+        $statusPath = $spec['paths']['/plants/{plantId}/status'];
+
+        $this->assertArrayNotHasKey('x-status', $plantPath);
+        $this->assertArrayNotHasKey('put', $plantPath);
+
+        $this->assertArrayHasKey('patch', $plantPath);
+        $this->assertArrayHasKey('patch', $statusPath);
+
+        $this->assertArrayNotHasKey('x-status', $plantPath['patch']);
+        $this->assertArrayNotHasKey('x-status', $statusPath['patch']);
+
+        $this->assertSame(
+            '#/components/schemas/AdministrationPlantUpdateInput',
+            $plantPath['patch']['requestBody']['content']['application/json']['schema']['$ref']
+        );
+
+        $this->assertSame(
+            '#/components/schemas/AdministrationLocationStatusInput',
+            $statusPath['patch']['requestBody']['content']['application/json']['schema']['$ref']
+        );
     }
 }

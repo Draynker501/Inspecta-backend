@@ -68,16 +68,31 @@ Route::post('users', [UserController::class, 'store'])->middleware('api.tenant')
 Route::get('users/{userId}', [UserController::class, 'show'])->middleware('api.tenant');
 Route::patch('users/{userId}/membership/status', [UserController::class, 'updateMembershipStatus'])->middleware('api.tenant');
 Route::put('users/{userId}/roles', [UserController::class, 'replaceRoles'])->middleware('api.tenant');
+
+// Administración de plantas.
 Route::get('plants', [PlantController::class, 'index'])->middleware('api.tenant');
 Route::post('plants', [PlantController::class, 'store'])->middleware('api.tenant');
 Route::get('plants/{plantId}', [PlantController::class, 'show'])->middleware('api.tenant');
+Route::patch('plants/{plantId}', [PlantController::class, 'update'])->middleware('api.tenant');
+Route::patch('plants/{plantId}/status', [PlantController::class, 'updateStatus'])->middleware('api.tenant');
+
+// Administración de áreas.
 Route::get('plants/{plantId}/areas', [PlantController::class, 'areas'])->middleware('api.tenant');
 Route::post('plants/{plantId}/areas', [AreaStoreController::class, 'store'])->middleware('api.tenant');
 Route::get('areas/{areaId}', [AreaController::class, 'show'])->middleware('api.tenant');
+Route::patch('areas/{areaId}', [AreaController::class, 'update'])->middleware('api.tenant');
+Route::patch('areas/{areaId}/status', [AreaController::class, 'updateStatus'])->middleware('api.tenant');
+
+// Administración de líneas de producción.
 Route::get('areas/{areaId}/lines', [AreaController::class, 'lines'])->middleware('api.tenant');
 Route::post('areas/{areaId}/lines', [ProductionLineStoreController::class, 'store'])->middleware('api.tenant');
 Route::get('production-lines/{productionLineId}', [ProductionLineController::class, 'show'])->middleware('api.tenant');
+Route::patch('production-lines/{productionLineId}', [ProductionLineController::class, 'update'])->middleware('api.tenant');
+Route::patch('production-lines/{productionLineId}/status', [ProductionLineController::class, 'updateStatus'])->middleware('api.tenant');
+
+// Consulta de la jerarquía de ubicaciones.
 Route::get('locations/hierarchy', [LocationHierarchyController::class, 'index'])->middleware('api.tenant');
+
 Route::get('inspections', [InspectionController::class, 'index'])->middleware('api.tenant');
 Route::post('inspections', [InspectionController::class, 'store'])->middleware('api.tenant');
 Route::get('inspections/{inspectionId}', [InspectionController::class, 'show'])->middleware('api.tenant');

@@ -315,4 +315,72 @@ class CorrectiveActionIntegrationTest extends TestCase
 
         $this->assertDatabaseCount('corrective_actions', 0);
     }
+
+    public function test_accion_correctiva_permanece_accesible_con_ubicacion_inactiva(): void
+    {
+        $env = $this->environment();
+
+        $incidentId = $this->incident($env);
+        $id = $this->createAction($env, $incidentId);
+
+        DB::table('plants')
+            ->where('id', $env['plant']->id)
+            ->update(['status' => false]);
+
+        DB::table('areas')
+            ->where('id', $env['area']->id)
+            ->update(['status' => false]);
+
+        $this->getJson("/api/corrective-actions/{$id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $id)
+            ->assertJsonPath('data.incident_id', $incidentId)
+            ->assertJsonPath('data.status', 'pending');
+
+        $this->getJson('/api/corrective-actions')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $id);
+
+        $this->assertDatabaseHas('corrective_actions', [
+            'id' => $id,
+            'incident_id' => $incidentId,
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_accion_correctiva_puede_modificarse_con_ubicacion_inactiva(): void
+    {
+        $env = $this->environment();
+
+        $incidentId = $this->incident($env);
+        $id = $this->createAction($env, $incidentId);
+
+        DB::table('plants')
+            ->where('id', $env['plant']->id)
+            ->update(['status' => false]);
+
+        DB::table('areas')
+            ->where('id', $env['area']->id)
+            ->update(['status' => false]);
+
+        $this->patchJson("/api/corrective-actions/{$id}", [
+            'description' => 'Completar medida correctiva pendiente.',
+            'priority' => 'critical',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.priority', 'critical')
+            ->assertJsonPath(
+                'data.description',
+                'Completar medida correctiva pendiente.',
+            );
+
+        $this->assertDatabaseHas('corrective_actions', [
+            'id' => $id,
+            'incident_id' => $incidentId,
+            'priority' => 'critical',
+        ]);
+
+        $this->assertSame(2, $this->auditCount($id));
+    }
 }

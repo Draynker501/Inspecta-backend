@@ -9,6 +9,7 @@ use App\Models\RolePermission;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Support\TenantFixtures;
 use Tests\TestCase;
@@ -89,7 +90,7 @@ class LocationHierarchyTest extends TestCase
         $response = $this->actingAsApiInOrganization($user, $org)
             ->getJson('/api/locations/hierarchy')
             ->assertOk();
-        $this->assertSame(['id', 'name', 'code', 'status', 'areas'], array_keys($response->json('data.0')));
+        $this->assertSame(['id', 'name', 'code', 'status', 'available', 'areas'], array_keys($response->json('data.0')));
         $ids = collect($response->json('data.0.areas'))->pluck('id')->all();
         $this->assertSame([$area->id], $ids);
         $this->assertSame($line->id, $response->json('data.0.areas.0.production_lines.0.id'));
@@ -338,5 +339,62 @@ class LocationHierarchyTest extends TestCase
             ->getJson('/api/locations/hierarchy')
             ->assertStatus(422);
         $this->assertArrayNotHasKey('data', $response->json() ?? []);
+    }
+
+    public function test_effective_availability_for_all_status_combinations(): void
+    {
+        $org = $this->clientOrganization('ORG-AVAILABILITY');
+        $user = $this->admin($org);
+
+        $plant = $this->plant($org, 'P');
+        $area = $this->area($plant, 'A');
+        $line = $this->productionLine($area, 'L');
+
+        $this->actingAsApiInOrganization($user, $org);
+
+        foreach ([true, false] as $plantStatus) {
+            foreach ([true, false] as $areaStatus) {
+                foreach ([true, false] as $lineStatus) {
+                    DB::table('plants')
+                        ->where('id', $plant->id)
+                        ->update(['status' => $plantStatus]);
+
+                    DB::table('areas')
+                        ->where('id', $area->id)
+                        ->update(['status' => $areaStatus]);
+
+                    DB::table('production_lines')
+                        ->where('id', $line->id)
+                        ->update(['status' => $lineStatus]);
+
+                    $this->getJson('/api/locations/hierarchy')
+                        ->assertOk()
+                        ->assertJsonPath(
+                            'data.0.status',
+                            $plantStatus,
+                        )
+                        ->assertJsonPath(
+                            'data.0.available',
+                            $plantStatus,
+                        )
+                        ->assertJsonPath(
+                            'data.0.areas.0.status',
+                            $areaStatus,
+                        )
+                        ->assertJsonPath(
+                            'data.0.areas.0.available',
+                            $plantStatus && $areaStatus,
+                        )
+                        ->assertJsonPath(
+                            'data.0.areas.0.production_lines.0.status',
+                            $lineStatus,
+                        )
+                        ->assertJsonPath(
+                            'data.0.areas.0.production_lines.0.available',
+                            $plantStatus && $areaStatus && $lineStatus,
+                        );
+                }
+            }
+        }
     }
 }
