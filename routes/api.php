@@ -67,6 +67,7 @@ Route::get('users', [UserController::class, 'index'])->middleware('api.tenant');
 Route::post('users', [UserController::class, 'store'])->middleware('api.tenant');
 Route::get('users/{userId}', [UserController::class, 'show'])->middleware('api.tenant');
 Route::patch('users/{userId}/membership/status', [UserController::class, 'updateMembershipStatus'])->middleware('api.tenant');
+Route::put('users/{userId}/roles', [UserController::class, 'replaceRoles'])->middleware('api.tenant');
 Route::get('plants', [PlantController::class, 'index'])->middleware('api.tenant');
 Route::post('plants', [PlantController::class, 'store'])->middleware('api.tenant');
 Route::get('plants/{plantId}', [PlantController::class, 'show'])->middleware('api.tenant');
