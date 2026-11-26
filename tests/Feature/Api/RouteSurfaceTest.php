@@ -151,6 +151,7 @@ class RouteSurfaceTest extends TestCase
             'PUT api/roles/{roleId}/permissions',
             'GET api/permissions',
             'PUT api/users/{userId}/roles',
+            'PUT api/users/{userId}/locations',
         ];
 
         foreach ($expected as $operation) {
@@ -261,6 +262,7 @@ class RouteSurfaceTest extends TestCase
             'PUT api/roles/{roleId}/permissions',
             'GET api/permissions',
             'PUT api/users/{userId}/roles',
+            'PUT api/users/{userId}/locations',
         ];
 
         $unexpected = array_values(array_diff($apiOperations, $allowed));
@@ -325,20 +327,6 @@ class RouteSurfaceTest extends TestCase
             ->assertOk();
     }
 
-    public function test_rutas_administrativas_planeadas_no_estan_registradas(): void
-    {
-        $uris = [];
-
-        foreach (Route::getRoutes() as $route) {
-            $uris[] = $route->uri();
-        }
-
-        $this->assertNotContains(
-            'api/users/{userId}/locations',
-            $uris
-        );
-    }
-
     public function test_no_estan_registradas_las_rutas_desactivadas(): void
     {
         $uris = [];
@@ -388,6 +376,7 @@ class RouteSurfaceTest extends TestCase
             ['PUT', 'api/roles/{roleId}/permissions'],
             ['GET', 'api/permissions'],
             ['PUT', 'api/users/{userId}/roles'],
+            ['PUT', 'api/users/{userId}/locations'],
         ];
 
         foreach ($operations as [$method, $uri]) {
@@ -479,5 +468,33 @@ class RouteSurfaceTest extends TestCase
                 ->assertStatus(400)
                 ->assertJsonPath('code', 'organization_required');
         }
+    }
+
+    public function test_asignacion_de_ubicaciones_requiere_token(): void
+    {
+        $userId = str_repeat('0', 36);
+
+        $this->putJson(
+            '/api/users/'.$userId.'/locations',
+            [
+                'plant_ids' => [],
+                'area_ids' => [],
+            ]
+        )->assertUnauthorized();
+    }
+
+    public function test_asignacion_de_ubicaciones_declara_api_tenant(): void
+    {
+        $route = collect(Route::getRoutes())->first(
+            fn ($route) => $route->uri() === 'api/users/{userId}/locations'
+                && in_array('PUT', $route->methods(), true)
+        );
+
+        $this->assertNotNull($route);
+
+        $this->assertContains(
+            'api.tenant',
+            $route->middleware()
+        );
     }
 }

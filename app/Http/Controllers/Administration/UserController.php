@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Administration;
 
 use App\Http\Controllers\TenantController;
 use App\Http\Requests\Administration\IndexUsersRequest;
+use App\Http\Requests\Administration\ReplaceUserLocationsRequest;
 use App\Http\Requests\Administration\ReplaceUserRolesRequest;
 use App\Http\Requests\Administration\StoreUserRequest;
 use App\Http\Requests\Administration\UpdateMembershipStatusRequest;
@@ -84,7 +85,28 @@ class UserController extends TenantController
         AdministrationUserService $service
     ): JsonResponse {
         return response()->json([
-            'data' => $service->replaceRoles($request->user(), $userId, $request->validated('role_ids')),
+            'data' => $service->replaceRoles(
+                $request->user(),
+                $userId,
+                $request->validated('role_ids')
+            ),
+        ]);
+    }
+
+    public function replaceLocations(
+        ReplaceUserLocationsRequest $request,
+        string $userId,
+        AdministrationUserService $service
+    ): JsonResponse {
+        $validated = $request->validated();
+
+        return response()->json([
+            'data' => $service->replaceLocations(
+                $request->user(),
+                $userId,
+                $validated['plant_ids'],
+                $validated['area_ids']
+            ),
         ]);
     }
 }

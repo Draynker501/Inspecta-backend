@@ -1293,6 +1293,7 @@ class OpenApiContractTest extends TestCase
             ['/roles/{roleId}/permissions', 'put', 200, 'AdministrationRoleResponse', 'AdministrationRolePermissionsInput'],
             ['/permissions', 'get', 200, 'AdministrationPermissionsResponse', null],
             ['/users/{userId}/roles', 'put', 200, 'AdministrationUserResponse', 'AdministrationUserRolesInput'],
+            ['/users/{userId}/locations', 'put', 200, 'AdministrationUserResponse', 'AdministrationUserLocationsInput'],
         ];
 
         foreach ($operations as [$path, $method, $status, $output, $input]) {
@@ -1324,5 +1325,205 @@ class OpenApiContractTest extends TestCase
         $this->assertTrue($schemas['AdministrationRolePermissionsInput']['properties']['permissions']['uniqueItems']);
         $this->assertTrue($schemas['AdministrationUserRolesInput']['properties']['role_ids']['uniqueItems']);
         $this->assertSame('boolean', $schemas['AdministrationRoleStatusInput']['properties']['status']['type']);
+    }
+
+    public function test_documenta_la_asignacion_de_ubicaciones_a_usuarios(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $path = $spec['paths']['/users/{userId}/locations'];
+
+        $this->assertSame(
+            'implemented',
+            $path['x-status']
+        );
+
+        $this->assertContains(
+            [
+                '$ref' => '#/components/parameters/organizationIdHeader',
+            ],
+            $path['parameters']
+        );
+
+        $operation = $path['put'];
+
+        $this->assertContains(
+            'Users',
+            $operation['tags']
+        );
+
+        foreach ([
+            'users.manage',
+            'plants.manage',
+            'plants.view',
+        ] as $permission) {
+            $this->assertStringContainsString(
+                $permission,
+                $operation['description']
+            );
+        }
+
+        $this->assertTrue(
+            $operation['requestBody']['required']
+        );
+
+        $this->assertSame(
+            '#/components/schemas/AdministrationUserLocationsInput',
+            $operation['requestBody']['content']['application/json']['schema']['$ref']
+        );
+
+        $this->assertSame(
+            '#/components/schemas/AdministrationUserResponse',
+            $operation['responses'][200]['content']['application/json']['schema']['$ref']
+        );
+
+        foreach ([
+            200,
+            400,
+            401,
+            403,
+            404,
+            409,
+            415,
+            422,
+        ] as $status) {
+            $this->assertArrayHasKey(
+                $status,
+                $operation['responses']
+            );
+        }
+
+        $this->assertSame(
+            '#/components/responses/UnauthorizedError',
+            $operation['responses'][401]['$ref']
+        );
+
+        $this->assertSame(
+            '#/components/responses/ForbiddenError',
+            $operation['responses'][403]['$ref']
+        );
+
+        $this->assertSame(
+            '#/components/responses/NotFoundError',
+            $operation['responses'][404]['$ref']
+        );
+
+        $this->assertSame(
+            '#/components/responses/ValidationError',
+            $operation['responses'][422]['$ref']
+        );
+
+        $this->assertSame(
+            '#/components/schemas/Error',
+            $operation['responses'][409]['content']['application/json']['schema']['$ref']
+        );
+
+        $this->assertSame(
+            '#/components/schemas/Error',
+            $operation['responses'][415]['content']['application/json']['schema']['$ref']
+        );
+    }
+
+    public function test_asignacion_de_ubicaciones_documenta_el_esquema_de_entrada(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $schema = $spec['components']['schemas']['AdministrationUserLocationsInput'];
+
+        $this->assertSame(
+            'object',
+            $schema['type']
+        );
+
+        $this->assertFalse(
+            $schema['additionalProperties']
+        );
+
+        $this->assertEqualsCanonicalizing(
+            ['plant_ids', 'area_ids'],
+            $schema['required']
+        );
+
+        $this->assertEqualsCanonicalizing(
+            ['plant_ids', 'area_ids'],
+            array_keys($schema['properties'])
+        );
+
+        foreach (['plant_ids', 'area_ids'] as $field) {
+            $property = $schema['properties'][$field];
+
+            $this->assertSame(
+                'array',
+                $property['type']
+            );
+
+            $this->assertTrue(
+                $property['uniqueItems']
+            );
+
+            $this->assertSame(
+                'string',
+                $property['items']['type']
+            );
+
+            $this->assertSame(
+                'uuid',
+                $property['items']['format']
+            );
+
+            $this->assertSame(
+                0,
+                $property['minItems'] ?? 0
+            );
+        }
+    }
+
+    public function test_asignacion_de_ubicaciones_documenta_ejemplos_de_sustitucion(): void
+    {
+        $spec = Yaml::parse($this->spec());
+
+        $operation = $spec['paths']['/users/{userId}/locations']['put'];
+
+        $examples = $operation['requestBody']['content']['application/json']['examples'];
+
+        $this->assertArrayHasKey(
+            'assignLocations',
+            $examples
+        );
+
+        $this->assertArrayHasKey(
+            'assignAreaOnly',
+            $examples
+        );
+
+        $this->assertArrayHasKey(
+            'removeAll',
+            $examples
+        );
+
+        $this->assertNotEmpty(
+            $examples['assignLocations']['value']['plant_ids']
+        );
+
+        $this->assertNotEmpty(
+            $examples['assignLocations']['value']['area_ids']
+        );
+
+        $this->assertSame(
+            [],
+            $examples['assignAreaOnly']['value']['plant_ids']
+        );
+
+        $this->assertNotEmpty(
+            $examples['assignAreaOnly']['value']['area_ids']
+        );
+
+        $this->assertSame(
+            [
+                'plant_ids' => [],
+                'area_ids' => [],
+            ],
+            $examples['removeAll']['value']
+        );
     }
 }

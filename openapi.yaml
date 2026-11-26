@@ -2193,6 +2193,122 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationError'
 
+
+  /users/{userId}/locations:
+    x-status: implemented
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    put:
+      summary: Sustituir ubicaciones asignadas a un usuario
+      description: |
+        Sustituye las asignaciones directas de plantas y áreas
+        del usuario dentro de la organización activa.
+
+        Requiere los permisos `users.manage`, `plants.manage`
+        y `plants.view`.
+
+        La cuenta y la membresía del usuario deben estar activas.
+
+        Las asignaciones de plantas y áreas son independientes.
+        No es necesario asignar una planta para asignar una de
+        sus áreas.
+
+        La asignación de una planta concede visibilidad sobre
+        sus áreas y líneas de producción. La asignación directa
+        de un área limita la visibilidad a dicha área y sus líneas,
+        conforme a los permisos efectivos del usuario.
+
+        El actor debe tener alcance administrativo sobre todas
+        las asignaciones existentes y sobre las nuevas ubicaciones.
+
+        Si existen asignaciones fuera del alcance del actor,
+        se rechaza la sustitución completa.
+
+        Las asignaciones inactivas existentes pueden conservarse
+        o retirarse, pero no se permiten nuevas asignaciones a
+        ubicaciones inactivas o no disponibles.
+
+        Ambos arreglos son obligatorios y pueden estar vacíos.
+
+        La operación es transaccional e idempotente. Los cambios
+        efectivos se registran en la bitácora de auditoría mediante
+        la acción `user.locations_updated`.
+
+        No modifica las asignaciones del usuario en otras
+        organizaciones ni elimina registros históricos.
+
+        No se permiten parámetros de consulta ni campos
+        adicionales en el cuerpo de la solicitud.
+      tags: [Users]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministrationUserLocationsInput'
+            examples:
+              assignLocations:
+                summary: Asignar plantas y áreas
+                value:
+                  plant_ids:
+                    - '01900000-0000-7000-8000-000000000001'
+                  area_ids:
+                    - '01900000-0000-7000-8000-000000000002'
+              assignAreaOnly:
+                summary: Asignar únicamente un área
+                value:
+                  plant_ids: []
+                  area_ids:
+                    - '01900000-0000-7000-8000-000000000002'
+              removeAll:
+                summary: Retirar todas las asignaciones
+                value:
+                  plant_ids: []
+                  area_ids: []
+      responses:
+        '200':
+          description: Asignaciones actualizadas correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationUserResponse'
+        '400':
+          description: Contexto de organización inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: |
+            Existen asignaciones que requieren revisión debido
+            a que las ubicaciones relacionadas ya no están
+            disponibles por eliminación lógica.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Content-Type debe ser application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
   # ===================================================================
   # CHECKLISTS
   # ===================================================================
@@ -7609,6 +7725,37 @@ components:
           type: array
           uniqueItems: true
           items: {type: string, format: uuid}
+
+    AdministrationUserLocationsInput:
+      type: object
+      additionalProperties: false
+      required:
+        - plant_ids
+        - area_ids
+      properties:
+        plant_ids:
+          type: array
+          description: |
+            Identificadores de las plantas asignadas directamente
+            al usuario dentro de la organización activa.
+            Un arreglo vacío retira todas las asignaciones
+            directas de plantas.
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+        area_ids:
+          type: array
+          description: |
+            Identificadores de las áreas asignadas directamente
+            al usuario dentro de la organización activa.
+            No requiere asignar previamente la planta padre.
+            Un arreglo vacío retira todas las asignaciones
+            directas de áreas.
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
     AdministrationMembership:
       type: object
       required:
