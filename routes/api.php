@@ -6,6 +6,7 @@ use App\Http\Controllers\AreaController;
 use App\Http\Controllers\AreaStoreController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\OrganizationController;
+use App\Http\Controllers\Auth\ProfileController;
 use App\Http\Controllers\ChecklistController;
 use App\Http\Controllers\ChecklistOrderingController;
 use App\Http\Controllers\ChecklistSectionController;
@@ -39,17 +40,36 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('auth')->group(function () {
-    Route::post('login', [AuthController::class, 'login'])->middleware('throttle:5,1');
-    // Logout solo exige autenticación: un usuario debe poder revocar su token
-    // aunque su organización haya quedado inactiva.
-    Route::post('logout', [AuthController::class, 'logout'])->middleware('api.auth');
-    // Identidad global: no requiere contexto organizacional.
-    Route::get('me', [AuthController::class, 'me'])->middleware('api.auth');
-    // Capacidades generales de la organización activa; exige membresía activa.
+    Route::post('login', [AuthController::class, 'login'])
+        ->middleware('throttle:5,1');
+
+    // Logout sin dependencia del contexto organizacional.
+    Route::post('logout', [AuthController::class, 'logout'])
+        ->middleware('api.auth');
+
+    // Consulta de identidad global.
+    Route::get('me', [AuthController::class, 'me'])
+        ->middleware('api.auth');
+
+    // Actualización de identidad global.
+    Route::patch('me', [ProfileController::class, 'update'])
+        ->middleware(['api.auth', 'throttle:10,1']);
+
+    // Cambio seguro de contraseña.
+    Route::put('password', [ProfileController::class, 'updatePassword'])
+        ->middleware(['api.auth', 'throttle:profile-password']);
+
+    // Información organizacional del usuario autenticado.
+    Route::get('me/membership', [ProfileController::class, 'membership'])
+        ->middleware(['api.tenant', 'tenant.require']);
+
+    // Capacidades de la organización activa.
     Route::get('capabilities', [AuthController::class, 'capabilities'])
         ->middleware(['api.tenant', 'tenant.require']);
-    // Listado de organizaciones del usuario autenticado: no requiere tenant.
-    Route::get('organizations', [OrganizationController::class, 'index'])->middleware('api.auth');
+
+    // Organizaciones accesibles para el usuario autenticado.
+    Route::get('organizations', [OrganizationController::class, 'index'])
+        ->middleware('api.auth');
 });
 
 Route::get('dashboard', [DashboardController::class, 'index'])->middleware('api.tenant');

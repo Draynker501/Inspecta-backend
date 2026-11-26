@@ -43,6 +43,23 @@ info:
     `GET /auth/me` devuelve solo la identidad global del usuario,
     sin depender de la organización seleccionada.
 
+    `PATCH /auth/me` permite actualizar la información personal
+    de la cuenta autenticada.
+
+    `PUT /auth/password` permite cambiar la contraseña y revoca
+    las sesiones secundarias, conservando el token utilizado
+    en la solicitud actual.
+
+    Estas operaciones de identidad global no requieren la cabecera
+    X-Organization-Id.
+
+    `GET /auth/me/membership` devuelve la membresía, los roles,
+    los permisos efectivos y las ubicaciones asignadas dentro
+    de la organización seleccionada.
+
+    La consulta de membresía requiere X-Organization-Id y una
+    membresía activa en una organización cliente válida.
+
     Al cambiar de organización, el cliente debe descartar el contexto
     anterior y consultar nuevamente `GET /auth/capabilities` utilizando
     la cabecera `X-Organization-Id` de la nueva organización.
@@ -71,7 +88,10 @@ security:
 
 tags:
   - name: Authentication
-    description: Inicio y cierre de sesión, e identidad del usuario autenticado.
+    description: |
+      Inicio y cierre de sesión, identidad global, actualización
+      de información personal, cambio de contraseña y consulta
+      de membresías y accesos organizacionales.
   - name: Dashboard
     description: Indicadores y estadísticas operativas de seguridad e higiene.
   - name: Reports
@@ -175,6 +195,264 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/InactiveUserError'
+
+    patch:
+      summary: Actualizar información personal
+      description: |
+        Actualiza exclusivamente la información personal de la cuenta
+        autenticada mediante el token Bearer.
+
+        No requiere contexto organizacional ni la cabecera
+        X-Organization-Id.
+
+        Permite modificar el nombre y el correo electrónico.
+        Debe proporcionarse al menos uno de estos campos.
+
+        Cuando se modifica el correo electrónico, se requiere la
+        contraseña actual y se restablece su estado de verificación.
+
+        El correo electrónico debe ser único entre todas las cuentas
+        del sistema, independientemente de su organización.
+
+        No permite modificar identificadores, estado de la cuenta,
+        roles, permisos, membresías ni ubicaciones.
+
+        No modifica la contraseña ni revoca los tokens existentes.
+
+        Solo admite objetos JSON. No admite parámetros de consulta,
+        archivos adjuntos ni campos adicionales.
+
+        Límite configurado de 10 solicitudes por minuto.
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdateInput'
+            examples:
+              updateName:
+                summary: Actualizar únicamente el nombre
+                value:
+                  name: Usuario INSPECTA
+              updateEmail:
+                summary: Actualizar el correo electrónico
+                value:
+                  email: usuario@example.com
+                  current_password: '<contraseña actual>'
+              updateProfile:
+                summary: Actualizar nombre y correo electrónico
+                value:
+                  name: Usuario INSPECTA
+                  email: usuario@example.com
+                  current_password: '<contraseña actual>'
+      responses:
+        '200':
+          description: Perfil actualizado correctamente.
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/RateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimitRemaining'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileUpdateResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '415':
+          description: El contenido debe enviarse como application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /auth/password:
+    x-status: implemented
+    put:
+      summary: Cambiar la contraseña de la cuenta autenticada
+      description: |
+        Modifica la contraseña de la cuenta global autenticada.
+
+        No requiere contexto organizacional ni la cabecera
+        X-Organization-Id.
+
+        Requiere proporcionar la contraseña actual, la nueva contraseña
+        y su confirmación.
+
+        La nueva contraseña debe contener al menos 12 caracteres,
+        incluyendo mayúsculas, minúsculas y números. No puede superar
+        los 72 bytes ni contener caracteres nulos.
+
+        La nueva contraseña debe ser diferente de la actual.
+
+        Los espacios de la contraseña se conservan.
+
+        Al completar exitosamente la operación:
+
+        - Se almacena la nueva contraseña mediante hashing.
+        - Se invalida el remember token.
+        - Se revocan todos los tokens personales de acceso de la cuenta,
+          excepto el token utilizado en la solicitud actual.
+        - Se conserva la sesión actual.
+        - No se modifican roles, permisos, membresías ni ubicaciones.
+
+        Las operaciones fallidas no modifican la contraseña ni revocan
+        las sesiones existentes.
+
+        Solo admite objetos JSON. No admite parámetros de consulta,
+        archivos adjuntos ni campos adicionales.
+
+        Límite de 5 solicitudes por minuto asociado a la cuenta
+        identificada mediante el token Bearer. Las sesiones de una
+        misma cuenta comparten el límite.
+
+        Cuando el token no puede resolverse, el límite se aplica
+        mediante la dirección IP.
+
+        Las solicitudes fallidas también consumen la cuota.
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfilePasswordInput'
+            example:
+              current_password: '<contraseña actual>'
+              password: NuevaPassword2026
+              password_confirmation: NuevaPassword2026
+      responses:
+        '200':
+          description: Contraseña actualizada correctamente.
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/RateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimitRemaining'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfilePasswordResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '415':
+          description: El contenido debe enviarse como application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /auth/me/membership:
+    x-status: implemented
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    get:
+      summary: Consultar membresía y accesos del usuario autenticado
+      description: |
+        Devuelve la información de la membresía del usuario autenticado
+        dentro de la organización seleccionada mediante la cabecera
+        X-Organization-Id.
+
+        Requiere una organización cliente activa, no eliminada,
+        y una membresía activa del usuario.
+
+        No requiere permisos administrativos adicionales.
+
+        Incluye:
+
+        - Información básica de la organización.
+        - Información de la membresía activa.
+        - Roles asignados directamente, activos e inactivos.
+        - Permisos efectivos concedidos por los roles activos.
+        - Plantas y áreas asignadas directamente.
+        - Indicadores de visibilidad general de ubicaciones.
+
+        Los roles inactivos se muestran únicamente con fines
+        informativos y no conceden permisos efectivos.
+
+        Los permisos se devuelven sin duplicados y ordenados
+        alfabéticamente.
+
+        Sin plants.view, la información de ubicaciones se oculta.
+
+        El indicador view_all requiere simultáneamente plants.view
+        y locations.view_all.
+
+        Incluso cuando view_all es true, los arreglos de plantas
+        y áreas contienen únicamente asignaciones directas.
+
+        Las ubicaciones inactivas se incluyen con available=false.
+        Las áreas pertenecientes a plantas inactivas también se
+        consideran no disponibles.
+
+        Las ubicaciones eliminadas y las áreas pertenecientes a
+        plantas eliminadas no se incluyen.
+
+        El indicador available representa el estado de disponibilidad
+        de la ubicación y no sustituye la autorización por recurso.
+
+        La información se limita a la organización seleccionada.
+        No se exponen roles, permisos ni ubicaciones de otros tenants.
+
+        Los parámetros de consulta no modifican la identidad del usuario
+        autenticado ni la organización seleccionada.
+
+        Operación de solo lectura, sin paginación.
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Membresía y accesos obtenidos correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileMembershipResponse'
+        '400':
+          description: |
+            Falta la cabecera X-Organization-Id o no contiene
+            un UUID válido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Organización inexistente, inactiva, eliminada,
+            membresía inexistente o revocada, u organización
+            de tipo operador.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
 
   /auth/capabilities:
     parameters:
@@ -7536,9 +7814,19 @@ components:
               $ref: '#/components/examples/ValidationFailed'
     TooManyRequests:
       description: |
-        Límite de peticiones excedido. Incluye Retry-After (segundos hasta
-        poder reintentar) y X-RateLimit-*. En `POST /auth/login` el límite es
-        de 5 intentos por minuto.
+        Límite de peticiones excedido. Incluye Retry-After
+        (segundos hasta poder reintentar) y X-RateLimit-*.
+
+        Límites configurados:
+
+        - POST /auth/login: 5 solicitudes por minuto.
+        - PATCH /auth/me: 10 solicitudes por minuto.
+        - PUT /auth/password: 5 solicitudes por minuto.
+
+        El cambio de contraseña utiliza un contador específico
+        compartido entre las sesiones de la misma cuenta.
+
+        Las solicitudes fallidas también pueden consumir la cuota.
       headers:
         Retry-After:
           description: Segundos que el cliente debe esperar antes de reintentar.
@@ -7638,6 +7926,335 @@ components:
               $ref: '#/components/examples/ServiceUnavailableExample'
 
   schemas:
+    ProfileUpdateInput:
+      type: object
+      additionalProperties: false
+      description: |
+        Información personal que puede modificar el usuario autenticado.
+        Debe incluir name, email o ambos.
+
+        Si email cambia respecto al valor almacenado,
+        current_password es obligatorio.
+      anyOf:
+        - required: [name]
+        - required: [email]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+          example: Usuario INSPECTA
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: Correo electrónico único a nivel global.
+          example: usuario@example.com
+        current_password:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 1024
+          writeOnly: true
+          description: |
+            Contraseña actual de la cuenta.
+            Obligatoria cuando se modifica el correo electrónico.
+
+    ProfileUpdateResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - message
+        - data
+      properties:
+        message:
+          type: string
+          example: Perfil actualizado correctamente.
+        data:
+          $ref: '#/components/schemas/ProfileIdentity'
+
+    ProfileIdentity:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - email
+        - organization_id
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 150
+          example: Usuario INSPECTA
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          example: usuario@example.com
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: |
+            Identificador organizacional heredado de la cuenta.
+            No representa necesariamente la organización activa
+            ni determina el acceso a los recursos del tenant.
+
+    ProfilePasswordInput:
+      type: object
+      additionalProperties: false
+      required:
+        - current_password
+        - password
+        - password_confirmation
+      properties:
+        current_password:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 1024
+          writeOnly: true
+          description: Contraseña actual de la cuenta.
+        password:
+          type: string
+          format: password
+          minLength: 12
+          maxLength: 72
+          writeOnly: true
+          description: |
+            Nueva contraseña de la cuenta.
+
+            Debe contener mayúsculas, minúsculas y números.
+
+            El límite de 72 se aplica a bytes en el servidor,
+            no únicamente al número de caracteres Unicode.
+
+            No admite caracteres nulos y debe ser diferente
+            de la contraseña actual.
+          example: NuevaPassword2026
+        password_confirmation:
+          type: string
+          format: password
+          writeOnly: true
+          description: |
+            Confirmación de la nueva contraseña.
+            Debe coincidir exactamente con password.
+          example: NuevaPassword2026
+
+    ProfilePasswordResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: Contraseña actualizada correctamente.
+
+    ProfileMembershipResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          $ref: '#/components/schemas/ProfileMembership'
+
+    ProfileMembership:
+      type: object
+      additionalProperties: false
+      required:
+        - organization
+        - membership
+        - roles
+        - permissions
+        - locations
+      properties:
+        organization:
+          $ref: '#/components/schemas/ProfileOrganization'
+        membership:
+          $ref: '#/components/schemas/ProfileMembershipDetails'
+        roles:
+          type: array
+          description: Roles asignados, activos e inactivos.
+          items:
+            $ref: '#/components/schemas/ProfileRole'
+        permissions:
+          type: array
+          uniqueItems: true
+          description: |
+            Permisos efectivos de la cuenta dentro de la organización.
+            Ordenados alfabéticamente y sin duplicados.
+          items:
+            $ref: '#/components/schemas/AdministrationPermissionKey'
+        locations:
+          $ref: '#/components/schemas/ProfileLocations'
+
+    ProfileOrganization:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - code
+        - type
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: INSPECTA Demo Organization
+        code:
+          type: string
+          example: INSPECTA-DEMO
+        type:
+          type: string
+          enum:
+            - client
+        status:
+          type: boolean
+          enum:
+            - true
+
+    ProfileMembershipDetails:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - status
+        - revoked_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - active
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+
+    ProfileRole:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Inspector
+        status:
+          type: boolean
+          description: |
+            true indica un rol activo.
+            false indica un rol inactivo que no concede permisos.
+
+    ProfileLocations:
+      type: object
+      additionalProperties: false
+      required:
+        - can_view
+        - view_all
+        - plants
+        - areas
+      properties:
+        can_view:
+          type: boolean
+          description: |
+            Indica si el usuario dispone de plants.view.
+            Si es false, plants y areas se devuelven vacíos.
+        view_all:
+          type: boolean
+          description: |
+            Indica si el usuario dispone simultáneamente de
+            plants.view y locations.view_all.
+        plants:
+          type: array
+          description: |
+            Plantas asignadas directamente al usuario.
+            No representa el catálogo completo de plantas accesibles.
+          items:
+            $ref: '#/components/schemas/ProfilePlant'
+        areas:
+          type: array
+          description: |
+            Áreas asignadas directamente al usuario.
+            No incluye asignaciones heredadas de plantas.
+          items:
+            $ref: '#/components/schemas/ProfileArea'
+
+    ProfilePlant:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - code
+        - status
+        - available
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Planta Guadalajara
+        code:
+          type: string
+          example: GDL-01
+        status:
+          type: boolean
+        available:
+          type: boolean
+          description: Indica si la planta asignada está activa.
+
+    ProfileArea:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - plant_id
+        - plant_name
+        - name
+        - code
+        - status
+        - available
+      properties:
+        id:
+          type: string
+          format: uuid
+        plant_id:
+          type: string
+          format: uuid
+        plant_name:
+          type: string
+          example: Planta Guadalajara
+        name:
+          type: string
+          example: Área de producción
+        code:
+          type: string
+          example: PROD-01
+        status:
+          type: boolean
+        available:
+          type: boolean
+          description: |
+            Indica si el área y su planta correspondiente
+            se encuentran activas.
     AdministrationPermissionKey:
       type: string
       enum: [plants.view, locations.view_all, plants.manage, users.manage, roles.manage, memberships.manage, checklists.view, checklists.manage, norms.view, norms.manage, inspections.manage, inspections.execute, findings.register, findings.close, corrective_actions.manage, corrective_actions.verify, reports.view, reports.view_own]
