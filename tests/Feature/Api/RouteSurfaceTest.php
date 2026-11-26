@@ -30,7 +30,7 @@ class RouteSurfaceTest extends TestCase
 
         $unexpected = array_values(array_filter(
             $uris,
-            static fn(string $uri): bool => !(
+            static fn (string $uri): bool => ! (
                 str_starts_with($uri, 'api/')
                 || $uri === 'up'
                 || $uri === '/'
@@ -40,7 +40,7 @@ class RouteSurfaceTest extends TestCase
         $this->assertSame(
             [],
             $unexpected,
-            'Rutas fuera de la superficie permitida: ' . implode(', ', $unexpected)
+            'Rutas fuera de la superficie permitida: '.implode(', ', $unexpected)
         );
     }
 
@@ -51,7 +51,7 @@ class RouteSurfaceTest extends TestCase
         foreach (Route::getRoutes() as $route) {
             foreach ($route->methods() as $method) {
                 if (in_array($method, ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], true)) {
-                    $operations[] = $method . ' ' . $route->uri();
+                    $operations[] = $method.' '.$route->uri();
                 }
             }
         }
@@ -169,7 +169,7 @@ class RouteSurfaceTest extends TestCase
         // No deben existir operaciones de dominio adicionales.
         $apiOperations = array_values(array_filter(
             $operations,
-            static fn(string $op): bool => str_starts_with($op, 'GET api/')
+            static fn (string $op): bool => str_starts_with($op, 'GET api/')
                 || str_starts_with($op, 'POST api/')
                 || str_starts_with($op, 'PUT api/')
                 || str_starts_with($op, 'PATCH api/')
@@ -282,7 +282,7 @@ class RouteSurfaceTest extends TestCase
 
         $unexpected = array_values(array_diff($apiOperations, $allowed));
 
-        $this->assertSame([], $unexpected, 'Operaciones API inesperadas: ' . implode(', ', $unexpected));
+        $this->assertSame([], $unexpected, 'Operaciones API inesperadas: '.implode(', ', $unexpected));
     }
 
     public function test_las_rutas_autenticadas_incluida_el_alta_de_areas_requieren_token(): void
@@ -291,7 +291,7 @@ class RouteSurfaceTest extends TestCase
         $this->getJson('/api/auth/me')->assertStatus(401);
         $this->getJson('/api/auth/organizations')->assertStatus(401);
         $this->getJson('/api/plants')->assertStatus(401);
-        $this->postJson('/api/plants/' . str_repeat('0', 36) . '/areas', [])->assertStatus(401);
+        $this->postJson('/api/plants/'.str_repeat('0', 36).'/areas', [])->assertStatus(401);
         $this->getJson('/api/dashboard')->assertStatus(401);
     }
 
@@ -302,7 +302,7 @@ class RouteSurfaceTest extends TestCase
 
     public function test_plants_declara_el_grupo_api_tenant_en_la_ruta(): void
     {
-        $route = collect(Route::getRoutes())->first(fn($route) => $route->uri() === 'api/plants' && in_array('GET', $route->methods(), true));
+        $route = collect(Route::getRoutes())->first(fn ($route) => $route->uri() === 'api/plants' && in_array('GET', $route->methods(), true));
 
         $this->assertNotNull($route);
         $this->assertContains('api.tenant', $route->middleware());
@@ -310,7 +310,7 @@ class RouteSurfaceTest extends TestCase
 
     public function test_alta_de_areas_declara_api_tenant_y_requiere_contexto(): void
     {
-        $route = collect(Route::getRoutes())->first(fn($route) => $route->uri() === 'api/plants/{plantId}/areas' && in_array('POST', $route->methods(), true));
+        $route = collect(Route::getRoutes())->first(fn ($route) => $route->uri() === 'api/plants/{plantId}/areas' && in_array('POST', $route->methods(), true));
 
         $this->assertNotNull($route);
         $this->assertContains('api.tenant', $route->middleware());
@@ -320,7 +320,7 @@ class RouteSurfaceTest extends TestCase
         $token = $user->createToken('tests')->plainTextToken;
         $plant = $this->plant($organization, 'P');
 
-        $this->withHeader('Authorization', 'Bearer ' . $token)
+        $this->withHeader('Authorization', 'Bearer '.$token)
             ->postJson("/api/plants/{$plant->id}/areas", ['name' => 'A', 'code' => 'A'])
             ->assertStatus(400)
             ->assertJsonPath('code', 'organization_required');
@@ -332,7 +332,7 @@ class RouteSurfaceTest extends TestCase
         $user = $this->admin($organization);
         $token = $user->createToken('tests')->plainTextToken;
 
-        $this->withHeader('Authorization', 'Bearer ' . $token)
+        $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson('/api/plants')
             ->assertStatus(400)
             ->assertJsonPath('code', 'organization_required');
@@ -364,7 +364,7 @@ class RouteSurfaceTest extends TestCase
     public function test_dashboard_declara_el_grupo_api_tenant_en_la_ruta(): void
     {
         $route = collect(Route::getRoutes())->first(
-            fn($route) => $route->uri() === 'api/dashboard'
+            fn ($route) => $route->uri() === 'api/dashboard'
                 && in_array('GET', $route->methods(), true)
         );
 
@@ -396,7 +396,7 @@ class RouteSurfaceTest extends TestCase
 
         foreach ($operations as [$method, $uri]) {
             $route = collect(Route::getRoutes())->first(
-                fn($route) => $route->uri() === $uri
+                fn ($route) => $route->uri() === $uri
                     && in_array($method, $route->methods(), true)
             );
 
@@ -425,7 +425,7 @@ class RouteSurfaceTest extends TestCase
 
         foreach ($operations as [$method, $uri]) {
             $route = collect(Route::getRoutes())->first(
-                fn($route) => $route->uri() === $uri
+                fn ($route) => $route->uri() === $uri
                     && in_array($method, $route->methods(), true)
             );
 
@@ -478,7 +478,7 @@ class RouteSurfaceTest extends TestCase
         ];
 
         foreach ($operations as [$uri, $payload]) {
-            $this->withHeader('Authorization', 'Bearer ' . $token)
+            $this->withHeader('Authorization', 'Bearer '.$token)
                 ->patchJson($uri, $payload)
                 ->assertStatus(400)
                 ->assertJsonPath('code', 'organization_required');
@@ -490,7 +490,7 @@ class RouteSurfaceTest extends TestCase
         $userId = str_repeat('0', 36);
 
         $this->putJson(
-            '/api/users/' . $userId . '/locations',
+            '/api/users/'.$userId.'/locations',
             [
                 'plant_ids' => [],
                 'area_ids' => [],
@@ -501,7 +501,7 @@ class RouteSurfaceTest extends TestCase
     public function test_asignacion_de_ubicaciones_declara_api_tenant(): void
     {
         $route = collect(Route::getRoutes())->first(
-            fn($route) => $route->uri() === 'api/users/{userId}/locations'
+            fn ($route) => $route->uri() === 'api/users/{userId}/locations'
                 && in_array('PUT', $route->methods(), true)
         );
 
@@ -543,7 +543,7 @@ class RouteSurfaceTest extends TestCase
 
         foreach ($operations as [$method, $uri]) {
             $route = collect(Route::getRoutes())->first(
-                fn($route) => $route->uri() === $uri
+                fn ($route) => $route->uri() === $uri
                     && in_array($method, $route->methods(), true)
             );
 
@@ -572,7 +572,7 @@ class RouteSurfaceTest extends TestCase
     public function test_la_ruta_de_membresia_declara_contexto_organizacional(): void
     {
         $route = collect(Route::getRoutes())->first(
-            fn($route) => $route->uri() === 'api/auth/me/membership'
+            fn ($route) => $route->uri() === 'api/auth/me/membership'
                 && in_array('GET', $route->methods(), true)
         );
 
@@ -606,7 +606,7 @@ class RouteSurfaceTest extends TestCase
 
         foreach ($operations as [$method, $uri, $middleware]) {
             $route = collect(Route::getRoutes())->first(
-                fn($route) => $route->uri() === $uri
+                fn ($route) => $route->uri() === $uri
                     && in_array($method, $route->methods(), true)
             );
 
