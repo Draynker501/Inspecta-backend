@@ -26,11 +26,7 @@ class AdministrationCapabilitiesTest extends TestCase
     ): Role {
         return app(TenantContext::class)->runAs(
             $organization->id,
-            function () use (
-                $user,
-                $organization,
-                $permissions
-            ) {
+            function () use ($user, $organization, $permissions) {
                 $role = $this->role(
                     $organization,
                     'Admin-Cap-'.Str::random(10)
@@ -236,7 +232,7 @@ class AdministrationCapabilitiesTest extends TestCase
             );
     }
 
-    public function test_location_assignment_requires_users_and_plants_manage(): void
+    public function test_location_assignment_requires_users_manage_plants_manage_and_plants_view(): void
     {
         $organization = $this->clientOrganization(
             'ADMIN-CAP-LOCATIONS'
@@ -244,6 +240,7 @@ class AdministrationCapabilitiesTest extends TestCase
 
         $user = $this->user($organization);
 
+        // Primer permiso: administración de ubicaciones.
         $this->grant(
             $user,
             $organization,
@@ -265,6 +262,7 @@ class AdministrationCapabilitiesTest extends TestCase
                 false
             );
 
+        // Segundo permiso: administración de usuarios.
         $this->grant(
             $user,
             $organization,
@@ -273,6 +271,44 @@ class AdministrationCapabilitiesTest extends TestCase
 
         $this->capabilities($user, $organization)
             ->assertOk()
+            ->assertJsonPath(
+                'administration.manage_users',
+                true
+            )
+            ->assertJsonPath(
+                'administration.manage_locations',
+                true
+            )
+            ->assertJsonPath(
+                'administration.view_locations',
+                false
+            )
+            ->assertJsonPath(
+                'administration.assign_locations',
+                false
+            );
+
+        // Tercer permiso: consulta de ubicaciones.
+        $this->grant(
+            $user,
+            $organization,
+            [Permission::PlantsView]
+        );
+
+        $this->capabilities($user, $organization)
+            ->assertOk()
+            ->assertJsonPath(
+                'administration.manage_users',
+                true
+            )
+            ->assertJsonPath(
+                'administration.manage_locations',
+                true
+            )
+            ->assertJsonPath(
+                'administration.view_locations',
+                true
+            )
             ->assertJsonPath(
                 'administration.assign_locations',
                 true
