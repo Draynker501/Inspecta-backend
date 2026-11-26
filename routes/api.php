@@ -1,10 +1,12 @@
 <?php
 
+use App\Http\Controllers\Administration\RoleController;
 use App\Http\Controllers\Administration\UserController;
 use App\Http\Controllers\AreaController;
 use App\Http\Controllers\AreaStoreController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\OrganizationController;
+use App\Http\Controllers\Auth\ProfileController;
 use App\Http\Controllers\ChecklistController;
 use App\Http\Controllers\ChecklistOrderingController;
 use App\Http\Controllers\ChecklistSectionController;
@@ -38,36 +40,80 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('auth')->group(function () {
-    Route::post('login', [AuthController::class, 'login'])->middleware('throttle:5,1');
-    // Logout solo exige autenticación: un usuario debe poder revocar su token
-    // aunque su organización haya quedado inactiva.
-    Route::post('logout', [AuthController::class, 'logout'])->middleware('api.auth');
-    // Identidad global: no requiere contexto organizacional.
-    Route::get('me', [AuthController::class, 'me'])->middleware('api.auth');
-    // Capacidades generales de la organización activa; exige membresía activa.
+    Route::post('login', [AuthController::class, 'login'])
+        ->middleware('throttle:5,1');
+
+    // Logout sin dependencia del contexto organizacional.
+    Route::post('logout', [AuthController::class, 'logout'])
+        ->middleware('api.auth');
+
+    // Consulta de identidad global.
+    Route::get('me', [AuthController::class, 'me'])
+        ->middleware('api.auth');
+
+    // Actualización de identidad global.
+    Route::patch('me', [ProfileController::class, 'update'])
+        ->middleware(['api.auth', 'throttle:profile-update']);
+
+    // Cambio seguro de contraseña.
+    Route::put('password', [ProfileController::class, 'updatePassword'])
+        ->middleware(['api.auth', 'throttle:profile-password']);
+
+    // Información organizacional del usuario autenticado.
+    Route::get('me/membership', [ProfileController::class, 'membership'])
+        ->middleware(['api.tenant', 'tenant.require']);
+
+    // Capacidades de la organización activa.
     Route::get('capabilities', [AuthController::class, 'capabilities'])
         ->middleware(['api.tenant', 'tenant.require']);
-    // Listado de organizaciones del usuario autenticado: no requiere tenant.
-    Route::get('organizations', [OrganizationController::class, 'index'])->middleware('api.auth');
+
+    // Organizaciones accesibles para el usuario autenticado.
+    Route::get('organizations', [OrganizationController::class, 'index'])
+        ->middleware('api.auth');
 });
 
 Route::get('dashboard', [DashboardController::class, 'index'])->middleware('api.tenant');
 Route::get('reports/summary', [ReportController::class, 'summary'])->middleware('api.tenant');
+// Administración de roles y permisos.
+Route::get('roles', [RoleController::class, 'index'])->middleware('api.tenant');
+Route::post('roles', [RoleController::class, 'store'])->middleware('api.tenant');
+Route::get('roles/{roleId}', [RoleController::class, 'show'])->middleware('api.tenant');
+Route::patch('roles/{roleId}', [RoleController::class, 'update'])->middleware('api.tenant');
+Route::patch('roles/{roleId}/status', [RoleController::class, 'updateStatus'])->middleware('api.tenant');
+Route::put('roles/{roleId}/permissions', [RoleController::class, 'replacePermissions'])->middleware('api.tenant');
+Route::get('permissions', [RoleController::class, 'permissions'])->middleware('api.tenant');
 // Administración de usuarios y membresías.
 Route::get('users', [UserController::class, 'index'])->middleware('api.tenant');
 Route::post('users', [UserController::class, 'store'])->middleware('api.tenant');
 Route::get('users/{userId}', [UserController::class, 'show'])->middleware('api.tenant');
 Route::patch('users/{userId}/membership/status', [UserController::class, 'updateMembershipStatus'])->middleware('api.tenant');
+Route::put('users/{userId}/roles', [UserController::class, 'replaceRoles'])->middleware('api.tenant');
+Route::put('users/{userId}/locations', [UserController::class, 'replaceLocations'])->middleware('api.tenant');
+
+// Administración de plantas.
 Route::get('plants', [PlantController::class, 'index'])->middleware('api.tenant');
 Route::post('plants', [PlantController::class, 'store'])->middleware('api.tenant');
 Route::get('plants/{plantId}', [PlantController::class, 'show'])->middleware('api.tenant');
+Route::patch('plants/{plantId}', [PlantController::class, 'update'])->middleware('api.tenant');
+Route::patch('plants/{plantId}/status', [PlantController::class, 'updateStatus'])->middleware('api.tenant');
+
+// Administración de áreas.
 Route::get('plants/{plantId}/areas', [PlantController::class, 'areas'])->middleware('api.tenant');
 Route::post('plants/{plantId}/areas', [AreaStoreController::class, 'store'])->middleware('api.tenant');
 Route::get('areas/{areaId}', [AreaController::class, 'show'])->middleware('api.tenant');
+Route::patch('areas/{areaId}', [AreaController::class, 'update'])->middleware('api.tenant');
+Route::patch('areas/{areaId}/status', [AreaController::class, 'updateStatus'])->middleware('api.tenant');
+
+// Administración de líneas de producción.
 Route::get('areas/{areaId}/lines', [AreaController::class, 'lines'])->middleware('api.tenant');
 Route::post('areas/{areaId}/lines', [ProductionLineStoreController::class, 'store'])->middleware('api.tenant');
 Route::get('production-lines/{productionLineId}', [ProductionLineController::class, 'show'])->middleware('api.tenant');
+Route::patch('production-lines/{productionLineId}', [ProductionLineController::class, 'update'])->middleware('api.tenant');
+Route::patch('production-lines/{productionLineId}/status', [ProductionLineController::class, 'updateStatus'])->middleware('api.tenant');
+
+// Consulta de la jerarquía de ubicaciones.
 Route::get('locations/hierarchy', [LocationHierarchyController::class, 'index'])->middleware('api.tenant');
+
 Route::get('inspections', [InspectionController::class, 'index'])->middleware('api.tenant');
 Route::post('inspections', [InspectionController::class, 'store'])->middleware('api.tenant');
 Route::get('inspections/{inspectionId}', [InspectionController::class, 'show'])->middleware('api.tenant');

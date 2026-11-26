@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Authorization\Permission;
 use App\Http\Requests\StorePlantRequest;
+use App\Http\Requests\UpdateLocationRequest;
+use App\Http\Requests\UpdateLocationStatusRequest;
 use App\Models\Plant;
+use App\Services\AdministrationLocationService;
 use App\Support\Audit\AuditLogger;
 use App\Support\Locations\LocationReadScope;
 use App\Support\Tenancy\TenantContext;
@@ -62,15 +65,17 @@ class PlantController extends TenantController
             return $plant;
         });
 
-        return response()->json(['data' => [
-            'id' => $plant->id,
-            'organization_id' => $plant->organization_id,
-            'name' => $plant->name,
-            'code' => $plant->code,
-            'address' => $plant->address,
-            'description' => $plant->description,
-            'status' => $plant->status,
-        ]], 201);
+        return response()->json([
+            'data' => [
+                'id' => $plant->id,
+                'organization_id' => $plant->organization_id,
+                'name' => $plant->name,
+                'code' => $plant->code,
+                'address' => $plant->address,
+                'description' => $plant->description,
+                'status' => $plant->status,
+            ],
+        ], 201);
     }
 
     public function index(Request $request)
@@ -80,11 +85,14 @@ class PlantController extends TenantController
         $validated = $request->validate([
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
-            'status' => ['sometimes', function (string $attribute, mixed $value, \Closure $fail): void {
-                if (! in_array($value, [true, false, 1, 0, '1', '0', 'true', 'false'], true)) {
-                    $fail('The '.$attribute.' field must be true or false.');
-                }
-            }],
+            'status' => [
+                'sometimes',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (! in_array($value, [true, false, 1, 0, '1', '0', 'true', 'false'], true)) {
+                        $fail('The '.$attribute.' field must be true or false.');
+                    }
+                },
+            ],
             'q' => ['sometimes', 'string', 'max:100'],
             'include_hierarchy' => ['sometimes'],
         ]);
@@ -154,6 +162,36 @@ class PlantController extends TenantController
         return response()->json(['data' => $plant->toArray()]);
     }
 
+    public function update(
+        UpdateLocationRequest $request,
+        string $plantId,
+        AdministrationLocationService $service,
+    ) {
+        $plant = $service->updatePlant(
+            $plantId,
+            $request->validated(),
+        );
+
+        return response()->json([
+            'data' => $plant->toArray(),
+        ]);
+    }
+
+    public function updateStatus(
+        UpdateLocationStatusRequest $request,
+        string $plantId,
+        AdministrationLocationService $service,
+    ) {
+        $plant = $service->updatePlantStatus(
+            $plantId,
+            $request->validated('status'),
+        );
+
+        return response()->json([
+            'data' => $plant->toArray(),
+        ]);
+    }
+
     public function areas(Request $request, string $plantId)
     {
         $user = $request->user();
@@ -177,11 +215,14 @@ class PlantController extends TenantController
         $validated = $request->validate([
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
-            'status' => ['sometimes', function (string $attribute, mixed $value, \Closure $fail): void {
-                if (! in_array($value, [true, false, 1, 0, '1', '0', 'true', 'false'], true)) {
-                    $fail('The '.$attribute.' field must be true or false.');
-                }
-            }],
+            'status' => [
+                'sometimes',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (! in_array($value, [true, false, 1, 0, '1', '0', 'true', 'false'], true)) {
+                        $fail('The '.$attribute.' field must be true or false.');
+                    }
+                },
+            ],
             'q' => ['sometimes', 'string', 'max:100'],
             'include_hierarchy' => ['sometimes'],
         ]);

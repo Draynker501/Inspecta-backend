@@ -3,8 +3,14 @@
 namespace App\Services;
 
 use App\Authorization\Permission;
+use App\Models\Area;
 use App\Models\OrganizationMembership;
+use App\Models\Plant;
+use App\Models\Role;
 use App\Models\User;
+use App\Models\UserArea;
+use App\Models\UserPlant;
+use App\Models\UserRole;
 use App\Support\Audit\AuditLogger;
 use App\Support\Locations\LocationReadScope;
 use App\Support\Tenancy\TenantContext;
@@ -71,10 +77,7 @@ class AdministrationUserService
 
             $query->whereHas(
                 'user.roles',
-                function (Builder $builder) use (
-                    $organizationId,
-                    $roleId
-                ): void {
+                function (Builder $builder) use ($organizationId, $roleId): void {
                     $builder
                         ->where(
                             'roles.id',
@@ -331,8 +334,8 @@ class AdministrationUserService
 
                 $membership->revoked_at =
                     $status === 'revoked'
-                        ? now()
-                        : null;
+                    ? now()
+                    : null;
 
                 $membership->save();
 
@@ -343,8 +346,8 @@ class AdministrationUserService
 
                 $this->audit->record(
                     $status === 'revoked'
-                        ? 'membership.revoked'
-                        : 'membership.reactivated',
+                    ? 'membership.revoked'
+                    : 'membership.reactivated',
                     $membership,
                     $oldValues,
                     $this->membershipSnapshot($membership)
@@ -364,6 +367,344 @@ class AdministrationUserService
      * Nunca utiliza users.organization_id para determinar
      * la pertenencia de un usuario a la organización.
      */
+    public function replaceRoles(User $actor, string $userId, array $roleIds): array
+    {
+        return $this->security->transaction($actor, function () use ($actor, $userId, $roleIds): array {
+            $this->security->authorize($actor, Permission::UsersManage, Permission::RolesManage);
+            $organizationId = $this->context->requireId();
+            $membership = OrganizationMembership::query()->forOrganization($organizationId)
+                ->forUser($userId)->lockForUpdate()->firstOrFail();
+            $target = User::query()->whereKey($membership->user_id)->firstOrFail();
+            $this->security->ensureActiveMember($target);
+            $this->security->ensureCanManageMember($actor, $target);
+
+            $current = $target->roles()->wherePivot('organization_id', $organizationId)
+                ->where('roles.organization_id', $organizationId)->pluck('roles.id')->all();
+            $roles = Role::query()->where('organization_id', $organizationId)
+                ->whereIn('id', $roleIds)->orderBy('id')->lockForUpdate()->get();
+            abort_unless($roles->count() === count($roleIds), 404, 'El recurso solicitado no está disponible.');
+
+            $added = array_values(array_diff($roleIds, $current));
+            $removed = array_values(array_diff($current, $roleIds));
+
+            foreach ($roles as $role) {
+                if (in_array($role->id, $added, true)) {
+                    $this->security->ensureCanAssignRole($actor, $role);
+                }
+            }
+
+            foreach ($roles as $role) {
+                if (in_array($role->id, $added, true)) {
+                    $target->assignRole($role);
+                }
+            }
+
+            UserRole::query()->where('organization_id', $organizationId)
+                ->where('user_id', $userId)->whereIn('role_id', $removed)->delete();
+
+            $this->context->flushPermissionCache($userId, $organizationId);
+            sort($current);
+            sort($roleIds);
+
+            if ($current !== $roleIds) {
+                $this->audit->record(
+                    'user.roles_updated',
+                    $membership,
+                    ['role_ids' => $current],
+                    ['role_ids' => $roleIds]
+                );
+            }
+
+            // No volver a autorizar después de una posible reducción de permisos propios.
+            return $this->serializeMembership(
+                $actor,
+                $this->membershipQuery()->where('user_id', $userId)->firstOrFail()
+            );
+        });
+    }
+
+    /**
+     * Sustituye las asignaciones directas de plantas y áreas
+     * de un usuario dentro de la organización activa.
+     */
+    public function replaceLocations(
+        User $actor,
+        string $userId,
+        array $plantIds,
+        array $areaIds
+    ): array {
+        return $this->security->transaction(
+            $actor,
+            function () use ($actor, $userId, $plantIds, $areaIds): array {
+                // =============================================
+                // AUTORIZACIÓN Y CONTEXTO
+                // =============================================
+
+                $this->security->authorize(
+                    $actor,
+                    Permission::UsersManage,
+                    Permission::PlantsManage,
+                    Permission::PlantsView
+                );
+
+                $organizationId = $this->context->requireId();
+
+                $membership = OrganizationMembership::query()
+                    ->forOrganization($organizationId)
+                    ->forUser($userId)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $target = User::query()
+                    ->whereKey($membership->user_id)
+                    ->firstOrFail();
+
+                $this->security->ensureActiveMember($target);
+
+                $this->security->ensureCanManageMember(
+                    $actor,
+                    $target
+                );
+
+                // =============================================
+                // ASIGNACIONES ACTUALES
+                // =============================================
+
+                $currentPlantIds = UserPlant::query()
+                    ->where('organization_id', $organizationId)
+                    ->where('user_id', $userId)
+                    ->orderBy('plant_id')
+                    ->lockForUpdate()
+                    ->pluck('plant_id')
+                    ->all();
+
+                $currentAreaIds = UserArea::query()
+                    ->where('organization_id', $organizationId)
+                    ->where('user_id', $userId)
+                    ->orderBy('area_id')
+                    ->lockForUpdate()
+                    ->pluck('area_id')
+                    ->all();
+
+                // =============================================
+                // CONSULTAR RECURSOS ACTUALES Y SOLICITADOS
+                // =============================================
+
+                $allPlantIds = array_values(
+                    array_unique(
+                        array_merge(
+                            $currentPlantIds,
+                            $plantIds
+                        )
+                    )
+                );
+
+                $allAreaIds = array_values(
+                    array_unique(
+                        array_merge(
+                            $currentAreaIds,
+                            $areaIds
+                        )
+                    )
+                );
+
+                $plants = Plant::query()
+                    ->where('organization_id', $organizationId)
+                    ->whereIn('id', $allPlantIds)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
+
+                $areas = Area::query()
+                    ->where('organization_id', $organizationId)
+                    ->whereIn('id', $allAreaIds)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
+
+                // =============================================
+                // VALIDAR EXISTENCIA DE RECURSOS
+                // =============================================
+
+                foreach ($plantIds as $plantId) {
+                    abort_unless(
+                        $plants->has($plantId),
+                        404,
+                        'El recurso solicitado no está disponible.'
+                    );
+                }
+
+                foreach ($areaIds as $areaId) {
+                    abort_unless(
+                        $areas->has($areaId),
+                        404,
+                        'El recurso solicitado no está disponible.'
+                    );
+                }
+
+                // =============================================
+                // PROTEGER ASIGNACIONES EXISTENTES
+                // =============================================
+
+                foreach ($currentPlantIds as $plantId) {
+                    $plant = $plants->get($plantId);
+
+                    abort_unless(
+                        $plant !== null,
+                        409,
+                        'Existen asignaciones de plantas que requieren revisión.'
+                    );
+
+                    $this->security->ensurePlantScope(
+                        $actor,
+                        $plant
+                    );
+                }
+
+                foreach ($currentAreaIds as $areaId) {
+                    $area = $areas->get($areaId);
+
+                    abort_unless(
+                        $area !== null,
+                        409,
+                        'Existen asignaciones de áreas que requieren revisión.'
+                    );
+
+                    $this->security->ensureAreaScope(
+                        $actor,
+                        $area
+                    );
+                }
+
+                // =============================================
+                // CALCULAR CAMBIOS
+                // =============================================
+
+                $addedPlantIds = array_values(
+                    array_diff(
+                        $plantIds,
+                        $currentPlantIds
+                    )
+                );
+
+                $removedPlantIds = array_values(
+                    array_diff(
+                        $currentPlantIds,
+                        $plantIds
+                    )
+                );
+
+                $addedAreaIds = array_values(
+                    array_diff(
+                        $areaIds,
+                        $currentAreaIds
+                    )
+                );
+
+                $removedAreaIds = array_values(
+                    array_diff(
+                        $currentAreaIds,
+                        $areaIds
+                    )
+                );
+
+                // =============================================
+                // VALIDAR NUEVAS ASIGNACIONES
+                // =============================================
+
+                foreach ($addedPlantIds as $plantId) {
+                    $this->security->ensureAssignablePlant(
+                        $actor,
+                        $plants->get($plantId)
+                    );
+                }
+
+                foreach ($addedAreaIds as $areaId) {
+                    $this->security->ensureAssignableArea(
+                        $actor,
+                        $areas->get($areaId)
+                    );
+                }
+
+                // =============================================
+                // CREAR NUEVAS ASIGNACIONES
+                // =============================================
+
+                foreach ($addedPlantIds as $plantId) {
+                    $target->assignPlant(
+                        $plants->get($plantId)
+                    );
+                }
+
+                foreach ($addedAreaIds as $areaId) {
+                    $target->assignArea(
+                        $areas->get($areaId)
+                    );
+                }
+
+                // =============================================
+                // RETIRAR ASIGNACIONES
+                // =============================================
+
+                if ($removedAreaIds !== []) {
+                    UserArea::query()
+                        ->where('organization_id', $organizationId)
+                        ->where('user_id', $userId)
+                        ->whereIn('area_id', $removedAreaIds)
+                        ->delete();
+                }
+
+                if ($removedPlantIds !== []) {
+                    UserPlant::query()
+                        ->where('organization_id', $organizationId)
+                        ->where('user_id', $userId)
+                        ->whereIn('plant_id', $removedPlantIds)
+                        ->delete();
+                }
+
+                // =============================================
+                // AUDITORÍA
+                // =============================================
+
+                sort($currentPlantIds);
+                sort($currentAreaIds);
+                sort($plantIds);
+                sort($areaIds);
+
+                if (
+                    $currentPlantIds !== $plantIds
+                    || $currentAreaIds !== $areaIds
+                ) {
+                    $this->audit->record(
+                        'user.locations_updated',
+                        $membership,
+                        [
+                            'plant_ids' => $currentPlantIds,
+                            'area_ids' => $currentAreaIds,
+                        ],
+                        [
+                            'plant_ids' => $plantIds,
+                            'area_ids' => $areaIds,
+                        ]
+                    );
+                }
+
+                // =============================================
+                // RESPUESTA ACTUALIZADA
+                // =============================================
+
+                return $this->serializeMembership(
+                    $actor,
+                    $this->membershipQuery()
+                        ->where('user_id', $userId)
+                        ->firstOrFail()
+                );
+            }
+        );
+    }
+
     private function membershipQuery(): Builder
     {
         $organizationId = $this->context->requireId();
@@ -374,9 +715,7 @@ class AdministrationUserService
             ->with([
                 'user',
 
-                'user.roles' => function ($query) use (
-                    $organizationId
-                ): void {
+                'user.roles' => function ($query) use ($organizationId): void {
                     $query
                         ->where(
                             'roles.organization_id',
@@ -390,9 +729,7 @@ class AdministrationUserService
                         ->orderBy('roles.id');
                 },
 
-                'user.plants' => function ($query) use (
-                    $organizationId
-                ): void {
+                'user.plants' => function ($query) use ($organizationId): void {
                     $query
                         ->where(
                             'plants.organization_id',
@@ -406,9 +743,7 @@ class AdministrationUserService
                         ->orderBy('plants.id');
                 },
 
-                'user.areas' => function ($query) use (
-                    $organizationId
-                ): void {
+                'user.areas' => function ($query) use ($organizationId): void {
                     $query
                         ->where(
                             'areas.organization_id',

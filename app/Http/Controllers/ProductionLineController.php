@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Authorization\Permission;
+use App\Http\Requests\UpdateLocationRequest;
+use App\Http\Requests\UpdateLocationStatusRequest;
 use App\Models\ProductionLine;
+use App\Services\AdministrationLocationService;
 use App\Support\Locations\LocationReadScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
@@ -32,5 +35,35 @@ class ProductionLineController extends TenantController
         }
 
         return response()->json(['data' => $line->toArray()]);
+    }
+
+    public function update(
+        UpdateLocationRequest $request,
+        string $productionLineId,
+        AdministrationLocationService $service,
+    ) {
+        $line = $service->updateProductionLine(
+            $productionLineId,
+            $request->validated(),
+        );
+
+        return response()->json([
+            'data' => $line->toArray(),
+        ]);
+    }
+
+    public function updateStatus(
+        UpdateLocationStatusRequest $request,
+        string $productionLineId,
+        AdministrationLocationService $service,
+    ) {
+        $line = $service->updateProductionLineStatus(
+            $productionLineId,
+            $request->validated('status'),
+        );
+
+        return response()->json([
+            'data' => $line->toArray(),
+        ]);
     }
 }

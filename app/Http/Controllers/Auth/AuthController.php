@@ -159,7 +159,8 @@ class AuthController extends Controller
 
         $administration['assign_locations'] =
             $administration['manage_users']
-            && $administration['manage_locations'];
+            && $administration['manage_locations']
+            && $administration['view_locations'];
 
         // Capacidades generales de navegación por módulo.
         $modules = [

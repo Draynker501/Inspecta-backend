@@ -270,4 +270,168 @@ class IncidentIntegrationTest extends TestCase
 
         $this->assertDatabaseCount('incidents', 0);
     }
+
+    public function test_rechaza_incidente_independiente_en_planta_inactiva(): void
+    {
+        $env = $this->environment();
+
+        DB::table('plants')
+            ->where('id', $env['plant']->id)
+            ->update(['status' => false]);
+
+        $this->postJson('/api/incidents', $this->payload($env))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['plant_id']);
+
+        $this->assertDatabaseCount('incidents', 0);
+    }
+
+    public function test_rechaza_incidente_independiente_en_area_inactiva(): void
+    {
+        $env = $this->environment();
+
+        DB::table('areas')
+            ->where('id', $env['area']->id)
+            ->update(['status' => false]);
+
+        $this->postJson('/api/incidents', $this->payload($env))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['area_id']);
+
+        $this->assertDatabaseCount('incidents', 0);
+    }
+
+    public function test_rechaza_incidente_independiente_en_linea_inactiva(): void
+    {
+        $env = $this->environment();
+
+        $line = $this->productionLine(
+            $env['area'],
+            'INC-L01',
+            ['status' => false],
+        );
+
+        $this->postJson('/api/incidents', array_merge(
+            $this->payload($env),
+            ['production_line_id' => $line->id],
+        ))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['production_line_id']);
+
+        $this->assertDatabaseCount('incidents', 0);
+    }
+
+    public function test_incidente_existente_permanece_accesible_con_ubicacion_inactiva(): void
+    {
+        $env = $this->environment();
+
+        $id = $this->createIncident($env);
+
+        DB::table('plants')
+            ->where('id', $env['plant']->id)
+            ->update(['status' => false]);
+
+        DB::table('areas')
+            ->where('id', $env['area']->id)
+            ->update(['status' => false]);
+
+        $this->getJson("/api/incidents/{$id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $id)
+            ->assertJsonPath('data.status', 'open');
+
+        $this->getJson('/api/incidents')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $id);
+
+        $this->assertDatabaseHas('incidents', [
+            'id' => $id,
+            'plant_id' => $env['plant']->id,
+            'area_id' => $env['area']->id,
+            'status' => 'open',
+        ]);
+    }
+
+    public function test_incidente_existente_puede_gestionarse_con_ubicacion_inactiva(): void
+    {
+        $env = $this->environment();
+
+        $id = $this->createIncident($env);
+
+        DB::table('plants')
+            ->where('id', $env['plant']->id)
+            ->update(['status' => false]);
+
+        DB::table('areas')
+            ->where('id', $env['area']->id)
+            ->update(['status' => false]);
+
+        foreach (['in_progress', 'resolved', 'closed'] as $status) {
+            $this->patchJson("/api/incidents/{$id}/status", [
+                'status' => $status,
+            ])
+                ->assertOk()
+                ->assertJsonPath('data.status', $status);
+        }
+
+        $this->assertDatabaseHas('incidents', [
+            'id' => $id,
+            'status' => 'closed',
+        ]);
+    }
+
+    public function test_reactivacion_de_ubicaciones_permite_registrar_incidentes(): void
+    {
+        $env = $this->environment();
+
+        $line = $this->productionLine(
+            $env['area'],
+            'INC-L01',
+        );
+
+        $payload = array_merge(
+            $this->payload($env),
+            ['production_line_id' => $line->id],
+        );
+
+        DB::table('plants')
+            ->where('id', $env['plant']->id)
+            ->update(['status' => false]);
+
+        DB::table('areas')
+            ->where('id', $env['area']->id)
+            ->update(['status' => false]);
+
+        DB::table('production_lines')
+            ->where('id', $line->id)
+            ->update(['status' => false]);
+
+        $this->postJson('/api/incidents', $payload)
+            ->assertUnprocessable();
+
+        DB::table('plants')
+            ->where('id', $env['plant']->id)
+            ->update(['status' => true]);
+
+        DB::table('areas')
+            ->where('id', $env['area']->id)
+            ->update(['status' => true]);
+
+        $this->postJson('/api/incidents', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['production_line_id']);
+
+        DB::table('production_lines')
+            ->where('id', $line->id)
+            ->update(['status' => true]);
+
+        $this->postJson('/api/incidents', $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.plant_id', $env['plant']->id)
+            ->assertJsonPath('data.area_id', $env['area']->id)
+            ->assertJsonPath('data.production_line_id', $line->id);
+
+        $this->assertDatabaseCount('incidents', 1);
+    }
 }

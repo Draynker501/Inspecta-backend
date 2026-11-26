@@ -62,17 +62,27 @@ class RouteSurfaceTest extends TestCase
             'POST api/auth/login',
             'POST api/auth/logout',
             'GET api/auth/me',
+            'PATCH api/auth/me',
+            'PUT api/auth/password',
+            'GET api/auth/me/membership',
+            'GET api/auth/capabilities',
             'GET api/auth/organizations',
             'GET api/dashboard',
             'GET api/plants',
             'POST api/plants',
             'GET api/plants/{plantId}',
+            'PATCH api/plants/{plantId}',
+            'PATCH api/plants/{plantId}/status',
             'GET api/plants/{plantId}/areas',
             'POST api/plants/{plantId}/areas',
             'GET api/areas/{areaId}',
+            'PATCH api/areas/{areaId}',
+            'PATCH api/areas/{areaId}/status',
             'GET api/areas/{areaId}/lines',
             'POST api/areas/{areaId}/lines',
             'GET api/production-lines/{productionLineId}',
+            'PATCH api/production-lines/{productionLineId}',
+            'PATCH api/production-lines/{productionLineId}/status',
             'GET api/locations/hierarchy',
             'GET api/norms',
             'GET api/norms/{normId}',
@@ -137,6 +147,19 @@ class RouteSurfaceTest extends TestCase
             'POST api/users',
             'GET api/users/{userId}',
             'PATCH api/users/{userId}/membership/status',
+            'GET api/roles',
+            'POST api/roles',
+            'GET api/roles/{roleId}',
+            'PATCH api/roles/{roleId}',
+            'PATCH api/roles/{roleId}/status',
+            'PUT api/roles/{roleId}/permissions',
+            'GET api/permissions',
+            'PUT api/users/{userId}/roles',
+            'PUT api/users/{userId}/locations',
+            'GET api/auth/me',
+            'PATCH api/auth/me',
+            'PUT api/auth/password',
+            'GET api/auth/me/membership',
         ];
 
         foreach ($expected as $operation) {
@@ -157,18 +180,27 @@ class RouteSurfaceTest extends TestCase
             'POST api/auth/login',
             'POST api/auth/logout',
             'GET api/auth/me',
+            'PATCH api/auth/me',
+            'PUT api/auth/password',
+            'GET api/auth/me/membership',
             'GET api/auth/capabilities',
             'GET api/auth/organizations',
             'GET api/dashboard',
             'GET api/plants',
             'POST api/plants',
             'GET api/plants/{plantId}',
+            'PATCH api/plants/{plantId}',
+            'PATCH api/plants/{plantId}/status',
             'GET api/plants/{plantId}/areas',
             'POST api/plants/{plantId}/areas',
             'GET api/areas/{areaId}',
+            'PATCH api/areas/{areaId}',
+            'PATCH api/areas/{areaId}/status',
             'GET api/areas/{areaId}/lines',
             'POST api/areas/{areaId}/lines',
             'GET api/production-lines/{productionLineId}',
+            'PATCH api/production-lines/{productionLineId}',
+            'PATCH api/production-lines/{productionLineId}/status',
             'GET api/locations/hierarchy',
             'GET api/norms',
             'GET api/norms/{normId}',
@@ -233,6 +265,19 @@ class RouteSurfaceTest extends TestCase
             'POST api/users',
             'GET api/users/{userId}',
             'PATCH api/users/{userId}/membership/status',
+            'GET api/roles',
+            'POST api/roles',
+            'GET api/roles/{roleId}',
+            'PATCH api/roles/{roleId}',
+            'PATCH api/roles/{roleId}/status',
+            'PUT api/roles/{roleId}/permissions',
+            'GET api/permissions',
+            'PUT api/users/{userId}/roles',
+            'PUT api/users/{userId}/locations',
+            'GET api/auth/me',
+            'PATCH api/auth/me',
+            'PUT api/auth/password',
+            'GET api/auth/me/membership',
         ];
 
         $unexpected = array_values(array_diff($apiOperations, $allowed));
@@ -297,29 +342,6 @@ class RouteSurfaceTest extends TestCase
             ->assertOk();
     }
 
-    public function test_rutas_administrativas_planeadas_no_estan_registradas(): void
-    {
-        $uris = [];
-
-        foreach (Route::getRoutes() as $route) {
-            $uris[] = $route->uri();
-        }
-
-        $this->assertNotContains('api/roles', $uris);
-
-        $this->assertNotContains('api/permissions', $uris);
-
-        $this->assertNotContains(
-            'api/users/{userId}/roles',
-            $uris
-        );
-
-        $this->assertNotContains(
-            'api/users/{userId}/locations',
-            $uris
-        );
-    }
-
     public function test_no_estan_registradas_las_rutas_desactivadas(): void
     {
         $uris = [];
@@ -361,6 +383,15 @@ class RouteSurfaceTest extends TestCase
             ['POST', 'api/users'],
             ['GET', 'api/users/{userId}'],
             ['PATCH', 'api/users/{userId}/membership/status'],
+            ['GET', 'api/roles'],
+            ['POST', 'api/roles'],
+            ['GET', 'api/roles/{roleId}'],
+            ['PATCH', 'api/roles/{roleId}'],
+            ['PATCH', 'api/roles/{roleId}/status'],
+            ['PUT', 'api/roles/{roleId}/permissions'],
+            ['GET', 'api/permissions'],
+            ['PUT', 'api/users/{userId}/roles'],
+            ['PUT', 'api/users/{userId}/locations'],
         ];
 
         foreach ($operations as [$method, $uri]) {
@@ -379,5 +410,293 @@ class RouteSurfaceTest extends TestCase
                 $route->middleware()
             );
         }
+    }
+
+    public function test_las_rutas_de_administracion_de_ubicaciones_declaran_api_tenant(): void
+    {
+        $operations = [
+            ['PATCH', 'api/plants/{plantId}'],
+            ['PATCH', 'api/plants/{plantId}/status'],
+            ['PATCH', 'api/areas/{areaId}'],
+            ['PATCH', 'api/areas/{areaId}/status'],
+            ['PATCH', 'api/production-lines/{productionLineId}'],
+            ['PATCH', 'api/production-lines/{productionLineId}/status'],
+        ];
+
+        foreach ($operations as [$method, $uri]) {
+            $route = collect(Route::getRoutes())->first(
+                fn ($route) => $route->uri() === $uri
+                    && in_array($method, $route->methods(), true)
+            );
+
+            $this->assertNotNull(
+                $route,
+                "Ruta no registrada: {$method} {$uri}"
+            );
+
+            $this->assertContains(
+                'api.tenant',
+                $route->middleware()
+            );
+        }
+    }
+
+    public function test_las_rutas_de_administracion_de_ubicaciones_requieren_token(): void
+    {
+        $id = str_repeat('0', 36);
+
+        $operations = [
+            ["/api/plants/{$id}", ['name' => 'Planta']],
+            ["/api/plants/{$id}/status", ['status' => false]],
+            ["/api/areas/{$id}", ['name' => 'Área']],
+            ["/api/areas/{$id}/status", ['status' => false]],
+            ["/api/production-lines/{$id}", ['name' => 'Línea']],
+            ["/api/production-lines/{$id}/status", ['status' => false]],
+        ];
+
+        foreach ($operations as [$uri, $payload]) {
+            $this->patchJson($uri, $payload)
+                ->assertStatus(401);
+        }
+    }
+
+    public function test_las_rutas_de_administracion_de_ubicaciones_requieren_contexto_organizacional(): void
+    {
+        $organization = $this->clientOrganization('ORG-LOCATION-ADMIN');
+        $user = $this->admin($organization);
+        $token = $user->createToken('tests')->plainTextToken;
+
+        $id = str_repeat('0', 36);
+
+        $operations = [
+            ["/api/plants/{$id}", ['name' => 'Planta']],
+            ["/api/plants/{$id}/status", ['status' => false]],
+            ["/api/areas/{$id}", ['name' => 'Área']],
+            ["/api/areas/{$id}/status", ['status' => false]],
+            ["/api/production-lines/{$id}", ['name' => 'Línea']],
+            ["/api/production-lines/{$id}/status", ['status' => false]],
+        ];
+
+        foreach ($operations as [$uri, $payload]) {
+            $this->withHeader('Authorization', 'Bearer '.$token)
+                ->patchJson($uri, $payload)
+                ->assertStatus(400)
+                ->assertJsonPath('code', 'organization_required');
+        }
+    }
+
+    public function test_asignacion_de_ubicaciones_requiere_token(): void
+    {
+        $userId = str_repeat('0', 36);
+
+        $this->putJson(
+            '/api/users/'.$userId.'/locations',
+            [
+                'plant_ids' => [],
+                'area_ids' => [],
+            ]
+        )->assertUnauthorized();
+    }
+
+    public function test_asignacion_de_ubicaciones_declara_api_tenant(): void
+    {
+        $route = collect(Route::getRoutes())->first(
+            fn ($route) => $route->uri() === 'api/users/{userId}/locations'
+                && in_array('PUT', $route->methods(), true)
+        );
+
+        $this->assertNotNull($route);
+
+        $this->assertContains(
+            'api.tenant',
+            $route->middleware()
+        );
+    }
+
+    public function test_las_rutas_de_perfil_requieren_autenticacion(): void
+    {
+        $this->patchJson(
+            '/api/auth/me',
+            ['name' => 'Nuevo nombre']
+        )->assertUnauthorized();
+
+        $this->putJson(
+            '/api/auth/password',
+            [
+                'current_password' => 'InspectaActual2026',
+                'password' => 'InspectaNueva2026',
+                'password_confirmation' => 'InspectaNueva2026',
+            ]
+        )->assertUnauthorized();
+
+        $this->getJson(
+            '/api/auth/me/membership'
+        )->assertUnauthorized();
+    }
+
+    public function test_las_rutas_globales_de_perfil_declaran_api_auth(): void
+    {
+        $operations = [
+            ['PATCH', 'api/auth/me'],
+            ['PUT', 'api/auth/password'],
+        ];
+
+        foreach ($operations as [$method, $uri]) {
+            $route = collect(Route::getRoutes())->first(
+                fn ($route) => $route->uri() === $uri
+                    && in_array($method, $route->methods(), true)
+            );
+
+            $this->assertNotNull(
+                $route,
+                "Ruta no registrada: {$method} {$uri}"
+            );
+
+            $this->assertContains(
+                'api.auth',
+                $route->middleware()
+            );
+
+            $this->assertNotContains(
+                'api.tenant',
+                $route->middleware()
+            );
+
+            $this->assertNotContains(
+                'tenant.require',
+                $route->middleware()
+            );
+        }
+    }
+
+    public function test_la_ruta_de_membresia_declara_contexto_organizacional(): void
+    {
+        $route = collect(Route::getRoutes())->first(
+            fn ($route) => $route->uri() === 'api/auth/me/membership'
+                && in_array('GET', $route->methods(), true)
+        );
+
+        $this->assertNotNull($route);
+
+        $this->assertContains(
+            'api.tenant',
+            $route->middleware()
+        );
+
+        $this->assertContains(
+            'tenant.require',
+            $route->middleware()
+        );
+    }
+
+    public function test_las_rutas_de_escritura_de_perfil_declaran_rate_limiting(): void
+    {
+        $operations = [
+            [
+                'PATCH',
+                'api/auth/me',
+                'throttle:profile-update',
+            ],
+            [
+                'PUT',
+                'api/auth/password',
+                'throttle:profile-password',
+            ],
+        ];
+
+        foreach ($operations as [$method, $uri, $middleware]) {
+            $route = collect(Route::getRoutes())->first(
+                fn ($route) => $route->uri() === $uri
+                    && in_array($method, $route->methods(), true)
+            );
+
+            $this->assertNotNull(
+                $route,
+                "Ruta no registrada: {$method} {$uri}"
+            );
+
+            $this->assertContains(
+                $middleware,
+                $route->middleware()
+            );
+        }
+    }
+
+    public function test_las_rutas_globales_de_perfil_no_requieren_organizacion(): void
+    {
+        $organization = $this->clientOrganization(
+            'ORG-PROFILE-GLOBAL'
+        );
+
+        $user = $this->user($organization);
+
+        $user->password = 'InspectaActual2026';
+        $user->save();
+
+        $token = $user
+            ->createToken('profile-route-test')
+            ->plainTextToken;
+
+        $this->withToken($token)
+            ->patchJson(
+                '/api/auth/me',
+                ['name' => 'Usuario actualizado']
+            )
+            ->assertOk()
+            ->assertJsonPath(
+                'data.name',
+                'Usuario actualizado'
+            );
+
+        $this->withToken($token)
+            ->putJson(
+                '/api/auth/password',
+                [
+                    'current_password' => 'InspectaActual2026',
+                    'password' => 'InspectaNueva2026',
+                    'password_confirmation' => 'InspectaNueva2026',
+                ]
+            )
+            ->assertOk();
+
+        $this->withToken($token)
+            ->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath(
+                'data.name',
+                'Usuario actualizado'
+            );
+    }
+
+    public function test_la_ruta_de_membresia_requiere_organizacion(): void
+    {
+        $organization = $this->clientOrganization(
+            'ORG-PROFILE-MEMBERSHIP'
+        );
+
+        $user = $this->user($organization);
+
+        $token = $user
+            ->createToken('membership-route-test')
+            ->plainTextToken;
+
+        $this->withToken($token)
+            ->getJson('/api/auth/me/membership')
+            ->assertStatus(400)
+            ->assertJsonPath(
+                'code',
+                'organization_required'
+            );
+
+        $this->withHeader(
+            'X-Organization-Id',
+            $organization->id
+        )
+            ->getJson('/api/auth/me/membership')
+            ->assertOk()
+            ->assertJsonPath(
+                'data.organization.id',
+                $organization->id
+            );
     }
 }

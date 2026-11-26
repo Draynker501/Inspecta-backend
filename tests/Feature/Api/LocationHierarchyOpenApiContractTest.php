@@ -14,33 +14,67 @@ class LocationHierarchyOpenApiContractTest extends TestCase
 
         $this->assertArrayNotHasKey('x-status', $path);
         $this->assertArrayNotHasKey('x-status', $path['get']);
-        $this->assertContains(['$ref' => '#/components/parameters/organizationIdHeader'], $path['parameters']);
+        $this->assertContains(
+            ['$ref' => '#/components/parameters/organizationIdHeader'],
+            $path['parameters']
+        );
+
         $this->assertEqualsCanonicalizing(
             ['page', 'per_page', 'plant_id', 'area_id'],
             array_map(fn ($p) => $p['name'], $path['get']['parameters'])
         );
 
         $schemas = $spec['components']['schemas'];
-        $this->assertFalse($schemas['LocationHierarchyPlant']['additionalProperties']);
+
+        $this->assertFalse(
+            $schemas['LocationHierarchyPlant']['additionalProperties']
+        );
+
         $this->assertEqualsCanonicalizing(
-            ['id', 'name', 'code', 'status', 'areas'],
+            ['id', 'name', 'code', 'status', 'available', 'areas'],
             $schemas['LocationHierarchyPlant']['required']
         );
+
         $this->assertEqualsCanonicalizing(
-            ['id', 'name', 'code', 'type', 'status', 'production_lines'],
+            ['id', 'name', 'code', 'type', 'status', 'available', 'production_lines'],
             $schemas['LocationHierarchyArea']['required']
         );
-        $this->assertFalse($schemas['LocationHierarchyArea']['additionalProperties']);
-        $this->assertTrue($schemas['LocationHierarchyArea']['properties']['type']['nullable']);
-        $this->assertFalse($schemas['LocationHierarchyLine']['additionalProperties']);
+
+        $this->assertFalse(
+            $schemas['LocationHierarchyArea']['additionalProperties']
+        );
+
+        $this->assertTrue(
+            $schemas['LocationHierarchyArea']['properties']['type']['nullable']
+        );
+
+        $this->assertFalse(
+            $schemas['LocationHierarchyLine']['additionalProperties']
+        );
+
         $this->assertEqualsCanonicalizing(
-            ['id', 'name', 'code', 'status'],
+            ['id', 'name', 'code', 'status', 'available'],
             $schemas['LocationHierarchyLine']['required']
         );
 
+        foreach ([
+            'LocationHierarchyPlant',
+            'LocationHierarchyArea',
+            'LocationHierarchyLine',
+        ] as $schema) {
+            $this->assertSame(
+                'boolean',
+                $schemas[$schema]['properties']['available']['type']
+            );
+        }
+
         $this->assertSame('2.4.0', $spec['info']['version']);
+
         foreach ([200, 400, 401, 403, 422] as $status) {
-            $this->assertArrayHasKey($status, $path['get']['responses']);
+            $this->assertArrayHasKey(
+                $status,
+                $path['get']['responses']
+            );
         }
     }
 }

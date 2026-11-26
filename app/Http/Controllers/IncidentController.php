@@ -180,6 +180,25 @@ class IncidentController extends TenantController
                 ? ProductionLine::query()->where('organization_id', $org)
                     ->where('area_id', $area->id)->lockForUpdate()->findOrFail($data['production_line_id'])
                 : null;
+            if ($inspection === null) {
+                $locationErrors = [];
+
+                if (! $plant->status) {
+                    $locationErrors['plant_id'] = 'La planta está inactiva.';
+                }
+
+                if (! $area->status) {
+                    $locationErrors['area_id'] = 'El área está inactiva.';
+                }
+
+                if ($line !== null && ! $line->status) {
+                    $locationErrors['production_line_id'] = 'La línea de producción está inactiva.';
+                }
+
+                if ($locationErrors !== []) {
+                    throw ValidationException::withMessages($locationErrors);
+                }
+            }
 
             if (
                 $inspection !== null && ($inspection->plant_id !== $plant->id

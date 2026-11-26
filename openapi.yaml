@@ -43,6 +43,23 @@ info:
     `GET /auth/me` devuelve solo la identidad global del usuario,
     sin depender de la organización seleccionada.
 
+    `PATCH /auth/me` permite actualizar la información personal
+    de la cuenta autenticada.
+
+    `PUT /auth/password` permite cambiar la contraseña y revoca
+    las sesiones secundarias, conservando el token utilizado
+    en la solicitud actual.
+
+    Estas operaciones de identidad global no requieren la cabecera
+    X-Organization-Id.
+
+    `GET /auth/me/membership` devuelve la membresía, los roles,
+    los permisos efectivos y las ubicaciones asignadas dentro
+    de la organización seleccionada.
+
+    La consulta de membresía requiere X-Organization-Id y una
+    membresía activa en una organización cliente válida.
+
     Al cambiar de organización, el cliente debe descartar el contexto
     anterior y consultar nuevamente `GET /auth/capabilities` utilizando
     la cabecera `X-Organization-Id` de la nueva organización.
@@ -71,7 +88,10 @@ security:
 
 tags:
   - name: Authentication
-    description: Inicio y cierre de sesión, e identidad del usuario autenticado.
+    description: |
+      Inicio y cierre de sesión, identidad global, actualización
+      de información personal, cambio de contraseña y consulta
+      de membresías y accesos organizacionales.
   - name: Dashboard
     description: Indicadores y estadísticas operativas de seguridad e higiene.
   - name: Reports
@@ -175,6 +195,264 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/InactiveUserError'
+
+    patch:
+      summary: Actualizar información personal
+      description: |
+        Actualiza exclusivamente la información personal de la cuenta
+        autenticada mediante el token Bearer.
+
+        No requiere contexto organizacional ni la cabecera
+        X-Organization-Id.
+
+        Permite modificar el nombre y el correo electrónico.
+        Debe proporcionarse al menos uno de estos campos.
+
+        Cuando se modifica el correo electrónico, se requiere la
+        contraseña actual y se restablece su estado de verificación.
+
+        El correo electrónico debe ser único entre todas las cuentas
+        del sistema, independientemente de su organización.
+
+        No permite modificar identificadores, estado de la cuenta,
+        roles, permisos, membresías ni ubicaciones.
+
+        No modifica la contraseña ni revoca los tokens existentes.
+
+        Solo admite objetos JSON. No admite parámetros de consulta,
+        archivos adjuntos ni campos adicionales.
+
+        Límite configurado de 10 solicitudes por minuto.
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdateInput'
+            examples:
+              updateName:
+                summary: Actualizar únicamente el nombre
+                value:
+                  name: Usuario INSPECTA
+              updateEmail:
+                summary: Actualizar el correo electrónico
+                value:
+                  email: usuario@example.com
+                  current_password: '<contraseña actual>'
+              updateProfile:
+                summary: Actualizar nombre y correo electrónico
+                value:
+                  name: Usuario INSPECTA
+                  email: usuario@example.com
+                  current_password: '<contraseña actual>'
+      responses:
+        '200':
+          description: Perfil actualizado correctamente.
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/RateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimitRemaining'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileUpdateResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '415':
+          description: El contenido debe enviarse como application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /auth/password:
+    x-status: implemented
+    put:
+      summary: Cambiar la contraseña de la cuenta autenticada
+      description: |
+        Modifica la contraseña de la cuenta global autenticada.
+
+        No requiere contexto organizacional ni la cabecera
+        X-Organization-Id.
+
+        Requiere proporcionar la contraseña actual, la nueva contraseña
+        y su confirmación.
+
+        La nueva contraseña debe contener al menos 12 caracteres,
+        incluyendo mayúsculas, minúsculas y números. No puede superar
+        los 72 bytes ni contener caracteres nulos.
+
+        La nueva contraseña debe ser diferente de la actual.
+
+        Los espacios de la contraseña se conservan.
+
+        Al completar exitosamente la operación:
+
+        - Se almacena la nueva contraseña mediante hashing.
+        - Se invalida el remember token.
+        - Se revocan todos los tokens personales de acceso de la cuenta,
+          excepto el token utilizado en la solicitud actual.
+        - Se conserva la sesión actual.
+        - No se modifican roles, permisos, membresías ni ubicaciones.
+
+        Las operaciones fallidas no modifican la contraseña ni revocan
+        las sesiones existentes.
+
+        Solo admite objetos JSON. No admite parámetros de consulta,
+        archivos adjuntos ni campos adicionales.
+
+        Límite de 5 solicitudes por minuto asociado a la cuenta
+        identificada mediante el token Bearer. Las sesiones de una
+        misma cuenta comparten el límite.
+
+        Cuando el token no puede resolverse, el límite se aplica
+        mediante la dirección IP.
+
+        Las solicitudes fallidas también consumen la cuota.
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfilePasswordInput'
+            example:
+              current_password: '<contraseña actual>'
+              password: NuevaPassword2026
+              password_confirmation: NuevaPassword2026
+      responses:
+        '200':
+          description: Contraseña actualizada correctamente.
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/RateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimitRemaining'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfilePasswordResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '415':
+          description: El contenido debe enviarse como application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /auth/me/membership:
+    x-status: implemented
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    get:
+      summary: Consultar membresía y accesos del usuario autenticado
+      description: |
+        Devuelve la información de la membresía del usuario autenticado
+        dentro de la organización seleccionada mediante la cabecera
+        X-Organization-Id.
+
+        Requiere una organización cliente activa, no eliminada,
+        y una membresía activa del usuario.
+
+        No requiere permisos administrativos adicionales.
+
+        Incluye:
+
+        - Información básica de la organización.
+        - Información de la membresía activa.
+        - Roles asignados directamente, activos e inactivos.
+        - Permisos efectivos concedidos por los roles activos.
+        - Plantas y áreas asignadas directamente.
+        - Indicadores de visibilidad general de ubicaciones.
+
+        Los roles inactivos se muestran únicamente con fines
+        informativos y no conceden permisos efectivos.
+
+        Los permisos se devuelven sin duplicados y ordenados
+        alfabéticamente.
+
+        Sin plants.view, la información de ubicaciones se oculta.
+
+        El indicador view_all requiere simultáneamente plants.view
+        y locations.view_all.
+
+        Incluso cuando view_all es true, los arreglos de plantas
+        y áreas contienen únicamente asignaciones directas.
+
+        Las ubicaciones inactivas se incluyen con available=false.
+        Las áreas pertenecientes a plantas inactivas también se
+        consideran no disponibles.
+
+        Las ubicaciones eliminadas y las áreas pertenecientes a
+        plantas eliminadas no se incluyen.
+
+        El indicador available representa el estado de disponibilidad
+        de la ubicación y no sustituye la autorización por recurso.
+
+        La información se limita a la organización seleccionada.
+        No se exponen roles, permisos ni ubicaciones de otros tenants.
+
+        Los parámetros de consulta no modifican la identidad del usuario
+        autenticado ni la organización seleccionada.
+
+        Operación de solo lectura, sin paginación.
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Membresía y accesos obtenidos correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileMembershipResponse'
+        '400':
+          description: |
+            Falta la cabecera X-Organization-Id o no contiene
+            un UUID válido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationRequired:
+                  $ref: '#/components/examples/OrganizationRequired'
+                organizationInvalid:
+                  $ref: '#/components/examples/OrganizationInvalid'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: |
+            Organización inexistente, inactiva, eliminada,
+            membresía inexistente o revocada, u organización
+            de tipo operador.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                organizationAccessDenied:
+                  $ref: '#/components/examples/OrganizationAccessDenied'
+                organizationNotTenant:
+                  $ref: '#/components/examples/OrganizationNotTenant'
 
   /auth/capabilities:
     parameters:
@@ -652,9 +930,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -670,8 +950,7 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
-    put:
-      x-status: planned
+    patch:
       summary: Actualizar Planta
       tags:
         - Organization
@@ -682,7 +961,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PlantInput'
+              $ref: '#/components/schemas/AdministrationPlantUpdateInput'
       responses:
         '200':
           description: Planta actualizada.
@@ -692,7 +971,7 @@ paths:
                 type: object
                 properties:
                   data:
-                    $ref: '#/components/schemas/Plant'
+                    $ref: '#/components/schemas/AdministrationPlant'
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -707,9 +986,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -726,20 +1007,21 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
+          $ref: '#/components/responses/ValidationError'
+        '415':
+          description: El Content-Type no es application/json; también se rechaza multipart.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              examples:
-                validationFailed:
-                  $ref: '#/components/examples/ValidationFailed'
-                crossTenantOperation:
-                  $ref: '#/components/examples/CrossTenantRelation'
+      description: Actualiza parcialmente los campos permitidos. Requiere plants.manage. No permite modificar la organización, el padre ni el estado. No admite parámetros de consulta ni archivos adjuntos.
+
+  /plants/{plantId}/status:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     patch:
-      x-status: planned
       summary: Activar/Desactivar Planta
-      description: Cambia el estado lógico de la planta (activa o inactiva).
+      description: Requiere plants.manage. Establece el estado explícitamente, sin cascada ni eliminación de registros históricos. La disponibilidad efectiva depende de los ancestros. No admite parámetros de consulta ni archivos adjuntos.
       tags:
         - Organization
       parameters:
@@ -749,13 +1031,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - status
-              properties:
-                status:
-                  type: boolean
-                  example: false
+              $ref: '#/components/schemas/AdministrationLocationStatusInput'
       responses:
         '200':
           description: Estado actualizado.
@@ -765,7 +1041,7 @@ paths:
                 type: object
                 properties:
                   data:
-                    $ref: '#/components/schemas/Plant'
+                    $ref: '#/components/schemas/AdministrationPlant'
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -780,9 +1056,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -798,6 +1076,14 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
+        '415':
+          description: El Content-Type no es application/json; también se rechaza multipart.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
 
   /plants/{plantId}/areas:
     parameters:
@@ -990,9 +1276,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -1008,8 +1296,7 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
-    put:
-      x-status: planned
+    patch:
       summary: Actualizar Área
       tags:
         - Organization
@@ -1020,7 +1307,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AreaInput'
+              $ref: '#/components/schemas/AdministrationAreaUpdateInput'
       responses:
         '200':
           description: Área actualizada.
@@ -1030,7 +1317,7 @@ paths:
                 type: object
                 properties:
                   data:
-                    $ref: '#/components/schemas/Area'
+                    $ref: '#/components/schemas/AdministrationArea'
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -1045,9 +1332,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -1064,18 +1353,19 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
+          $ref: '#/components/responses/ValidationError'
+        '415':
+          description: El Content-Type no es application/json; también se rechaza multipart.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              examples:
-                validationFailed:
-                  $ref: '#/components/examples/ValidationFailed'
-                crossTenantOperation:
-                  $ref: '#/components/examples/CrossTenantRelation'
+      description: Actualiza parcialmente los campos permitidos. Requiere plants.manage. No permite modificar la organización, el padre ni el estado. No admite parámetros de consulta ni archivos adjuntos.
+
+  /areas/{areaId}/status:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     patch:
-      x-status: planned
       summary: Activar/Desactivar Área
       tags:
         - Organization
@@ -1086,12 +1376,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - status
-              properties:
-                status:
-                  type: boolean
+              $ref: '#/components/schemas/AdministrationLocationStatusInput'
       responses:
         '200':
           description: Estado actualizado.
@@ -1101,7 +1386,7 @@ paths:
                 type: object
                 properties:
                   data:
-                    $ref: '#/components/schemas/Area'
+                    $ref: '#/components/schemas/AdministrationArea'
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -1116,9 +1401,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -1134,6 +1421,15 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
+        '415':
+          description: El Content-Type no es application/json; también se rechaza multipart.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+      description: Requiere plants.manage. Establece el estado explícitamente, sin cascada ni eliminación de registros históricos. La disponibilidad efectiva depende de los ancestros. No admite parámetros de consulta ni archivos adjuntos.
 
   /areas/{areaId}/lines:
     parameters:
@@ -1334,9 +1630,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -1352,8 +1650,7 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
-    put:
-      x-status: planned
+    patch:
       summary: Actualizar Línea de Producción
       tags:
         - Organization
@@ -1364,7 +1661,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProductionLineInput'
+              $ref: '#/components/schemas/AdministrationProductionLineUpdateInput'
       responses:
         '200':
           description: Línea actualizada.
@@ -1374,7 +1671,7 @@ paths:
                 type: object
                 properties:
                   data:
-                    $ref: '#/components/schemas/ProductionLine'
+                    $ref: '#/components/schemas/AdministrationProductionLine'
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -1389,9 +1686,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -1408,18 +1707,19 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
         '422':
-          description: Datos inválidos o referencia a recursos de otra organización.
+          $ref: '#/components/responses/ValidationError'
+        '415':
+          description: El Content-Type no es application/json; también se rechaza multipart.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              examples:
-                validationFailed:
-                  $ref: '#/components/examples/ValidationFailed'
-                crossTenantOperation:
-                  $ref: '#/components/examples/CrossTenantRelation'
+      description: Actualiza parcialmente los campos permitidos. Requiere plants.manage. No permite modificar la organización, el padre ni el estado. No admite parámetros de consulta ni archivos adjuntos.
+
+  /production-lines/{productionLineId}/status:
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
     patch:
-      x-status: planned
       summary: Activar/Desactivar Línea de Producción
       tags:
         - Organization
@@ -1430,12 +1730,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - status
-              properties:
-                status:
-                  type: boolean
+              $ref: '#/components/schemas/AdministrationLocationStatusInput'
       responses:
         '200':
           description: Estado actualizado.
@@ -1445,7 +1740,7 @@ paths:
                 type: object
                 properties:
                   data:
-                    $ref: '#/components/schemas/ProductionLine'
+                    $ref: '#/components/schemas/AdministrationProductionLine'
         '400':
           description: Contexto de organización inválido (organization_required u organization_invalid).
           content:
@@ -1460,9 +1755,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -1478,6 +1775,15 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
         '404':
           $ref: '#/components/responses/NotFoundError'
+        '415':
+          description: El Content-Type no es application/json; también se rechaza multipart.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+      description: Requiere plants.manage. Establece el estado explícitamente, sin cascada ni eliminación de registros históricos. La disponibilidad efectiva depende de los ancestros. No admite parámetros de consulta ni archivos adjuntos.
 
   # ===================================================================
   # USERS
@@ -1844,61 +2150,442 @@ paths:
                   $ref: '#/components/examples/CrossTenantRelation'
 
   /roles:
-    x-status: planned
+    x-status: implemented
     parameters:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
-      summary: Listar Roles
-      description: Obtiene la lista paginada de roles disponibles para asignar a los usuarios.
-      tags:
-        - Users
+      summary: Listar roles
+      description: Requiere users.manage o roles.manage. Solo organización activa.
+      tags: [Users]
       parameters:
-        - $ref: '#/components/parameters/pageParam'
-        - $ref: '#/components/parameters/perPageParam'
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: per_page
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 100, default: 15}
+        - name: q
+          in: query
+          schema: {type: string, maxLength: 100}
+        - name: status
+          in: query
+          schema: {type: integer, enum: [0, 1]}
       responses:
         '200':
-          description: Lista de roles obtenida.
+          description: Operación exitosa.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Role'
-                  meta:
-                    $ref: '#/components/schemas/PaginationMeta'
+                $ref: '#/components/schemas/AdministrationRolesResponse'
         '400':
-          description: Contexto de organización inválido (organization_required u organization_invalid).
+          description: Contexto de organización inválido.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              examples:
-                organizationRequired:
-                  $ref: '#/components/examples/OrganizationRequired'
-                organizationInvalid:
-                  $ref: '#/components/examples/OrganizationInvalid'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
-            insuficiente (las policies pueden responder 403 sin code).
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    post:
+      summary: Crear rol
+      description: Requiere roles.manage. Crea rol personalizado activo sin permisos.
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministrationRoleCreateInput'
+      responses:
+        '201':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationRoleResponse'
+        '400':
+          description: Contexto de organización inválido.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              examples:
-                userInactive:
-                  $ref: '#/components/examples/UserInactive'
-                organizationAccessDenied:
-                  $ref: '#/components/examples/OrganizationAccessDenied'
-                organizationNotTenant:
-                  $ref: '#/components/examples/OrganizationNotTenant'
-                forbiddenPolicy:
-                  $ref: '#/components/examples/ForbiddenPolicy'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '415':
+          description: Content-Type debe ser application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /roles/{roleId}:
+    x-status: implemented
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    get:
+      summary: Consultar rol
+      description: Requiere users.manage o roles.manage. Solo organización activa.
+      tags: [Users]
+      parameters:
+        - name: roleId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationRoleResponse'
+        '400':
+          description: Contexto de organización inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      summary: Editar rol
+      description: Requiere roles.manage. Roles base protegidos y delegación limitada a permisos propios.
+      tags: [Users]
+      parameters:
+        - name: roleId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministrationRoleUpdateInput'
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationRoleResponse'
+        '400':
+          description: Contexto de organización inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '415':
+          description: Content-Type debe ser application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /roles/{roleId}/status:
+    x-status: implemented
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    patch:
+      summary: Cambiar estado de rol
+      description: Requiere roles.manage. Roles base protegidos y delegación limitada a permisos propios. Conserva asignaciones.
+      tags: [Users]
+      parameters:
+        - name: roleId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministrationRoleStatusInput'
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationRoleResponse'
+        '400':
+          description: Contexto de organización inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '415':
+          description: Content-Type debe ser application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /roles/{roleId}/permissions:
+    x-status: implemented
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    put:
+      summary: Sustituir permisos
+      description: Requiere roles.manage. Roles base protegidos y delegación limitada a permisos propios. Admite arreglo vacío.
+      tags: [Users]
+      parameters:
+        - name: roleId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministrationRolePermissionsInput'
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationRoleResponse'
+        '400':
+          description: Contexto de organización inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '415':
+          description: Content-Type debe ser application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /permissions:
+    x-status: implemented
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    get:
+      summary: Consultar catálogo de permisos
+      description: Requiere roles.manage. assignable indica si el actor posee el permiso.
+      tags: [Users]
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationPermissionsResponse'
+        '400':
+          description: Contexto de organización inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /users/{userId}/roles:
+    x-status: implemented
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    put:
+      summary: Sustituir roles de usuario
+      description: Requiere users.manage y roles.manage. Membresía y cuenta activas. Conserva roles inactivos existentes pero no permite nuevas asignaciones inactivas. Protege al último administrador.
+      tags: [Users]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministrationUserRolesInput'
+      responses:
+        '200':
+          description: Operación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationUserResponse'
+        '400':
+          description: Contexto de organización inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '415':
+          description: Content-Type debe ser application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+
+  /users/{userId}/locations:
+    x-status: implemented
+    parameters:
+      - $ref: '#/components/parameters/organizationIdHeader'
+    put:
+      summary: Sustituir ubicaciones asignadas a un usuario
+      description: |
+        Sustituye las asignaciones directas de plantas y áreas
+        del usuario dentro de la organización activa.
+
+        Requiere los permisos `users.manage`, `plants.manage`
+        y `plants.view`.
+
+        La cuenta y la membresía del usuario deben estar activas.
+
+        Las asignaciones de plantas y áreas son independientes.
+        No es necesario asignar una planta para asignar una de
+        sus áreas.
+
+        La asignación de una planta concede visibilidad sobre
+        sus áreas y líneas de producción. La asignación directa
+        de un área limita la visibilidad a dicha área y sus líneas,
+        conforme a los permisos efectivos del usuario.
+
+        El actor debe tener alcance administrativo sobre todas
+        las asignaciones existentes y sobre las nuevas ubicaciones.
+
+        Si existen asignaciones fuera del alcance del actor,
+        se rechaza la sustitución completa.
+
+        Las asignaciones inactivas existentes pueden conservarse
+        o retirarse, pero no se permiten nuevas asignaciones a
+        ubicaciones inactivas o no disponibles.
+
+        Ambos arreglos son obligatorios y pueden estar vacíos.
+
+        La operación es transaccional e idempotente. Los cambios
+        efectivos se registran en la bitácora de auditoría mediante
+        la acción `user.locations_updated`.
+
+        No modifica las asignaciones del usuario en otras
+        organizaciones ni elimina registros históricos.
+
+        No se permiten parámetros de consulta ni campos
+        adicionales en el cuerpo de la solicitud.
+      tags: [Users]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministrationUserLocationsInput'
+            examples:
+              assignLocations:
+                summary: Asignar plantas y áreas
+                value:
+                  plant_ids:
+                    - '01900000-0000-7000-8000-000000000001'
+                  area_ids:
+                    - '01900000-0000-7000-8000-000000000002'
+              assignAreaOnly:
+                summary: Asignar únicamente un área
+                value:
+                  plant_ids: []
+                  area_ids:
+                    - '01900000-0000-7000-8000-000000000002'
+              removeAll:
+                summary: Retirar todas las asignaciones
+                value:
+                  plant_ids: []
+                  area_ids: []
+      responses:
+        '200':
+          description: Asignaciones actualizadas correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministrationUserResponse'
+        '400':
+          description: Contexto de organización inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: |
+            Existen asignaciones que requieren revisión debido
+            a que las ubicaciones relacionadas ya no están
+            disponibles por eliminación lógica.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Content-Type debe ser application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
 
   # ===================================================================
   # CHECKLISTS
@@ -4166,12 +4853,17 @@ paths:
       - $ref: '#/components/parameters/organizationIdHeader'
     get:
       summary: Listar Inspecciones
-      description: |
-        Requiere membresía activa y `inspections.execute` o `inspections.manage`.
+      description: 'Requiere membresía activa y `inspections.execute` o `inspections.manage`.
+  
         Solo se devuelven inspecciones en plantas o áreas asignadas; las ajenas
+  
         requieren `inspections.manage`. `locations.view_all` no sustituye la
+  
         asignación. Se rechazan parámetros desconocidos. Orden descendente por
+  
         `created_at` e `id`; `per_page` predeterminado 15, máximo 100.
+  
+        '
       tags:
         - Inspections
       parameters:
@@ -4181,7 +4873,11 @@ paths:
           name: status
           schema:
             type: string
-            enum: [draft, completed, confirmed, rejected]
+            enum:
+              - draft
+              - completed
+              - confirmed
+              - rejected
           description: Filtrar inspecciones por estado.
         - in: query
           name: plant_id
@@ -4223,9 +4919,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -4247,13 +4945,20 @@ paths:
                 $ref: '#/components/schemas/Error'
     post:
       summary: Crear inspección online
-      description: |
-        Requiere `inspections.execute`, membresía activa y asignación a planta
+      description: 'Requiere `inspections.execute`, membresía activa y asignación a planta
+  
         o área. Crea una inspección propia en `draft`, con UUIDv7 y fecha de
+  
         inicio del servidor. No admite respuestas, fechas, estado ni usuarios
+  
         del cliente. No ofrece idempotencia ni sincronización offline; es
+  
         incompatible con el POST offline anteriormente planeado y la PWA
+  
         inspeccionada.
+  
+  
+        La planta, el área y la línea de producción (si se indica) deben estar activas.'
       tags:
         - Inspections
       requestBody:
@@ -4286,9 +4991,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -4924,13 +5631,21 @@ paths:
           name: status
           schema:
             type: string
-            enum: [open, in_progress, resolved, closed]
+            enum:
+              - open
+              - in_progress
+              - resolved
+              - closed
           description: Filtrar por estado.
         - in: query
           name: risk_level
           schema:
             type: string
-            enum: [low, medium, high, critical]
+            enum:
+              - low
+              - medium
+              - high
+              - critical
           description: Filtrar por nivel de riesgo.
         - in: query
           name: plant_id
@@ -4990,9 +5705,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -5008,7 +5725,10 @@ paths:
                   $ref: '#/components/examples/ForbiddenPolicy'
     post:
       summary: Reportar Incidencia
-      description: Crea una nueva incidencia. Puede estar vinculada a una inspección previa o ser un reporte aislado. El `reported_by` se toma del usuario autenticado.
+      description: 'Crea una nueva incidencia. Puede estar vinculada a una inspección previa o ser un reporte aislado. El `reported_by` se toma del usuario autenticado.
+  
+  
+        Las incidencias independientes requieren planta, área y línea (si se indica) activas. Las vinculadas a una inspección existente pueden conservar ubicaciones inactivas, sujetas a permisos y coherencia de la ubicación.'
       tags:
         - Incidents
       requestBody:
@@ -5041,9 +5761,11 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
-          description: |
-            Sin acceso: usuario inactivo, organización no accesible o permiso
+          description: 'Sin acceso: usuario inactivo, organización no accesible o permiso
+  
             insuficiente (las policies pueden responder 403 sin code).
+  
+            '
           content:
             application/json:
               schema:
@@ -6769,7 +7491,7 @@ paths:
           description: Sin permiso plants.view.
         '422':
           description: Parámetros inválidos o jerarquía superior a 1,000 nodos.
-
+      description: Conserva el estado individual (status) y devuelve la disponibilidad efectiva (available), sin excluir ubicaciones inactivas por ese motivo.
 
 components:
 
@@ -7092,9 +7814,52 @@ components:
               $ref: '#/components/examples/ValidationFailed'
     TooManyRequests:
       description: |
-        Límite de peticiones excedido. Incluye Retry-After (segundos hasta
-        poder reintentar) y X-RateLimit-*. En `POST /auth/login` el límite es
-        de 5 intentos por minuto.
+        Límite de peticiones excedido. Incluye Retry-After
+        (segundos hasta poder reintentar) y X-RateLimit-*.
+
+        Límites configurados:
+
+        - POST /auth/login: 5 solicitudes por minuto.
+        - PATCH /auth/me: 10 solicitudes por minuto.
+
+        La actualización de perfil está limitada a 10 solicitudes
+        por minuto por usuario autenticado.
+
+        La cuota se comparte entre todos los tokens válidos del
+        mismo usuario y es independiente de la organización
+        seleccionada.
+
+        Las solicitudes rechazadas por validación también
+        consumen cuota.
+
+        Cuando el token es inválido, está expirado o su propietario
+        no está activo, el limitador utiliza la dirección IP como
+        clave alternativa.
+
+        Esta cuota es independiente de los límites aplicados al
+        inicio de sesión y al cambio de contraseña.
+
+        - PUT /auth/password: 5 solicitudes por minuto.
+
+                El cambio de contraseña está limitado a 5 solicitudes
+        por minuto por usuario autenticado.
+
+        La cuota se comparte entre todos los tokens válidos
+        pertenecientes al mismo usuario.
+
+        Los intentos fallidos también consumen cuota.
+
+        Los tokens inválidos, revocados, expirados o asociados
+        a usuarios desactivados utilizan una cuota alternativa
+        basada en la dirección IP.
+
+        La cuota es independiente de la organización seleccionada,
+        del inicio de sesión y de la actualización de perfil.
+
+        El cambio de contraseña utiliza un contador específico
+        compartido entre las sesiones de la misma cuenta.
+
+        Las solicitudes fallidas también pueden consumir la cuota.
       headers:
         Retry-After:
           description: Segundos que el cliente debe esperar antes de reintentar.
@@ -7194,6 +7959,453 @@ components:
               $ref: '#/components/examples/ServiceUnavailableExample'
 
   schemas:
+    ProfileUpdateInput:
+      type: object
+      additionalProperties: false
+      description: |
+        Información personal que puede modificar el usuario autenticado.
+        Debe incluir name, email o ambos.
+
+        Si email cambia respecto al valor almacenado,
+        current_password es obligatorio.
+      anyOf:
+        - required: [name]
+        - required: [email]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+          example: Usuario INSPECTA
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: Correo electrónico único a nivel global.
+          example: usuario@example.com
+        current_password:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 1024
+          writeOnly: true
+          description: |
+            Contraseña actual de la cuenta.
+            Obligatoria cuando se modifica el correo electrónico.
+
+    ProfileUpdateResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - message
+        - data
+      properties:
+        message:
+          type: string
+          example: Perfil actualizado correctamente.
+        data:
+          $ref: '#/components/schemas/ProfileIdentity'
+
+    ProfileIdentity:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - email
+        - organization_id
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 150
+          example: Usuario INSPECTA
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          example: usuario@example.com
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: |
+            Identificador organizacional heredado de la cuenta.
+            No representa necesariamente la organización activa
+            ni determina el acceso a los recursos del tenant.
+
+    ProfilePasswordInput:
+      type: object
+      additionalProperties: false
+      required:
+        - current_password
+        - password
+        - password_confirmation
+      properties:
+        current_password:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 1024
+          writeOnly: true
+          description: Contraseña actual de la cuenta.
+        password:
+          type: string
+          format: password
+          minLength: 12
+          maxLength: 72
+          writeOnly: true
+          description: |
+            Nueva contraseña de la cuenta.
+
+            Debe contener mayúsculas, minúsculas y números.
+
+            El límite de 72 se aplica a bytes en el servidor,
+            no únicamente al número de caracteres Unicode.
+
+            No admite caracteres nulos y debe ser diferente
+            de la contraseña actual.
+          example: NuevaPassword2026
+        password_confirmation:
+          type: string
+          format: password
+          writeOnly: true
+          description: |
+            Confirmación de la nueva contraseña.
+            Debe coincidir exactamente con password.
+          example: NuevaPassword2026
+
+    ProfilePasswordResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: Contraseña actualizada correctamente.
+
+    ProfileMembershipResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          $ref: '#/components/schemas/ProfileMembership'
+
+    ProfileMembership:
+      type: object
+      additionalProperties: false
+      required:
+        - organization
+        - membership
+        - roles
+        - permissions
+        - locations
+      properties:
+        organization:
+          $ref: '#/components/schemas/ProfileOrganization'
+        membership:
+          $ref: '#/components/schemas/ProfileMembershipDetails'
+        roles:
+          type: array
+          description: Roles asignados, activos e inactivos.
+          items:
+            $ref: '#/components/schemas/ProfileRole'
+        permissions:
+          type: array
+          uniqueItems: true
+          description: |
+            Permisos efectivos de la cuenta dentro de la organización.
+            Ordenados alfabéticamente y sin duplicados.
+          items:
+            $ref: '#/components/schemas/AdministrationPermissionKey'
+        locations:
+          $ref: '#/components/schemas/ProfileLocations'
+
+    ProfileOrganization:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - code
+        - type
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: INSPECTA Demo Organization
+        code:
+          type: string
+          example: INSPECTA-DEMO
+        type:
+          type: string
+          enum:
+            - client
+        status:
+          type: boolean
+          enum:
+            - true
+
+    ProfileMembershipDetails:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - status
+        - revoked_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - active
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+
+    ProfileRole:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Inspector
+        status:
+          type: boolean
+          description: |
+            true indica un rol activo.
+            false indica un rol inactivo que no concede permisos.
+
+    ProfileLocations:
+      type: object
+      additionalProperties: false
+      required:
+        - can_view
+        - view_all
+        - plants
+        - areas
+      properties:
+        can_view:
+          type: boolean
+          description: |
+            Indica si el usuario dispone de plants.view.
+            Si es false, plants y areas se devuelven vacíos.
+        view_all:
+          type: boolean
+          description: |
+            Indica si el usuario dispone simultáneamente de
+            plants.view y locations.view_all.
+        plants:
+          type: array
+          description: |
+            Plantas asignadas directamente al usuario.
+            No representa el catálogo completo de plantas accesibles.
+          items:
+            $ref: '#/components/schemas/ProfilePlant'
+        areas:
+          type: array
+          description: |
+            Áreas asignadas directamente al usuario.
+            No incluye asignaciones heredadas de plantas.
+          items:
+            $ref: '#/components/schemas/ProfileArea'
+
+    ProfilePlant:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - code
+        - status
+        - available
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Planta Guadalajara
+        code:
+          type: string
+          example: GDL-01
+        status:
+          type: boolean
+        available:
+          type: boolean
+          description: Indica si la planta asignada está activa.
+
+    ProfileArea:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - plant_id
+        - plant_name
+        - name
+        - code
+        - status
+        - available
+      properties:
+        id:
+          type: string
+          format: uuid
+        plant_id:
+          type: string
+          format: uuid
+        plant_name:
+          type: string
+          example: Planta Guadalajara
+        name:
+          type: string
+          example: Área de producción
+        code:
+          type: string
+          example: PROD-01
+        status:
+          type: boolean
+        available:
+          type: boolean
+          description: |
+            Indica si el área y su planta correspondiente
+            se encuentran activas.
+    AdministrationPermissionKey:
+      type: string
+      enum: [plants.view, locations.view_all, plants.manage, users.manage, roles.manage, memberships.manage, checklists.view, checklists.manage, norms.view, norms.manage, inspections.manage, inspections.execute, findings.register, findings.close, corrective_actions.manage, corrective_actions.verify, reports.view, reports.view_own]
+    AdministrationRole:
+      type: object
+      required: [id, name, description, system_key, status, permissions, users_count]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, maxLength: 50}
+        description: {type: string, nullable: true}
+        system_key: {type: string, nullable: true}
+        status: {type: boolean}
+        permissions:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/AdministrationPermissionKey'
+        users_count: {type: integer, minimum: 0, description: Número de membresías activas asignadas.}
+    AdministrationRoleResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/AdministrationRole'
+    AdministrationRolesResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdministrationRole'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+    AdministrationRoleCreateInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 50}
+        description: {type: string, nullable: true, maxLength: 2000}
+    AdministrationRoleUpdateInput:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: {type: string, minLength: 1, maxLength: 50}
+        description: {type: string, nullable: true, maxLength: 2000}
+    AdministrationRoleStatusInput:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: {type: boolean}
+    AdministrationRolePermissionsInput:
+      type: object
+      additionalProperties: false
+      required: [permissions]
+      properties:
+        permissions:
+          type: array
+          uniqueItems: true
+          maxItems: 18
+          items:
+            $ref: '#/components/schemas/AdministrationPermissionKey'
+    AdministrationPermissionsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required: [key, assignable]
+            properties:
+              key:
+                $ref: '#/components/schemas/AdministrationPermissionKey'
+              assignable: {type: boolean}
+    AdministrationUserRolesInput:
+      type: object
+      additionalProperties: false
+      required: [role_ids]
+      properties:
+        role_ids:
+          type: array
+          uniqueItems: true
+          items: {type: string, format: uuid}
+
+    AdministrationUserLocationsInput:
+      type: object
+      additionalProperties: false
+      required:
+        - plant_ids
+        - area_ids
+      properties:
+        plant_ids:
+          type: array
+          description: |
+            Identificadores de las plantas asignadas directamente
+            al usuario dentro de la organización activa.
+            Un arreglo vacío retira todas las asignaciones
+            directas de plantas.
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+        area_ids:
+          type: array
+          description: |
+            Identificadores de las áreas asignadas directamente
+            al usuario dentro de la organización activa.
+            No requiere asignar previamente la planta padre.
+            Un arreglo vacío retira todas las asignaciones
+            directas de áreas.
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
     AdministrationMembership:
       type: object
       required:
@@ -8025,7 +9237,12 @@ components:
     LocationHierarchyLine:
       type: object
       additionalProperties: false
-      required: [id, name, code, status]
+      required:
+        - id
+        - name
+        - code
+        - status
+        - available
       properties:
         id:
           type: string
@@ -8038,11 +9255,21 @@ components:
           maxLength: 50
         status:
           type: boolean
+        available:
+          type: boolean
+          description: 'Estado efectivo: verdadero si la ubicación y todos sus ancestros están activos.'
 
     LocationHierarchyArea:
       type: object
       additionalProperties: false
-      required: [id, name, code, type, status, production_lines]
+      required:
+        - id
+        - name
+        - code
+        - type
+        - status
+        - production_lines
+        - available
       properties:
         id:
           type: string
@@ -8063,11 +9290,20 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LocationHierarchyLine'
+        available:
+          type: boolean
+          description: 'Estado efectivo: verdadero si la ubicación y todos sus ancestros están activos.'
 
     LocationHierarchyPlant:
       type: object
       additionalProperties: false
-      required: [id, name, code, status, areas]
+      required:
+        - id
+        - name
+        - code
+        - status
+        - areas
+        - available
       properties:
         id:
           type: string
@@ -8084,6 +9320,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LocationHierarchyArea'
+        available:
+          type: boolean
+          description: 'Estado efectivo: verdadero si la ubicación y todos sus ancestros están activos.'
 
     LocationHierarchyResponse:
       type: object
@@ -8706,32 +9945,33 @@ components:
         id:
           type: string
           format: uuid
-          example: "018f1a2c-1111-7e5f-8000-abcdef123456"
+          example: 018f1a2c-1111-7e5f-8000-abcdef123456
         organization_id:
           type: string
           format: uuid
           description: ID de la organización a la que pertenece el área.
-          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+          example: 018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f
         plant_id:
           type: string
           format: uuid
-          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+          example: 018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f
         name:
           type: string
           maxLength: 150
-          example: "Área de Soldadura"
+          example: Área de Soldadura
         code:
           type: string
           maxLength: 50
-          example: "AR-SOLD-01"
+          example: AR-SOLD-01
         type:
           type: string
-          enum: [production, warehouse, administrative, maintenance, outdoor]
-          example: "production"
+          example: production
+          nullable: true
+          maxLength: 50
         description:
           type: string
           nullable: true
-          example: "Zona de soldadura robótica"
+          example: Zona de soldadura robótica
         status:
           type: boolean
           example: true
@@ -8744,7 +9984,7 @@ components:
         production_lines:
           type: array
           nullable: true
-          description: "Opcional. Jerarquía inferior."
+          description: Opcional. Jerarquía inferior.
           items:
             $ref: '#/components/schemas/ProductionLine'
         created_at:
@@ -8765,25 +10005,26 @@ components:
         name:
           type: string
           maxLength: 150
-          example: "Área de Soldadura"
+          example: Área de Soldadura
         code:
           type: string
           maxLength: 50
-          example: "AR-SOLD-01"
+          example: AR-SOLD-01
         organization_id:
           type: string
           format: uuid
           nullable: true
           description: ID de la organización. La organización activa se selecciona mediante la cabecera X-Organization-Id y una membresía activa; no se infiere del token.
-          example: "018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f"
+          example: 018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f
         type:
           type: string
-          enum: [production, warehouse, administrative, maintenance, outdoor]
-          example: "production"
+          example: production
+          nullable: true
+          maxLength: 50
         description:
           type: string
           nullable: true
-          example: "Zona de soldadura robótica"
+          example: Zona de soldadura robótica
 
     AreaCreateInput:
       type: object
@@ -11288,3 +12529,233 @@ components:
             $ref: '#/components/schemas/SyncOperation'
         cursor:
           $ref: '#/components/schemas/SyncCursor'
+
+    AdministrationPlantUpdateInput:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        code:
+          type: string
+          description: Se recorta y convierte a mayúsculas antes de validar; el valor normalizado debe tener 1–50 caracteres ASCII A–Z, 0–9 o guion.
+        description:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+    AdministrationPlant:
+      type: object
+      required:
+        - id
+        - organization_id
+        - name
+        - code
+        - description
+        - address
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece la planta.
+          example: 018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f
+        name:
+          type: string
+          maxLength: 150
+          example: Planta Norte
+        code:
+          type: string
+          maxLength: 50
+          example: PLN-01
+          pattern: ^[A-Z0-9-]+$
+        description:
+          type: string
+          nullable: true
+          example: Planta principal de manufactura
+        address:
+          type: string
+          nullable: true
+          example: Av. Industria 100, Jalisco
+        status:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-10-01T09:00:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-10-01T09:00:00Z'
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fecha de baja lógica (soft delete); nulo si no está eliminada lógicamente. Independiente de status.
+          example: null
+    AdministrationAreaUpdateInput:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        code:
+          type: string
+          description: Se recorta y convierte a mayúsculas antes de validar; el valor normalizado debe tener 1–50 caracteres ASCII A–Z, 0–9 o guion.
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+          nullable: true
+          maxLength: 50
+    AdministrationArea:
+      type: object
+      required:
+        - id
+        - organization_id
+        - plant_id
+        - name
+        - code
+        - description
+        - type
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 018f1a2c-1111-7e5f-8000-abcdef123456
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece el área.
+          example: 018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f
+        plant_id:
+          type: string
+          format: uuid
+          example: 018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f
+        name:
+          type: string
+          maxLength: 150
+          example: Área de Soldadura
+        code:
+          type: string
+          maxLength: 50
+          example: AR-SOLD-01
+          pattern: ^[A-Z0-9-]+$
+        description:
+          type: string
+          nullable: true
+          example: Zona de soldadura robótica
+        type:
+          type: string
+          nullable: true
+          maxLength: 50
+        status:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fecha de baja lógica (soft delete); nulo si no está eliminada lógicamente. Independiente de status.
+          example: null
+    AdministrationProductionLineUpdateInput:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        code:
+          type: string
+          description: Se recorta y convierte a mayúsculas antes de validar; el valor normalizado debe tener 1–50 caracteres ASCII A–Z, 0–9 o guion.
+        description:
+          type: string
+          nullable: true
+    AdministrationProductionLine:
+      type: object
+      required:
+        - id
+        - organization_id
+        - area_id
+        - name
+        - code
+        - description
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 018f1a2d-2222-7e5f-8000-fedcba654321
+        organization_id:
+          type: string
+          format: uuid
+          description: ID de la organización a la que pertenece la línea de producción.
+          example: 018f1a2b-3c4d-7e5f-8000-9a8b7c6d5e4f
+        area_id:
+          type: string
+          format: uuid
+          example: 018f1a2c-1111-7e5f-8000-abcdef123456
+        name:
+          type: string
+          maxLength: 150
+          example: Línea Automotriz A
+        code:
+          type: string
+          maxLength: 50
+          example: LN-AUT-A
+          pattern: ^[A-Z0-9-]+$
+        description:
+          type: string
+          nullable: true
+          example: Ensamblaje de chasis
+        status:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Fecha de baja lógica (soft delete); nulo si no está eliminada lógicamente. Independiente de status.
+          example: null
+    AdministrationLocationStatusInput:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          type: boolean

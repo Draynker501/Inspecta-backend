@@ -99,6 +99,7 @@ class TenantControllerTest extends TestCase
             'App\Http\Controllers\Controller',
             'App\Http\Controllers\Auth\AuthController',
             'App\Http\Controllers\Auth\OrganizationController',
+            'App\Http\Controllers\Auth\ProfileController',
         ];
 
         foreach ($iterator as $file) {
