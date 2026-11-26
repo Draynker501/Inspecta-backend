@@ -53,7 +53,7 @@ Route::prefix('auth')->group(function () {
 
     // Actualización de identidad global.
     Route::patch('me', [ProfileController::class, 'update'])
-        ->middleware(['api.auth', 'throttle:10,1']);
+        ->middleware(['api.auth', 'throttle:profile-update']);
 
     // Cambio seguro de contraseña.
     Route::put('password', [ProfileController::class, 'updatePassword'])

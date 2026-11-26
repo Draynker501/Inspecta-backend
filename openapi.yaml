@@ -7821,7 +7821,40 @@ components:
 
         - POST /auth/login: 5 solicitudes por minuto.
         - PATCH /auth/me: 10 solicitudes por minuto.
+
+        La actualización de perfil está limitada a 10 solicitudes
+        por minuto por usuario autenticado.
+
+        La cuota se comparte entre todos los tokens válidos del
+        mismo usuario y es independiente de la organización
+        seleccionada.
+
+        Las solicitudes rechazadas por validación también
+        consumen cuota.
+
+        Cuando el token es inválido, está expirado o su propietario
+        no está activo, el limitador utiliza la dirección IP como
+        clave alternativa.
+
+        Esta cuota es independiente de los límites aplicados al
+        inicio de sesión y al cambio de contraseña.
+
         - PUT /auth/password: 5 solicitudes por minuto.
+
+                El cambio de contraseña está limitado a 5 solicitudes
+        por minuto por usuario autenticado.
+
+        La cuota se comparte entre todos los tokens válidos
+        pertenecientes al mismo usuario.
+
+        Los intentos fallidos también consumen cuota.
+
+        Los tokens inválidos, revocados, expirados o asociados
+        a usuarios desactivados utilizan una cuota alternativa
+        basada en la dirección IP.
+
+        La cuota es independiente de la organización seleccionada,
+        del inicio de sesión y de la actualización de perfil.
 
         El cambio de contraseña utiliza un contador específico
         compartido entre las sesiones de la misma cuenta.

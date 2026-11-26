@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Auth;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator;
@@ -64,7 +65,9 @@ class UpdateProfileRequest extends FormRequest
         }
 
         if (is_string($data['email'] ?? null)) {
-            $data['email'] = trim($data['email']);
+            $data['email'] = Str::lower(
+                trim($data['email'])
+            );
         }
 
         return $data;
@@ -84,7 +87,7 @@ class UpdateProfileRequest extends FormRequest
                 'sometimes',
                 'required',
                 'string',
-                'email',
+                'email:rfc',
                 'max:255',
                 Rule::unique('users', 'email')
                     ->ignore($this->user()->getKey()),

@@ -202,8 +202,12 @@ class ProfileService
                     ]);
                 }
 
-                // El modelo User utiliza el cast hashed.
-                $user->password = $data['password'];
+                // Tratar siempre la contraseña recibida
+                // como texto plano, incluso cuando tenga
+                // la apariencia de un hash válido.
+                $user->password = Hash::make(
+                    $data['password']
+                );
 
                 // Invalidar posibles sesiones persistentes
                 // basadas en remember_token.
